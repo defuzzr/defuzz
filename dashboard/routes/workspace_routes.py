@@ -640,13 +640,36 @@ def discard_project(body: Any = Body(default_factory=dict)):
 def workspace_projects():
     from hermes_constants import get_hermes_home
     from ...audit.readonly_db import read_profile_registrations_readonly
+    from ...state_store import split_registered_projects
     snapshot = read_profile_registrations_readonly('active', get_hermes_home())
-    return {'projects': snapshot.records, 'coverage': snapshot.coverage}
+    projects, unavailable = split_registered_projects(snapshot.records)
+    return {'projects': projects, 'unavailable_projects': unavailable,
+            'coverage': snapshot.coverage}
+
+
+@router.post('/workspace/projects/forget')
+def forget_workspace_project(body: Any = Body(default_factory=dict)):
+    """Forget one registration in the active profile; the project folder itself is never touched."""
+    from ...state_store import forget_project, state_db_path
+    body = _object(body)
+    raw_path = body.get('path')
+    if not isinstance(raw_path, str) or not raw_path or '\x00' in raw_path:
+        raise HTTPException(400, 'path must be a non-empty NUL-free string')
+    # An exact SQL registration identifier, not a filesystem path: legacy relative,
+    # tilde and whitespace spellings must be passed through without normalisation.
+    try:
+        removed = forget_project(raw_path, db_path=state_db_path())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except WRITE_ERRORS as exc:
+        raise HTTPException(400, _error_text(exc)) from exc
+    return {'status': 'forgotten', 'removed': removed}
 
 
 @router.get('/workspace/file')
 def workspace_file(project: str, path: str):
     from ...audit.fingerprint import safe_read_regular_file_plain
+    from ...audit.policy import credential_path
     from ...safety import assert_safe_root, SafetyError
     parts = Path(path).parts
     if not parts or Path(path).is_absolute() or '..' in parts or any(p.lower().startswith('.env') or p.lower() in ('auth.json', 'credentials.json', '.git') for p in parts):
@@ -661,6 +684,10 @@ def workspace_file(project: str, path: str):
         registered = {r['canonical_path'] for r in snapshot.records}
         if str(root.resolve()) not in registered:
             raise ValueError('Project is not registered in the active profile')
+        # Match the tree's conservative credential boundary, including the root's
+        # own components. Registration is not permission to preview secret stores.
+        if credential_path(root) or credential_path(root / path):
+            raise ValueError('Unsafe or secret-bearing file path')
         read = safe_read_regular_file_plain(root, path, max_bytes=256 * 1024)
         if read.kind != 'regular' or read.coverage != 'verified' or not read.stable or read.content is None:
             raise ValueError('File cannot be safely read within the limit')

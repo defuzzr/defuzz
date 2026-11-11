@@ -465,13 +465,20 @@ class ProfileRegistrationsSnapshot:
 
 def _normalize_registration_row(r: sqlite3.Row, profile_name: str, target: Path) -> dict[str, Any] | None:
     keys = set(r.keys())
-    raw_path = str(r["path"] or "").strip()
+    # Preserve the exact stored identifier: forgetting compares this string verbatim, so
+    # stripping would make a whitespace-ending registration impossible to forget.
+    raw_path = str(r["path"] or "")
     if not raw_path:
         return None
-    try:
-        canonical_path = str(Path(raw_path).expanduser().resolve(strict=False))
-    except (OSError, RuntimeError):  # RuntimeError: a link loop on Python 3.11 and 3.12
-        canonical_path = raw_path
+    # Canonicalise only a path that is already an absolute filesystem spelling. Legacy
+    # relative and "~" registrations stay raw in both fields; they are identifiers, not
+    # paths to expand. No strip happens before either use.
+    canonical_path = raw_path
+    if "\x00" not in raw_path and os.path.isabs(raw_path):
+        try:
+            canonical_path = str(Path(raw_path).resolve(strict=False))
+        except (OSError, RuntimeError):  # RuntimeError: a link loop on Python 3.11 and 3.12
+            canonical_path = raw_path
 
     def _col(name: str) -> Any:
         return r[name] if name in keys else None

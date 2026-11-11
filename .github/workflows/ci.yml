@@ -71,6 +71,13 @@ jobs:
           tests/test_python_floor_syntax.py
           tests/test_docs_contract.py
           tests/test_ci_workflow.py
+          tests/test_workspace_projects_listing.py
+          tests/test_workspace_preview_credentials.py
+          tests/test_existing_projects.py
+          tests/test_existing_project_routes.py
+          tests/test_existing_project_integration.py
+          tests/test_existing_project_audit_flow.py
+          tests/test_project_tree.py
 
   desktop:
     name: Desktop (Node 24, ${{ matrix.os }})

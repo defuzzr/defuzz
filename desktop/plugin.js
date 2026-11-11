@@ -1927,10 +1927,11 @@ export function ToolsLockSection({
   })
 }
 
-export function ManualLintSection({ ctx, project, mode = 'both' }) {
+export function ManualLintSection({ ctx, project, mode = 'both', requireLintConfirmation = false }) {
   const [rest] = useState(() => createScopedRest(ctx))
   // Follow saved preferences until the user makes an explicit per-run choice.
   const [modeOverride, setSelectedMode] = useState(null)
+  const [lintConfirm, setLintConfirm] = useState(false)
   const selectedMode = modeOverride ?? mode
   const [versions, setVersions] = useState(null)
   const [state, setState] = useState({ busy: false, result: null, error: '', handoff: null })
@@ -1964,6 +1965,10 @@ export function ManualLintSection({ ctx, project, mode = 'both' }) {
   }
   const run = async () => {
     if (!project || request.current.disposed || request.current.busy) return
+    // Lint can run repository tooling and write files. A folder adopted by reference is
+    // untrusted, so the first click explains and only a second explicit click runs it.
+    if (requireLintConfirmation && !lintConfirm) { setLintConfirm(true); return }
+    setLintConfirm(false)
     const owner = request.current
     request.current.busy = true
     setState(prev => ({ ...prev, busy: true, error: '' }))
@@ -1991,10 +1996,12 @@ export function ManualLintSection({ ctx, project, mode = 'both' }) {
     style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', padding: '12px', color: 'var(--ui-text-primary)' },
     children: [
       jsx('p', { children: `Manual whole-project lint (${selectedMode} group): ${project || 'No project selected'}` }),
+      requireLintConfirmation ? jsx('p', { style: { margin: 0, fontSize: '11.5px', color: 'var(--ui-text-secondary)' }, children: 'Lint can execute repository code and write files. This folder was opened by reference and is not trusted.' }) : null,
       jsxs('label', { children: ['Run lint group', jsx('select', { 'aria-label': 'Run lint group', value: selectedMode,
         disabled: state.busy || state.result?.state === 'running', onChange: e => setSelectedMode(e.target.value),
         children: ['pre', 'post', 'both'].map(value => jsx('option', { value, children: value.toUpperCase() }, value)) })] }),
-      jsx(Button, { disabled: !project || state.busy, onClick: run, children: state.busy ? 'Lint request pending…' : state.result?.state === 'running' ? 'Check lint status' : 'Run lint' }),
+      jsx(Button, { disabled: !project || state.busy, onClick: run, children: state.busy ? 'Lint request pending…' : state.result?.state === 'running' ? 'Check lint status' : requireLintConfirmation && lintConfirm ? 'Confirm and run lint' : 'Run lint' }),
+      requireLintConfirmation && lintConfirm && !state.busy ? jsx('p', { 'data-testid': 'manual-lint-confirm', role: 'status', style: { margin: 0 }, children: 'Lint can execute repository code and write files. Confirm to run lint on this existing project.' }) : null,
       jsx('div', { role: 'status', children: state.error || (state.busy ? 'Lint request pending…' : '') }),
       jsx('h4', { children: 'Tool versions / setup status' }),
       jsx(Button, { children: 'Refresh tool versions', disabled: state.busy, onClick: async () => {
@@ -2567,10 +2574,14 @@ export function scaffoldErrorKind(error) {
 // Shared request model: no requests during render, no ambient timers, no automatic lint.
 export function createWorkspaceModel(ctx, changed = () => {}, initialScreen = 'main') {
   const rest = createScopedRest(ctx)
-  let state = { busy: false, error: '', screen: initialScreen, projects: [], selected: '',
+  let state = { busy: false, error: '', screen: initialScreen, projects: [], unavailableProjects: [], selected: '',
+    forgetting: '', forgetNotice: '',
     idea: '', name: '', answers: { building: 'service', layout: 'single', languages: [], engine: '' },
     matches: [], matchFailed: false, template: null, options: {},
     catalog: null, selectedKitId: '', kitPreview: null, kitPreviewError: '',
+    existingList: { status: 'idle', projects: [], coverage: '', error: '' },
+    existingOpenBusy: false, existingOpenError: '', existingOpenNotice: '',
+    projectTree: { project: '', status: 'idle', files: [], coverage: '', truncated: false, omitted: 0, error: '' },
     proposal: null, output: null, settings: { rules: [
       { id: 'ruff-format', label: 'Ruff formatting', mode: 'pre', enabled: true },
       { id: 'ruff', label: 'Ruff analysis', mode: 'both', enabled: true },
@@ -2583,6 +2594,15 @@ export function createWorkspaceModel(ctx, changed = () => {}, initialScreen = 'm
   let previewToken = 0
   let matchToken = 0
   let kitPreviewToken = 0
+  let projectTreeToken = 0
+  let existingListToken = 0
+  // Project-list reads are serialized: a verified reload after forget must never be swallowed
+  // because a Refresh was in flight, and overlapping reads must publish in start order.
+  let listToken = 0
+  let listTail = Promise.resolve()
+  let listInFlight = null
+  let listBusy = 0
+  let listPendingReads = 0
   let activeProposalId = null
   let acceptJob = null // the accept job being polled after a 202: { pid, finish, ... }
   let mounted = false
@@ -2782,6 +2802,314 @@ export function createWorkspaceModel(ctx, changed = () => {}, initialScreen = 'm
     settingsTimer?.()
     if (state.loaded && typeof ctx.setTimeout === 'function') settingsTimer = ctx.setTimeout(saveSettings, 300)
   }
+  const applyNormalizedLists = (normalized, result, { preservePreview = false } = {}) => {
+    if (!preservePreview) previewToken += 1
+    const stillSelected = normalized.projects.some(p => p.path === state.selected && p.registered === true)
+    emit({
+      projects: normalized.projects,
+      unavailableProjects: normalized.unavailableProjects,
+      projectsLoaded: true,
+      coverage: result?.coverage || 'could_not_verify',
+      selected: stillSelected ? state.selected : '',
+      ...(stillSelected && preservePreview ? {} : { preview: null, previewPath: '' })
+    })
+    return normalized
+  }
+  // Reads are serialized and de-duplicated. `force` is for the verified reload after a registry
+  // mutation: it waits for any Refresh already in flight and then performs its own read, so a
+  // concurrent Refresh can never make the confirmation read be skipped. The newest read wins
+  // for the visible list; every read also returns its own normalized payload so a caller can
+  // verify the mutation against the read it actually made, even if a later read supersedes it.
+  const fetchProjects = ({ force = false, preservePreview = false } = {}) => {
+    if (disposed) return Promise.resolve(undefined)
+    const ownerLifetime = lifetime
+    if (!force && listInFlight) return Promise.resolve(undefined)
+    const token = ++listToken
+    listBusy += 1
+    emit({ busy: true, error: '' })
+    const execute = async () => {
+      if (disposed || ownerLifetime !== lifetime) return undefined
+      try {
+        const result = await rest('/workspace/projects')
+        if (disposed || ownerLifetime !== lifetime) return undefined
+        const normalized = normalizeProjectLists(result && typeof result === 'object' ? result : {})
+        if (token === listToken) applyNormalizedLists(normalized, result, { preservePreview })
+        return {
+          projects: normalized.projects,
+          unavailableProjects: normalized.unavailableProjects,
+          coverage: result?.coverage || 'could_not_verify'
+        }
+      } catch (error) {
+        if (!disposed && ownerLifetime === lifetime && token === listToken) {
+          emit({ error: formatError(error) })
+        }
+        return undefined
+      }
+    }
+    const idle = listPendingReads === 0
+    listPendingReads += 1
+    const job = idle ? execute() : listTail.then(execute)
+    let settled
+    settled = job.finally(() => {
+      listBusy -= 1
+      listPendingReads -= 1
+      if (listBusy === 0 && !disposed && ownerLifetime === lifetime) emit({ busy: false })
+      if (listInFlight === settled) listInFlight = null
+    })
+    listTail = settled.then(() => undefined, () => undefined)
+    if (!force) listInFlight = settled
+    return settled
+  }
+  const loadProjects = () => fetchProjects()
+  const exactRegistration = value => typeof value === 'string' && value ? value : ''
+  // Forget removes one exact registry record only. It never touches the folder, so the
+  // confirmation says so and success is claimed only after a fresh verified list proves that
+  // this exact registration is gone.
+  const forget = async registrationPath => {
+    const exactPath = exactRegistration(registrationPath)
+    if (!exactPath || state.forgetting || disposed) return undefined
+    const ownerLifetime = lifetime
+    const current = () => !disposed && ownerLifetime === lifetime
+    emit({ forgetting: exactPath, error: '', forgetNotice: '' })
+    try {
+      const result = await rest('/workspace/projects/forget', { method: 'POST', body: { path: exactPath } })
+      if (!current()) return undefined
+      const rejected = Boolean(result && (result.ok === false || result.status === 'error' || result.error))
+      const rejectedMessage = rejected
+        ? String(result.error || result.detail || 'The registry did not remove this project.')
+        : ''
+      const verified = await fetchProjects({ force: true, preservePreview: true })
+      if (!current()) return result
+      if (rejected) {
+        emit({ error: rejectedMessage })
+        return result
+      }
+      if (!verified) {
+        emit({ forgetNotice: 'Could not verify removal: the project list could not be reloaded. Nothing was removed and nothing is claimed; Refresh projects to check.' })
+        return result
+      }
+      if (verified.coverage !== 'verified') {
+        emit({ forgetNotice: `Could not verify removal: registry coverage is ${verified.coverage || 'unknown'}. Nothing is claimed as removed; Refresh projects to check.` })
+        return result
+      }
+      if (result && result.removed === false) {
+        emit({ forgetNotice: 'The registry reported no matching registration; nothing was removed. Refresh projects to check.' })
+        return result
+      }
+      // Verify against the exact read this call made, not mutable state a newer read may own.
+      const verifiedPaths = new Set([...verified.projects, ...verified.unavailableProjects]
+        .map(record => record.registrationPath)
+        .filter(Boolean))
+      if (verifiedPaths.has(exactPath)) {
+        emit({ forgetNotice: 'The registry still lists this registration; nothing was removed. Refresh projects to confirm.' })
+        return result
+      }
+      emit({ forgetNotice: 'Removed from Defuzz only; files untouched.' })
+      return result
+    } catch (error) {
+      if (current()) emit({ error: formatError(error) })
+      return undefined
+    } finally {
+      if (current()) emit({ forgetting: '' })
+    }
+  }
+  const forgetMissing = async () => {
+    if (state.forgetting || disposed) return undefined
+    const targets = (state.unavailableProjects || [])
+      .filter(p => p.folder_status === 'missing' && p.registrationPath)
+      .map(p => p.registrationPath)
+    if (!targets.length) return undefined
+    const ownerLifetime = lifetime
+    const current = () => !disposed && ownerLifetime === lifetime
+    const errors = []
+    emit({ forgetting: targets[0], error: '', forgetNotice: '' })
+    for (const path of targets) {
+      if (!current()) return undefined
+      emit({ forgetting: path })
+      try {
+        const result = await rest('/workspace/projects/forget', { method: 'POST', body: { path } })
+        if (!current()) return undefined
+        if (result && (result.ok === false || result.status === 'error' || result.error)) {
+          errors.push(String(result.error || result.detail || `Could not forget ${path}`))
+        } else if (result && result.removed === false) {
+          errors.push(`Registry reported no removal for ${path}`)
+        }
+      } catch (error) {
+        errors.push(formatError(error))
+      }
+    }
+    if (!current()) return undefined
+    const verified = await fetchProjects({ force: true, preservePreview: true })
+    if (!current()) return undefined
+    if (errors.length) emit({ error: errors.join('; ') })
+    if (!verified) {
+      emit({ forgetting: '', forgetNotice: `Could not verify removal of ${targets.length} missing project${targets.length === 1 ? '' : 's'}; nothing is claimed as removed. Refresh projects to check.` })
+      return { status: 'unverified', removed: 0, failed: targets.length, errors }
+    }
+    const present = new Set([...verified.projects, ...verified.unavailableProjects]
+      .map(record => record.registrationPath)
+      .filter(Boolean))
+    const confirmed = targets.filter(path => !present.has(path))
+    const unconfirmed = targets.filter(path => present.has(path))
+    if (verified.coverage !== 'verified') {
+      emit({ forgetting: '', forgetNotice: `Could not verify removal: registry coverage is ${verified.coverage || 'unknown'}. Nothing is claimed as removed.` })
+      return { status: 'unverified', removed: 0, failed: targets.length, errors }
+    }
+    const parts = [confirmed.length
+      ? `${confirmed.length} missing project${confirmed.length === 1 ? '' : 's'} removed from Defuzz only; files untouched.`
+      : 'No missing projects were confirmed removed; files untouched.']
+    if (unconfirmed.length) parts.push(`${unconfirmed.length} still listed or unverified: ${unconfirmed.join(', ')}.`)
+    emit({ forgetting: '', forgetNotice: parts.join(' ') })
+    return {
+      status: unconfirmed.length || errors.length ? 'partial' : 'forgotten',
+      removed: confirmed.length,
+      failed: unconfirmed.length + errors.length,
+      errors
+    }
+  }
+  const isExistingTemplate = project => project?.template_id === 'existing'
+  // Reads the bounded, read-only file list for one already-selected existing registration.
+  // A reply is published only if the same selection is still current; a profile/lifetime
+  // change or a different selection discards it. An error is shown as an error, never
+  // replaced with invented rows.
+  const loadProjectTree = async projectPath => {
+    const cleanPath = typeof projectPath === 'string' ? projectPath : ''
+    if (disposed || !cleanPath) return undefined
+    const ownerLifetime = lifetime
+    const token = ++projectTreeToken
+    const isCurrent = () => !disposed && ownerLifetime === lifetime && token === projectTreeToken && state.selected === cleanPath
+    emit({ projectTree: { project: cleanPath, status: 'loading', files: [], coverage: '', truncated: false, omitted: 0, error: '' } })
+    try {
+      const result = await rest(`/workspace/tree?project=${encodeURIComponent(cleanPath)}`)
+      if (!isCurrent()) return undefined
+      const files = Array.isArray(result?.files) ? result.files.filter(entry => typeof entry === 'string' && entry.trim()) : null
+      if (!files) {
+        emit({ projectTree: { project: cleanPath, status: 'error', files: [], coverage: '', truncated: false, omitted: 0, error: 'The file list response could not be read.' } })
+        return result
+      }
+      const omitted = Number.isFinite(result?.omitted) && result.omitted > 0 ? Math.floor(result.omitted) : 0
+      emit({ projectTree: {
+        project: cleanPath,
+        status: 'ready',
+        files,
+        coverage: typeof result?.coverage === 'string' ? result.coverage : '',
+        truncated: result?.truncated === true,
+        omitted,
+        error: ''
+      } })
+      return result
+    } catch (error) {
+      if (isCurrent()) {
+        const details = error?.body?.detail || error?.data?.detail || formatError(error)
+        emit({ projectTree: { project: cleanPath, status: 'error', files: [], coverage: '', truncated: false, omitted: 0, error: String(details) } })
+      }
+      return undefined
+    }
+  }
+  // Selection is local and explicit: only a verified registered project can be selected, and
+  // only an existing (adopted-by-reference) project asks the backend for its real file list.
+  const selectProject = selected => {
+    if (state.busy || disposed || !state.projects.some(project => project.path === selected && project.registered === true)) return false
+    previewToken += 1
+    projectTreeToken += 1
+    const project = state.projects.find(entry => entry.path === selected) || null
+    const existing = isExistingTemplate(project)
+    emit({
+      selected,
+      preview: null,
+      previewPath: '',
+      projectTree: existing
+        ? { project: selected, status: 'loading', files: [], coverage: '', truncated: false, omitted: 0, error: '' }
+        : { project: '', status: 'idle', files: [], coverage: '', truncated: false, omitted: 0, error: '' }
+    })
+    if (existing) loadProjectTree(selected)
+    return true
+  }
+  // The existing-project list is read only when the person explicitly opens the dialog.
+  // There is no mount-time scan and no background refresh.
+  const listExistingProjects = async () => {
+    if (disposed) return undefined
+    const ownerLifetime = lifetime
+    const token = ++existingListToken
+    const current = () => !disposed && ownerLifetime === lifetime && token === existingListToken
+    emit({ existingList: { status: 'loading', projects: [], coverage: '', error: '' } })
+    try {
+      const result = await rest('/workspace/available-projects')
+      if (!current()) return undefined
+      const coverage = result?.coverage === 'verified' ? 'verified' : 'could_not_verify'
+      if (coverage !== 'verified') {
+        emit({ existingList: { status: 'error', projects: [], coverage, error: String(result?.error || 'Hermes projects could not be verified.') } })
+        return result
+      }
+      const projects = (Array.isArray(result?.projects) ? result.projects : []).map(project => {
+        const path = typeof project?.primary_path === 'string' && project.primary_path
+          ? project.primary_path
+          : typeof project?.path === 'string' ? project.path : ''
+        const name = typeof project?.name === 'string' && project.name.trim() ? project.name : path
+        return {
+          id: typeof project?.id === 'string' ? project.id : '',
+          name,
+          path,
+          folders: Array.isArray(project?.folders) ? project.folders : []
+        }
+      }).filter(project => project.path)
+      emit({ existingList: { status: 'ready', projects, coverage, error: '' } })
+      return result
+    } catch (error) {
+      if (current()) {
+        const details = error?.body?.detail || error?.data?.detail || formatError(error)
+        emit({ existingList: { status: 'error', projects: [], coverage: 'could_not_verify', error: String(details) } })
+      }
+      return undefined
+    }
+  }
+  // Registers a reference to an existing folder. Success is claimed only after a forced,
+  // verified project-list read shows the canonical folder; otherwise nothing is selected.
+  const openExistingProject = async ({ path, hermes_project_id } = {}) => {
+    if (disposed || state.existingOpenBusy) return { ok: false }
+    const cleanPath = typeof path === 'string' ? path.trim() : ''
+    const projectId = typeof hermes_project_id === 'string' && hermes_project_id.trim() ? hermes_project_id.trim() : ''
+    if (!cleanPath) {
+      emit({ existingOpenError: 'Choose a project or type the full folder path on the backend machine.' })
+      return { ok: false }
+    }
+    const ownerLifetime = lifetime
+    const current = () => !disposed && ownerLifetime === lifetime
+    emit({ existingOpenBusy: true, existingOpenError: '', existingOpenNotice: '' })
+    try {
+      const body = projectId ? { path: cleanPath, hermes_project_id: projectId } : { path: cleanPath }
+      const result = await rest('/workspace/projects/open', { method: 'POST', body })
+      if (!current()) return { ok: false }
+      const openedPath = typeof result?.project?.path === 'string' && result.project.path ? result.project.path : ''
+      if (result?.status !== 'opened' || !openedPath) {
+        emit({ existingOpenBusy: false, existingOpenError: 'The backend did not confirm that the folder was opened. Nothing was selected.' })
+        return { ok: false }
+      }
+      const verified = await fetchProjects({ force: true, preservePreview: true })
+      if (!current()) return { ok: false }
+      if (!verified) {
+        emit({ existingOpenBusy: false, existingOpenError: 'The reference could not be verified because the project list could not be reloaded. Nothing was selected; Refresh projects to check.' })
+        return { ok: false }
+      }
+      if (verified.coverage !== 'verified') {
+        emit({ existingOpenBusy: false, existingOpenError: `The reference could not be verified: registry coverage is ${verified.coverage || 'unknown'}. Nothing was selected.` })
+        return { ok: false }
+      }
+      const record = verified.projects.find(project => project.path === openedPath && project.registered === true)
+      if (!record) {
+        emit({ existingOpenBusy: false, existingOpenError: 'The backend reported the project opened, but the verified active-profile list does not show it. Nothing was selected; Refresh projects to check.' })
+        return { ok: false }
+      }
+      emit({ existingOpenBusy: false, existingOpenNotice: `Opened ${record.name || openedPath} as a reference. No files were copied, changed, or trusted.` })
+      selectProject(record.path)
+      return { ok: true, path: record.path }
+    } catch (error) {
+      if (!current()) return { ok: false }
+      const details = error?.body?.detail || error?.data?.detail || formatError(error)
+      emit({ existingOpenBusy: false, existingOpenError: String(details) })
+      return { ok: false }
+    }
+  }
   return {
     dispose,
     mount: () => { mounted = true; if (disposed) { disposed = false; emit({ busy: false }) } },
@@ -2789,12 +3117,10 @@ export function createWorkspaceModel(ctx, changed = () => {}, initialScreen = 'm
     get: () => state,
     edit: patch => invalidate(patch),
     screen: screen => emit({ screen }),
-    select: selected => {
-      if (!state.busy && state.projects.some(p => p.path === selected && p.registered === true)) {
-        previewToken += 1
-        emit({ selected, preview: null, previewPath: '' })
-      }
-    },
+    select: selectProject,
+    loadTree: () => loadProjectTree(state.selected),
+    listExistingProjects,
+    openExistingProject,
     preview: path => {
       const cleanPath = typeof path === 'string' ? path.trim() : ''
       if (state.busy || disposed || !state.selected || !cleanPath) return undefined
@@ -2817,16 +3143,9 @@ export function createWorkspaceModel(ctx, changed = () => {}, initialScreen = 'm
         }
       })()
     },
-    load: () => request('/workspace/projects', undefined, result => {
-      previewToken += 1
-      const projects = (result.projects || []).map(project => {
-        const registered = project.registered === true || (project.registered !== false && result.coverage === 'verified')
-        return { ...project, path: project.path || project.canonical_path || project.raw_path || '', registered,
-          registrationStatus: registered ? 'registered' : project.registered === false ? 'not registered' : 'could_not_verify' }
-      })
-      emit({ projects, projectsLoaded: true, coverage: result.coverage || 'could_not_verify',
-        selected: projects.some(p => p.path === state.selected && p.registered) ? state.selected : '', preview: null, previewPath: '' })
-    }),
+    load: loadProjects,
+    forget,
+    forgetMissing,
     // Loads the pick-list. The request carries only the typed idea, so the "(suggested)"
     // marks never depend on the chosen row. `heldAnswers` are the answers the page keeps
     // for Create (they are stored, never sent here).
@@ -3318,6 +3637,15 @@ export function ComputerToolsSection({ model, state, project, projectState }) {
   const card = background => ({ ...panelStyle, padding: '14px', border: '1px solid var(--ui-stroke-secondary)', borderLeft: '3px solid var(--ui-accent)', borderRadius: '10px', background })
   const [confirmTrust, setConfirmTrust] = useState(false)
   const [confirmSetup, setConfirmSetup] = useState(false)
+  const [openTool, setOpenTool] = useState('')
+  const toolRefs = useRef({})
+  const toolItems = Array.isArray(state.tools?.items) ? state.tools.items : []
+  const closeTool = name => {
+    setOpenTool('')
+    const opener = toolRefs.current?.[name]
+    if (opener && typeof opener.focus === 'function') opener.focus()
+  }
+  const toolStatusLine = item => String(item.status || 'could_not_verify')
   return jsxs('section', { 'aria-label': 'Tools on this computer', 'data-testid': 'settings-computer-tools', 'data-color-scheme': 'no-red-green', style: panelStyle, children: [
     jsx('h2', { style: { margin: 0, fontSize: '15px' }, children: 'Tools on this computer' }),
     jsx('p', { children: 'Nothing is checked, installed or trusted until you press a button here.' }),
@@ -3327,17 +3655,72 @@ export function ComputerToolsSection({ model, state, project, projectState }) {
     ...Object.entries(state.resourceErrors || {}).map(([key, error]) => jsx('p', { role: 'alert', children: `${key}: ${error}` }, key)),
     jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'Lint tools, expected versions and setup plan' }),
-    outputView(state.tools || 'Tools not checked yet'),
+    jsx('p', { children: 'Expectations come from the plugin manifest; installed versions and paths come from /tools/status. An expected version does not prove a tool is installed. Selecting a pill only reveals its details; it never installs or runs anything.' }),
+    !state.tools ? jsx('p', { children: 'Tools not checked yet' }) : (toolItems.length ? jsx('div', {
+      role: 'group',
+      'aria-label': 'Tool status pills',
+      'data-testid': 'tool-status-grid',
+      style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px', alignItems: 'start' },
+      children: toolItems.map(item => {
+      const name = String(item.name || 'unknown')
+      const isOpen = openTool === name
+      const popupId = `tool-status-popup-${name.replace(/[^a-zA-Z0-9_-]+/g, '-')}`
+      return jsx('div', {
+        key: name,
+        style: { position: 'relative', minWidth: 0 },
+        onKeyDown: e => {
+          if (e?.key !== 'Escape' || !isOpen) return
+          e.preventDefault?.()
+          closeTool(name)
+        },
+        children: [
+          jsx(Button, {
+            className: 'tool-pill',
+            'data-testid': 'tool-pill',
+            'data-tool': name,
+            'aria-expanded': isOpen,
+            'aria-controls': popupId,
+            title: `${name} — expected ${item.expected_version ?? item.version ?? 'unknown'}, installed ${item.installed_version ?? 'unknown'}`,
+            ref: node => { if (toolRefs.current) toolRefs.current[name] = node },
+            onClick: () => setOpenTool(current => current === name ? '' : name),
+            style: { width: '100%', minWidth: 0, justifyContent: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+            children: name
+          }),
+          isOpen ? jsx('div', {
+            id: popupId,
+            role: 'dialog',
+            'aria-label': `Tool status ${name}`,
+            'data-testid': 'tool-status-popup',
+            'data-tool': name,
+            style: { position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 20, background: RAISED_FILL, color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', padding: '8px 10px', fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '3px' },
+            children: [
+              jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' }, children: [
+                jsx('strong', { style: { flex: 1, overflowWrap: 'anywhere' }, children: name }),
+                jsx(Button, {
+                  'data-testid': 'close-tool-status',
+                  'aria-label': `Close tool status ${name}`,
+                  onClick: () => closeTool(name),
+                  children: '×'
+                })
+              ] }),
+              jsx('span', { children: `Expected version: ${item.expected_version ?? item.version ?? 'unknown'}` }),
+              jsx('span', { children: `Installed version: ${item.installed_version ?? 'unknown'}` }),
+              jsx('span', { style: { overflowWrap: 'anywhere' }, children: `Executable: ${item.executable_path ?? 'unknown'}` }),
+              jsx('span', { children: `Status: ${toolStatusLine(item)}` }),
+              item.error ? jsx('span', { role: 'alert', style: { overflowWrap: 'anywhere' }, children: `Error: ${item.error}` }) : null
+            ]
+          }) : null
+        ]
+      })
+    })}) : jsx('p', { children: 'No tool rows returned; absence is not a pass.' })),
+    state.tools?.plan ? jsx('details', { 'data-testid': 'tool-setup-plan', style: { marginTop: '6px' }, children: [
+      jsx('summary', { style: { cursor: 'pointer' }, children: 'Setup plan and total size (review before confirming)' }),
+      outputView(state.tools.plan)
+    ] }) : null
     ] }),
     jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'Installed tool versions' }),
-    jsx('p', { children: 'Read from /tools/status, separately from the selected project and TOOLS.lock. An expected version does not prove a tool is installed; a missing answer means unknown.' }),
-    outputView(state.tools ? (state.tools.items || []).map(item => ({ name: item.name,
-      expected_version: item.expected_version ?? item.version ?? null,
-      installed_version: item.installed_version ?? null,
-      executable_path: item.executable_path ?? null,
-      status: item.status ?? 'could_not_verify',
-      ...(item.error ? { error: item.error } : {}) })) : 'Installed versions not checked yet'),
+    jsx('p', { children: 'Installed versions and executable paths are shown in each tool pill above. They come from /tools/status, separately from the selected project and TOOLS.lock. An expected version does not prove a tool is installed; a missing answer means unknown.' })
     ] }),
     jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'Setup status' }), outputView(state.setup || 'Setup not checked yet'),
@@ -3573,15 +3956,89 @@ export const V10_PIPELINE_STAGES = {
   ]
 }
 
-function projectBadgeFor(project) {
-  const raw = `${project?.template_id || project?.template || ''} ${project?.language || ''} ${project?.stack || ''} ${project?.name || ''} ${project?.path || ''}`.toLowerCase()
-  if (raw.includes('web-golden')) return { badge: 'Web', template: 'web-golden' }
-  if (raw.includes('rust') || raw.includes('cargo') || raw.endsWith('.rs')) return { badge: 'R', template: 'rust-golden' }
-  if (raw.includes('python') || raw.includes('py') || raw.includes('uv')) return { badge: 'Py', template: 'python-golden' }
-  if (raw.includes('go-golden') || /\bgo\b/.test(raw)) return { badge: 'Go', template: 'go-golden' }
-  if (raw.includes('cpp') || raw.includes('c++') || raw.includes('cmake')) return { badge: 'C++', template: 'cpp-golden' }
-  if (raw.includes('dotnet') || raw.includes('csharp') || raw.includes('c#')) return { badge: 'C#', template: 'dotnet-golden' }
-  return { badge: 'TS', template: 'ts-node-golden' }
+const PROJECT_META_KEYS = ['template_id', 'template', 'language', 'languages', 'stack']
+
+function projectMetaText(project) {
+  const parts = []
+  for (const key of PROJECT_META_KEYS) {
+    const value = project?.[key]
+    if (typeof value === 'string') parts.push(value)
+    else if (Array.isArray(value)) parts.push(...value.filter(item => typeof item === 'string'))
+  }
+  return parts.join(' ').toLowerCase()
+}
+
+// Template/language badges come from metadata only. Names and paths are user data:
+// a folder called "copy" or "py-copy" must never be mistaken for a Python project.
+export function projectBadgeFor(project) {
+  const meta = projectMetaText(project)
+  if (meta.includes('web-golden')) return { badge: 'Web', template: 'web-golden' }
+  if (/(^|[^a-z0-9])(rust|cargo)([^a-z0-9]|$)|\.rs($|[^a-z0-9])/.test(meta)) return { badge: 'R', template: 'rust-golden' }
+  if (/(^|[^a-z0-9])(python|py|uv)([^a-z0-9]|$)/.test(meta)) return { badge: 'Py', template: 'python-golden' }
+  if (/(^|[^a-z0-9])(go|golang)([^a-z0-9]|$)/.test(meta)) return { badge: 'Go', template: 'go-golden' }
+  if (/(^|[^a-z0-9])(cpp|c\+\+|cmake)([^a-z0-9]|$)/.test(meta)) return { badge: 'C++', template: 'cpp-golden' }
+  if (/(^|[^a-z0-9])(dotnet|csharp|c#)([^a-z0-9]|$)/.test(meta)) return { badge: 'C#', template: 'dotnet-golden' }
+  // TypeScript is a positive claim: require an explicit TS/template marker. Unknown metadata
+  // (including adopted projects and name/path tokens like "py") stays unknown.
+  if (meta.includes('ts-node-golden') || /(^|[^a-z0-9])(ts|typescript|node|javascript|js)([^a-z0-9]|$)/.test(meta)) {
+    return { badge: 'TS', template: 'ts-node-golden' }
+  }
+  return { badge: '?', template: 'unknown' }
+}
+
+const FOLDER_STATUS_ORDER = ['present', 'missing', 'not_directory', 'unavailable']
+
+function normalizeProjectRecord(project, fallbackStatus) {
+  // The registry's exact stored string: used to key management rows and as the POST body for
+  // forget. Never trim it or substitute the canonical path, or a duplicate alias cannot be
+  // targeted exactly.
+  const registrationPath = typeof project?.raw_path === 'string' && project.raw_path
+    ? project.raw_path
+    : typeof project?.path === 'string' && project.path
+      ? project.path
+      : typeof project?.canonical_path === 'string' && project.canonical_path ? project.canonical_path : ''
+  // The canonical folder: used for selection and read actions. Two stored registrations may
+  // point at one folder, so the strip de-dupes on this value.
+  const path = typeof project?.canonical_path === 'string' && project.canonical_path
+    ? project.canonical_path
+    : typeof project?.path === 'string' && project.path
+      ? project.path
+      : registrationPath
+  const trimmed = path.replace(/[\\/]+$/, '')
+  const name = typeof project?.name === 'string' && project.name
+    ? project.name
+    : trimmed ? trimmed.split(/[\\/]/).pop() : 'Unnamed project'
+  const declared = typeof project?.folder_status === 'string' ? project.folder_status : ''
+  return { ...project, name, path, canonicalPath: path, registrationPath, folder_status: declared || fallbackStatus }
+}
+
+// `projects` are the records whose directory exists; `unavailable_projects` keep the rest.
+// Missing folders are not projects any more, so they never join the current strip or count.
+function normalizeProjectLists(result) {
+  const currentRecords = Array.isArray(result?.projects) ? result.projects : []
+  const unavailableRecords = Array.isArray(result?.unavailable_projects) ? result.unavailable_projects : []
+  const coverage = result?.coverage === 'verified' ? 'verified' : 'could_not_verify'
+  const projects = currentRecords.map(record => {
+    const project = normalizeProjectRecord(record, 'present')
+    const registered = project.registered === true || (project.registered !== false && coverage === 'verified')
+    return {
+      ...project,
+      folder_status: 'present',
+      registered,
+      registrationStatus: registered ? 'registered' : project.registered === false ? 'not registered' : 'could_not_verify'
+    }
+  })
+  const unavailableProjects = unavailableRecords.map(record => {
+    const project = normalizeProjectRecord(record, 'unavailable')
+    return {
+      ...project,
+      registered: false,
+      folder_status: FOLDER_STATUS_ORDER.includes(project.folder_status) && project.folder_status !== 'present'
+        ? project.folder_status
+        : 'unavailable'
+    }
+  })
+  return { projects, unavailableProjects }
 }
 
 export function buildTreeFromPaths(paths = []) {
@@ -3900,7 +4357,7 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
     }
   }, [ctx])
 
-  const projectName = project || state?.selected || 'invoice-tracker'
+  const projectName = project || state?.selected || 'No project selected'
   const prevContextRef = useRef({ projectName, auditMode })
   if (prevContextRef.current.projectName !== projectName || prevContextRef.current.auditMode !== auditMode) {
     prevContextRef.current = { projectName, auditMode }
@@ -4365,6 +4822,14 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
   const [folderBusy, setFolderBusy] = useState(false)
   const [folderMode, setFolderMode] = useState('choose')
   const [saveFallback, setSaveFallback] = useState('')
+  const [manageOpen, setManageOpen] = useState(false)
+  const [manageConfirm, setManageConfirm] = useState({ path: '', bulk: false })
+  const [openExisting, setOpenExisting] = useState(false)
+  const [existingPath, setExistingPath] = useState('')
+  const [existingSelected, setExistingSelected] = useState('')
+  const [existingBrowseNote, setExistingBrowseNote] = useState('')
+  const [existingBrowseError, setExistingBrowseError] = useState('')
+  const [lintConfirmPath, setLintConfirmPath] = useState('')
   const FOLDER_UNREACHABLE = 'Could not read the projects folder. Creating a project is unavailable until Defuzz can be reached.'
 
   const clearIdeaMatchTimer = () => {
@@ -4427,13 +4892,46 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
   }
 
   const selectedProjectObj = current.projects.find(p => p.path === current.selected) || null
-  const activeTemplateSpec = V10_TEMPLATES.find(t => t.id === (selectedProjectObj ? projectBadgeFor(selectedProjectObj).template : 'ts-node-golden')) || V10_TEMPLATES[0]
-  const filteredProjects = current.projects.filter(p => {
+  const selectedIsExisting = selectedProjectObj?.template_id === 'existing'
+  // Classification label for a non-existing selected project's footer only; never used as
+  // editor or tree placeholder content.
+  const activeTemplateSpec = V10_TEMPLATES.find(t => selectedProjectObj && t.id === projectBadgeFor(selectedProjectObj).template) || V10_TEMPLATES[0]
+  // One card per canonical folder. Duplicate stored registrations (raw_path aliases) manage
+  // separately, but the strip shows a single project and keeps the first display name.
+  const canonicalFolder = project => project?.canonicalPath || project?.path || project?.name || ''
+  const uniqueProjects = (() => {
+    const seen = new Set()
+    return current.projects.filter(project => {
+      const key = canonicalFolder(project)
+      if (!key) return true
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  })()
+  const filteredProjects = uniqueProjects.filter(p => {
     const info = projectBadgeFor(p)
     const matchesTemplate = templateFilter === 'all' || info.template === templateFilter || (templateFilter === 'csharpier' && info.template === 'dotnet-golden')
     const matchesQuery = !projectSearch.trim() || `${p.name || ''} ${p.path || ''} ${info.template} ${info.badge}`.toLowerCase().includes(projectSearch.trim().toLowerCase())
     return matchesTemplate && matchesQuery
   })
+
+  const manageRecords = []
+  const seenRegistrations = new Set()
+  for (const [recordKind, list] of [['current', current.projects], ['unavailable', current.unavailableProjects || []]]) {
+    for (const project of list) {
+      const key = project.registrationPath || project.path || `${project.name}|${project.folder_status}`
+      if (seenRegistrations.has(key)) continue
+      seenRegistrations.add(key)
+      manageRecords.push({ ...project, recordKind })
+    }
+  }
+  const nonverifiedRecords = current.coverage !== 'verified'
+    ? manageRecords
+    : manageRecords.filter(record => record.registered !== true || record.registrationStatus === 'could_not_verify')
+  const missingCount = (current.unavailableProjects || []).filter(p => p.folder_status === 'missing').length
+  const folderStatusText = status => status === 'not_directory' ? 'not a directory' : (status || 'unavailable')
+  const manageConfirmPath = manageConfirm.bulk ? '' : manageConfirm.path
 
   const knownLockedFiles = selectedProjectObj?.locked_hashes && typeof selectedProjectObj.locked_hashes === 'object'
     ? Object.keys(selectedProjectObj.locked_hashes)
@@ -4441,13 +4939,32 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
   const sessionCreatedFiles = selectedProjectObj?.path && Array.isArray(createdProjectFiles[selectedProjectObj.path])
     ? createdProjectFiles[selectedProjectObj.path]
     : []
+  // A real, bounded file list is the only source of rows for an existing project. Its
+  // reply belongs to one selection; anything else is discarded. Older registrations keep
+  // their stored locked_hashes as the known-file fallback, never as guessed names.
+  const activeTree = current.projectTree && current.projectTree.project === current.selected
+    ? current.projectTree
+    : { project: '', status: 'idle', files: [], coverage: '', truncated: false, omitted: 0, error: '' }
   const projectFiles = selectedProjectObj
-    ? (Array.isArray(selectedProjectObj.files) && selectedProjectObj.files.length > 0
-        ? selectedProjectObj.files
-        : knownLockedFiles.length > 0
-          ? knownLockedFiles
-          : sessionCreatedFiles)
+    ? (selectedIsExisting
+        ? (activeTree.status === 'ready' ? activeTree.files : [])
+        : (Array.isArray(selectedProjectObj.files) && selectedProjectObj.files.length > 0
+            ? selectedProjectObj.files
+            : knownLockedFiles.length > 0
+              ? knownLockedFiles
+              : sessionCreatedFiles))
     : []
+  const treeNoticeParts = []
+  if (activeTree.truncated || activeTree.omitted > 0) {
+    treeNoticeParts.push(`File list truncated: ${activeTree.files.length} shown${activeTree.omitted > 0 ? `, ${activeTree.omitted} omitted` : ''}.`)
+  }
+  if (activeTree.status === 'ready' && activeTree.coverage && activeTree.coverage !== 'verified') {
+    treeNoticeParts.push('File list coverage could not be verified; it may be incomplete.')
+  }
+  if (activeTree.status === 'error') treeNoticeParts.push(`File list unavailable: ${activeTree.error}`)
+  const treeNotice = selectedProjectObj
+    ? (activeTree.status === 'loading' ? 'Loading file list…' : treeNoticeParts.join(' '))
+    : ''
   const treeHierarchy = buildTreeFromPaths(projectFiles)
   let folderCount = 0
   let fileCount = 0
@@ -4510,12 +5027,12 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
     if (opener) pendingFocusRestoreRef.current = opener
   }
   useEffect(() => {
-    if (!newProjectModalOpen && !auditModalOpen && !storageModalOpen && pendingFocusRestoreRef.current) {
+    if (!newProjectModalOpen && !auditModalOpen && !storageModalOpen && !openExisting && pendingFocusRestoreRef.current) {
       const opener = pendingFocusRestoreRef.current
       pendingFocusRestoreRef.current = null
       opener.focus?.()
     }
-  }, [newProjectModalOpen, auditModalOpen, storageModalOpen])
+  }, [newProjectModalOpen, auditModalOpen, storageModalOpen, openExisting])
 
   const handleModalKeyDown = (onClose) => e => {
     if (e?.key === 'Escape') {
@@ -4958,6 +5475,66 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
     }
   }
 
+  const openExistingModal = e => {
+    modalOpenerRef.current = e?.currentTarget || e?.target || null
+    setExistingPath('')
+    setExistingSelected('')
+    setExistingBrowseNote('')
+    setExistingBrowseError('')
+    setOpenExisting(true)
+    // Explicit open only: the list is never read on mount or in the background.
+    return model.listExistingProjects()
+  }
+
+  const closeExistingModal = () => {
+    setOpenExisting(false)
+    setExistingPath('')
+    setExistingSelected('')
+    setExistingBrowseNote('')
+    setExistingBrowseError('')
+    restoreModalOpenerFocus()
+  }
+
+  // Browse is a convenience only: it supplies the path as this desktop sees it and never
+  // reads the folder. The grant handle is not kept; the backend still validates the path.
+  const browseExistingFolder = async () => {
+    if (typeof ctx?.files?.requestFolder !== 'function') {
+      setExistingBrowseError('Browse is not available on this desktop. Type the backend folder path instead.')
+      return
+    }
+    setExistingBrowseError('')
+    try {
+      const picked = await ctx.files.requestFolder()
+      if (!picked || !picked.ok || !picked.folder) return
+      const pickedPath = typeof picked.folder === 'string' ? picked.folder : picked.folder.path
+      if (typeof pickedPath !== 'string' || !pickedPath.trim()) {
+        setExistingBrowseError('The picked folder did not report a path. Type the backend folder path instead.')
+        return
+      }
+      setExistingPath(pickedPath)
+      setExistingSelected('')
+      setExistingBrowseNote(`Picked on this computer: ${pickedPath}. Use the path the backend machine can reach.`)
+    } catch {
+      setExistingBrowseError('The folder picker failed. Type the backend folder path instead.')
+    }
+  }
+
+  const confirmOpenExisting = async () => {
+    const manualPath = existingPath.trim()
+    const row = !manualPath ? (current.existingList?.projects || []).find(project => project.path === existingSelected) : null
+    const chosenPath = manualPath || row?.path || ''
+    if (!chosenPath) {
+      setExistingBrowseError('Choose a project or type the full folder path on the backend machine.')
+      return
+    }
+    const result = await model.openExistingProject({ path: chosenPath, hermes_project_id: row?.id })
+    if (result?.ok) {
+      setActionNotice(`Opened ${result.path} as a reference. No files were copied or changed. Audit is read-only; lint can execute repository code.`)
+      closeExistingModal()
+    }
+  }
+
+
   const openAuditModal = async (mode, e) => {
     modalOpenerRef.current = e?.currentTarget || e?.target || null
     const scopeToken = ++auditScopeTokenRef.current
@@ -5128,6 +5705,14 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
   const runFooterLint = async () => {
     const targetProject = current.selected
     if (!targetProject || current.busy || footerLintRef.current[targetProject]?.busy || activeLintState.busy || disposedRef.current) return
+    // An adopted-by-reference folder is untrusted: lint may run its tooling and write files.
+    // It only runs after an explicit second click for this exact selected path.
+    if (selectedIsExisting && lintConfirmPath !== targetProject) {
+      setLintConfirmPath(targetProject)
+      setActionNotice('Lint can execute repository code and write files. Click ▶ again to confirm for this existing project.')
+      return
+    }
+    setLintConfirmPath('')
     const existingJob = footerLintRef.current[targetProject]?.job ?? activeLintState.job ?? null
     footerLintRef.current[targetProject] = { ...(footerLintRef.current[targetProject] || {}), busy: true, job: existingJob }
     setFooterLintByProject(prev => ({
@@ -5246,9 +5831,9 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
     ? (current.preview.content ?? JSON.stringify(current.preview, null, 2))
     : current.previewPath === file
       ? `Loading ${file}…`
-      : `# ${selectedProjectObj?.name || activeTemplateSpec.id}\n\n// ${file} (${activeTemplateSpec.id})`
+      : 'Select a file to preview its contents.'
   const showMdPreview = isMdFile && mdMode === 'preview'
-  const anyModalOpen = Boolean(newProjectModalOpen || auditModalOpen || storageModalOpen || folderDialogOpen)
+  const anyModalOpen = Boolean(newProjectModalOpen || auditModalOpen || storageModalOpen || folderDialogOpen || openExisting)
   const modalLocked = Boolean(current.busy || current.partial)
   const catalogNotice = current.catalog?.notice || ''
   const catalogSuggested = current.catalog?.suggested || []
@@ -5313,6 +5898,7 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
     jsxs('header', { className: 'top', 'data-testid': 'v10-top-bar', inert: anyModalOpen ? true : undefined, 'aria-hidden': anyModalOpen ? 'true' : undefined, style: { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', borderBottom: '1px solid var(--ui-stroke-secondary)', paddingBottom: '12px' }, children: [
       jsx('img', { className: 'locked-banner', 'data-testid': 'v10-locked-banner', src: DEFUZZ_BANNER_DATA_URL, alt: 'Project Defuzz', width: 688, height: 192, style: { height: '64px', width: 'auto', objectFit: 'contain' } }),
       jsx('span', { className: 'spacer', style: { flex: 1 } }),
+      jsx(Button, { id: 'open-existing-project', 'data-testid': 'open-existing-project-btn', 'aria-label': 'Open an existing Hermes project', onClick: openExistingModal, children: 'Open existing project' }),
       jsx(Button, { id: 'start-project', 'data-testid': 'start-project-modal-btn', className: 'primary', 'aria-label': 'Open Start project modal', onClick: openNewProjectModal, children: '+ Start project' }),
       jsx(Button, { id: 'settings-button', 'data-testid': 'settings-button', className: 'steel-settings', 'aria-label': 'Settings', onClick: () => navigateScreen(current.screen === 'settings' ? 'main' : 'settings', current.screen === 'settings' ? ROUTE_PATH : `${ROUTE_PATH}/settings`), children: 'Settings' }),
       jsx(Button, { id: 'inspector-button', 'data-testid': 'inspector-button', 'aria-label': 'Adopted copy inspector', onClick: () => navigateScreen(current.screen === 'adopt' ? 'main' : 'adopt', current.screen === 'adopt' ? ROUTE_PATH : `${ROUTE_PATH}/inspector`), children: 'Adopted copies' })
@@ -5326,12 +5912,24 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
     jsxs('section', { id: 'workspace', className: 'workspace', 'aria-label': 'Projects', 'data-testid': 'project-workspace-box', 'data-color-scheme': 'no-red-green', inert: anyModalOpen ? true : undefined, 'aria-hidden': anyModalOpen ? 'true' : undefined,
       style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '12px', padding: '16px', color: 'var(--ui-text-primary)', display: 'flex', flexDirection: 'column', gap: '10px' }, children: [
       jsxs('div', { className: 'projects-toolbar', 'data-testid': 'projects-toolbar', style: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }, children: [
-        jsxs('h1', { style: { margin: 0, fontSize: '16px' }, children: ['Projects ', jsx('span', { id: 'project-count', className: 'project-count', children: String(current.projects.length) })] }),
+        jsxs('h1', { style: { margin: 0, fontSize: '16px' }, children: ['Projects ', jsx('span', { id: 'project-count', className: 'project-count', children: String(uniqueProjects.length) })] }),
         jsx('span', { style: { flex: 1 } }),
         jsx('input', { id: 'project-search', type: 'text', 'aria-label': 'Filter projects', placeholder: 'Filter projects…', value: projectSearch, onChange: e => setProjectSearch(e.target.value), style: { padding: '6px 10px', borderRadius: '6px', border: '1px solid var(--ui-stroke-secondary)', background: 'transparent', color: 'var(--ui-text-primary)' } }),
-        action('Refresh projects', () => model.load(), current.busy),
+        action('Refresh projects', () => model.load(), Boolean(current.busy || current.forgetting)),
         action('Load workspace preferences', () => model.loadSettings(), current.busy),
-        action('Save workspace preferences', () => model.saveSettings(), current.busy || !current.loaded)
+        action('Save workspace preferences', () => model.saveSettings(), current.busy || !current.loaded),
+        jsx(Button, {
+          id: 'manage-projects-toggle',
+          'data-testid': 'manage-projects-toggle',
+          'aria-expanded': manageOpen,
+          'aria-controls': 'manage-projects-panel',
+          disabled: Boolean(current.busy || current.forgetting),
+          onClick: () => {
+            setManageConfirm({ path: '', bulk: false })
+            setManageOpen(open => !open)
+          },
+          children: manageOpen ? 'Hide project management' : 'Manage projects'
+        })
       ] }),
       jsxs('div', { 'data-testid': 'v10-template-filter-pills', role: 'group', 'aria-label': 'Template and tool filters', style: { display: 'flex', gap: '6px', flexWrap: 'wrap' }, children: [
         jsx(Button, { 'data-testid': 'filter-pill-all', 'aria-pressed': templateFilter === 'all', onClick: () => setTemplateFilter('all'), children: `All templates (${V10_TEMPLATES.length})` }),
@@ -5345,40 +5943,120 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
       ] }),
       jsx('div', { id: 'project-cards', className: 'project-cards', 'data-testid': 'v10-project-strip', 'aria-label': 'Current projects', style: { display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', borderBottom: '1px solid var(--ui-stroke-secondary)' }, children: filteredProjects.map(project => {
         const info = projectBadgeFor(project)
+        const displayName = project.name || project.path
         const isSelected = current.selected === project.path && Boolean(project.path)
-        return jsxs(Button, {
+        const accessiblePath = project.canonicalPath || project.path
+        const registrationNote = project.registrationPath && project.registrationPath !== accessiblePath
+          ? ` (registered as ${project.registrationPath})`
+          : ''
+        return jsx(Button, {
           className: 'project-card',
-          'data-project': project.name || project.path,
+          'data-project': displayName,
           'data-template': info.template,
           'aria-pressed': isSelected,
+          'aria-label': `${displayName} — ${accessiblePath || 'no path'}${registrationNote}`,
+          title: project.path || project.name,
           disabled: !project.registered || !project.path,
           onClick: () => {
             model.select(project.path)
             setActionNotice('')
           },
           style: { display: 'inline-flex', alignItems: 'center', gap: '6px', height: '32px', padding: '4px 10px' },
-          children: [
-            jsx('span', { className: 'project-symbol', 'data-language': info.badge, style: { fontFamily: 'var(--font-mono)', fontWeight: 600 }, children: info.badge }),
-            jsx('span', { className: 'project-name', children: `${project.name || project.path}${project.registered ? '' : ` — ${project.registrationStatus || 'could_not_verify'}`}` })
-          ]
-        }, project.path || project.name)
+          children: jsx('span', { className: 'project-name', children: displayName })
+        }, project.canonicalPath || project.path || displayName)
       }) }),
+      current.projectsLoaded && current.coverage !== 'verified' ? jsx('p', {
+        id: 'projects-coverage-warning',
+        'data-testid': 'projects-coverage-warning',
+        role: 'status',
+        style: { margin: 0, color: 'var(--ui-text-secondary)', fontSize: '11px' },
+        children: 'Could not verify registry coverage; this list may be incomplete. Nothing here proves that an unlisted project is gone.'
+      }) : null,
       filteredProjects.length === 0 && current.projects.length > 0 ? jsx('div', { id: 'no-project-match', className: 'no-match', children: 'No matching projects.' }) : null,
       !current.projects.length ? jsx('p', { children: current.busy ? 'Loading projects…' : current.projectsLoaded ? 'No projects returned. Unknown coverage is not proof that no projects exist.' : 'Projects not loaded. Refresh to read active-profile registrations.' }) : null,
+      manageOpen ? jsxs('section', {
+        id: 'manage-projects-panel',
+        'data-testid': 'manage-projects-panel',
+        'aria-label': 'Manage projects',
+        'data-confirming': manageConfirmPath || (manageConfirm.bulk ? 'bulk' : undefined),
+        style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px' },
+        children: [
+          jsx('h2', { style: { margin: 0, fontSize: '13px' }, children: 'Manage projects' }),
+          jsx('p', { style: { margin: 0, color: 'var(--ui-text-secondary)' }, children: 'Every registration Defuzz knows about. Forgetting removes the registry record only; folders on disk are never deleted.' }),
+          current.coverage !== 'verified' ? jsxs('div', {
+            id: 'manage-coverage-warning',
+            'data-testid': 'manage-coverage-warning',
+            role: 'status',
+            style: { margin: 0, color: 'var(--ui-text-secondary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px', padding: '6px 8px' },
+            children: [
+              jsx('strong', { children: 'Could not verify registry coverage. ' }),
+              jsx('span', { children: `These registrations are unknown, not absent: ${nonverifiedRecords.length ? nonverifiedRecords.map(record => record.registrationPath || record.path || record.name).join(', ') : '(none listed)'}` })
+            ]
+          }) : null,
+          jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }, children: [
+            jsx('span', { children: `${current.projects.length} current · ${(current.unavailableProjects || []).length} unavailable` }),
+            missingCount > 0 ? (manageConfirm.bulk ? jsxs('span', { 'data-testid': 'bulk-forget-confirm', style: { display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }, children: [
+              jsx('span', { children: `Remove ${missingCount} missing project${missingCount === 1 ? '' : 's'} from Defuzz? This removes them from Defuzz only; files untouched.` }),
+              jsx(Button, { 'data-testid': 'confirm-forget-missing', disabled: Boolean(current.forgetting), onClick: () => { setManageConfirm({ path: '', bulk: false }); return model.forgetMissing() }, children: `Forget ${missingCount} missing` }),
+              jsx(Button, { 'data-testid': 'cancel-forget-missing', onClick: () => setManageConfirm({ path: '', bulk: false }), children: 'Cancel' })
+            ] }) : jsx(Button, { 'data-testid': 'forget-missing-projects', onClick: () => setManageConfirm({ path: '', bulk: true }), children: `Forget missing (${missingCount})` })) : null
+          ] }),
+          jsx('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' }, children: manageRecords.length ? manageRecords.map(record => {
+            const registrationPath = record.registrationPath || record.path || ''
+            const confirming = manageConfirmPath && manageConfirmPath === registrationPath
+            return jsxs('div', {
+              'data-testid': 'manage-project-row',
+              'data-path': registrationPath,
+              'data-registration-path': registrationPath,
+              'data-canonical-path': record.canonicalPath || record.path || '',
+              'data-folder-status': record.folder_status,
+              style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' },
+              children: [
+                jsxs('div', { style: { display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' }, children: [
+                  jsx('strong', { className: 'manage-project-name', children: record.name }),
+                  jsx('code', { style: { overflowWrap: 'anywhere' }, children: registrationPath || '(no path)' }),
+                  record.canonicalPath && record.canonicalPath !== registrationPath
+                    ? jsx('span', { style: { color: 'var(--ui-text-secondary)', overflowWrap: 'anywhere' }, children: `Canonical folder: ${record.canonicalPath}` })
+                    : null,
+                  jsx('span', { className: 'manage-project-folder-status', style: { color: 'var(--ui-text-secondary)' }, children: `Folder: ${folderStatusText(record.folder_status)}` })
+                ] }),
+                confirming ? jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }, children: [
+                  jsx('span', { children: 'Remove this project from Defuzz? This removes it from Defuzz only; files untouched.' }),
+                  jsx(Button, { 'data-testid': 'confirm-forget-project', disabled: Boolean(current.forgetting), onClick: () => { setManageConfirm({ path: '', bulk: false }); return model.forget(registrationPath) }, children: 'Forget' }),
+                  jsx(Button, { 'data-testid': 'cancel-forget-project', onClick: () => setManageConfirm({ path: '', bulk: false }), children: 'Cancel' })
+                ] }) : jsx(Button, {
+                  'data-testid': 'forget-project',
+                  'aria-label': `Forget ${record.name} — exact registration ${registrationPath || 'unavailable'}`,
+                  disabled: Boolean(current.forgetting) || !registrationPath,
+                  onClick: () => setManageConfirm({ path: registrationPath, bulk: false }),
+                  children: current.forgetting === registrationPath ? 'Forgetting…' : 'Forget'
+                })
+              ]
+            }, `${record.recordKind}|${registrationPath}|${record.folder_status}`)
+          }) : jsx('p', { style: { margin: 0 }, children: 'No project registrations returned.' }) }),
+          current.forgetNotice ? jsx('p', { id: 'forget-notice', role: 'status', style: { margin: 0, color: 'var(--ui-text-secondary)' }, children: current.forgetNotice }) : null
+        ]
+      }) : null,
       jsxs('div', { className: 'columns', style: { '--tree-size': `${splitVal}%`, '--split': `${splitVal}%`, display: 'grid', gap: '0px', gridTemplateColumns: `minmax(0, ${splitVal}%) 7px minmax(0, 1fr)`, border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', overflow: 'hidden' }, children: [
         jsxs('section', { className: 'explorer', 'aria-label': 'Project explorer', style: { minWidth: 0, padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }, children: [
           jsxs('div', { className: 'pane-head', style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' }, children: [
-            jsx('h2', { id: 'active-project-title', style: { margin: 0, fontSize: '13px' }, children: selectedProjectObj?.name || current.selected || 'invoice-tracker' }),
+            jsx('h2', { id: 'active-project-title', style: { margin: 0, fontSize: '13px' }, children: selectedProjectObj ? (selectedProjectObj.name || selectedProjectObj.path) : 'No project selected' }),
             jsx(Button, { id: 'collapse-all', onClick: () => {
               const nextCollapse = !collapseAll
               setCollapseAll(nextCollapse)
               setCollapsedFolders({})
-            }, children: collapseAll ? 'Expand all' : 'Collapse all' })
+            }, children: collapseAll ? 'Expand all' : 'Collapse all' }),
+            selectedIsExisting ? jsx(Button, { 'data-testid': 'tree-reload', disabled: activeTree.status === 'loading', onClick: () => model.loadTree(), children: activeTree.status === 'loading' ? 'Loading…' : 'Reload file list' }) : null
           ] }),
-          jsx('div', { id: 'tree', className: 'tree', role: 'tree', 'aria-label': 'Project file tree', style: { display: 'flex', flexDirection: 'column', gap: '2px' }, children: renderedTreeItems.length > 0 ? renderedTreeItems : jsx('div', { 'data-testid': 'file-listing-unavailable', style: { padding: '6px 4px', fontSize: '12px', color: 'var(--ui-text-secondary)' }, children: selectedProjectObj ? 'File listing unavailable for this project.' : 'File listing unavailable — select a registered project.' }) }),
+          treeNotice ? jsx('div', { 'data-testid': 'project-tree-notice', role: 'status', style: { fontSize: '11px', color: 'var(--ui-text-secondary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px', padding: '4px 8px' }, children: treeNotice }) : null,
+          jsx('div', { id: 'tree', className: 'tree', role: 'tree', 'aria-label': 'Project file tree', style: { display: 'flex', flexDirection: 'column', gap: '2px' }, children: renderedTreeItems.length > 0 ? renderedTreeItems : jsx('div', { 'data-testid': 'file-listing-unavailable', style: { padding: '6px 4px', fontSize: '12px', color: 'var(--ui-text-secondary)' }, children: selectedProjectObj ? (selectedIsExisting && activeTree.status === 'ready' ? 'No files were listed for this project.' : 'File listing unavailable for this project.') : 'File listing unavailable — select a registered project.' }) }),
           jsxs('div', { className: 'tree-footer', style: { display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--ui-text-secondary)', paddingTop: '6px', borderTop: '1px solid var(--ui-stroke-secondary)' }, children: [
             jsx('span', { id: 'tree-total', children: `${fileCount} files · ${folderCount} folders` }),
-            jsx('span', { children: activeTemplateSpec.id })
+            jsx('span', { 'data-testid': 'tree-coverage', children: selectedIsExisting
+              ? (activeTree.status === 'ready'
+                  ? (activeTree.coverage === 'verified' ? 'File list verified' : 'File list unverified')
+                  : activeTree.status === 'error' ? 'File list unavailable' : activeTree.status === 'loading' ? 'File list loading' : 'File list not loaded')
+              : (selectedProjectObj ? activeTemplateSpec.id : '') })
           ] })
         ] }),
         jsx('div', {
@@ -5468,7 +6146,7 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
                   ]
                 }, `line-${i}`))
           }),
-          current.selected ? jsx(ManualLintSection, { ctx, project: current.selected, mode: current.settings?.lint_mode || 'both' }, current.selected) : null
+          current.selected ? jsx(ManualLintSection, { ctx, project: current.selected, mode: current.settings?.lint_mode || 'both', requireLintConfirmation: selectedIsExisting }, current.selected) : null
         ] })
       ] }),
       jsxs('footer', { className: 'bottom', 'data-testid': 'v10-workspace-footer', style: { display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginTop: '6px', paddingTop: '10px', borderTop: '1px solid var(--ui-stroke-secondary)' }, children: [
@@ -5489,7 +6167,7 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
         ] }),
         jsxs('div', { className: 'audit-assurances', 'aria-label': 'Audit inspection boundaries', style: { display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', paddingLeft: '12px', borderLeft: '1px solid var(--ui-stroke-secondary)' }, children: [
           jsx('span', { className: 'audit-assurances-label', style: { fontSize: '10px', fontFamily: 'var(--font-mono)', color: 'var(--ui-text-secondary)' }, children: 'AUDIT' }),
-          jsx(Badge, { className: 'audit-safety', title: 'Audit does not modify inspected project files. Reports use plugin storage.', children: '🔒 Read-only' }),
+          jsx(Badge, { className: 'audit-safety', title: 'Audit only reads inspected project files. Lint is a separate action and can execute repository code and write files.', children: '🔒 Audit read-only' }),
           jsx(Badge, { className: 'audit-safety', title: 'Discovered project hooks and scripts are inspected, not launched.', children: '🚫 Runs none of your scripts' }),
           jsx(Badge, { className: 'audit-safety', title: 'The audit collector makes no outbound network calls.', children: '🚫 No internet use' }),
           jsx(Button, { id: 'plugin-storage-button', 'data-testid': 'plugin-storage-button', onClick: e => { modalOpenerRef.current = e?.currentTarget || e?.target || null; setStorageModalOpen(true) }, children: '💾 Plugin storage' })
@@ -5629,6 +6307,59 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
         jsxs('footer', { style: { display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }, children: [
           jsx(Button, { id: 'projects-folder-cancel', onClick: closeFolderDialog, children: 'Cancel' }),
           jsx(Button, { id: 'projects-folder-use', className: 'primary', disabled: folderBusy, onClick: confirmProjectsFolder, children: 'Use this folder' })
+        ] })
+      ] })
+    ] }) : null,
+    openExisting ? jsxs('div', { 'data-testid': 'modal-backdrop', 'data-modal-backdrop': 'true', onClick: e => { if (e?.target === e?.currentTarget) closeExistingModal() }, style: { ...MODAL_SCRIM }, children: [
+      jsxs('div', { id: 'open-existing-dialog', 'data-testid': 'open-existing-modal', role: 'dialog', 'data-glass-raised': true, 'aria-modal': 'true', 'aria-labelledby': 'open-existing-title', tabIndex: -1, onKeyDown: handleModalKeyDown(closeExistingModal), style: { width: 'min(620px, 92vw)', maxWidth: '100%', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box', padding: '16px', background: RAISED_FILL, color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }, children: [
+        jsxs('header', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' }, children: [
+          jsx('h2', { id: 'open-existing-title', style: { margin: 0 }, children: 'Open existing Hermes project' }),
+          jsx(Button, { 'aria-label': 'Close open existing project dialog', autoFocus: true, 'data-initial-focus': 'true', disabled: Boolean(current.existingOpenBusy), onClick: closeExistingModal, children: '×' })
+        ] }),
+        jsx('p', { id: 'open-existing-scope', style: { margin: 0 }, children: 'Opening adds a reference only. Audit is read-only; lint can execute repository code and write files.' }),
+        jsx('p', { style: { margin: 0, fontSize: '11.5px', color: 'var(--ui-text-secondary)' }, children: 'Nothing in the folder is copied, moved, adopted, or trusted. Opening does not run lint, checks, installs, or adoption.' }),
+        jsxs('section', { 'aria-label': 'Hermes projects', style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', padding: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }, children: [
+          jsx('h3', { style: { margin: 0, fontSize: '13px' }, children: 'Hermes projects' }),
+          (current.existingList?.status || 'idle') === 'loading'
+            ? jsx('p', { role: 'status', style: { margin: 0, fontSize: '12px', color: 'var(--ui-text-secondary)' }, children: 'Loading Hermes projects…' })
+            : current.existingList?.status === 'error'
+              ? jsx('p', { 'data-testid': 'open-existing-list-error', role: 'alert', style: { margin: 0, fontSize: '12px' }, children: `Could not verify Hermes projects: ${current.existingList.error}. Type the backend folder path below.` })
+              : (current.existingList?.projects || []).length === 0
+                ? jsx('p', { style: { margin: 0, fontSize: '12px', color: 'var(--ui-text-secondary)' }, children: 'No existing Hermes project folders were found. Type the backend folder path below.' })
+                : jsx('div', { role: 'radiogroup', 'aria-label': 'Existing Hermes projects', style: { display: 'flex', flexDirection: 'column', gap: '4px' }, children: (current.existingList?.projects || []).map(project => {
+                    const checked = existingSelected === project.path
+                    return jsxs('div', { 'data-testid': 'existing-project-row', 'data-path': project.path, style: { display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', columnGap: '8px', alignItems: 'start', padding: '5px 7px', border: `1px solid ${checked ? 'var(--ui-accent)' : 'var(--ui-stroke-secondary)'}`, borderRadius: '6px' }, children: [
+                      jsx('input', { 'data-testid': 'existing-project-select', 'aria-label': `${project.name} — ${project.path}`, type: 'radio', name: 'existing-project', checked, onChange: () => { setExistingSelected(project.path); setExistingPath(''); setExistingBrowseNote(''); setExistingBrowseError('') } }),
+                      jsxs('div', { style: { minWidth: 0 }, children: [
+                        jsx('strong', { style: { display: 'block', overflowWrap: 'anywhere' }, children: project.name }),
+                        jsx('code', { style: { fontSize: '11px', overflowWrap: 'anywhere', color: 'var(--ui-text-secondary)' }, children: project.path })
+                      ] })
+                    ] }, project.path)
+                  }) })
+        ] }),
+        jsxs('label', { htmlFor: 'open-existing-input', children: [
+          'Folder path on the backend machine',
+          jsx('input', {
+            id: 'open-existing-input',
+            'data-testid': 'open-existing-path',
+            value: existingPath,
+            placeholder: '/home/user/projects/my-project',
+            disabled: Boolean(current.existingOpenBusy),
+            onChange: e => { setExistingPath(e.target.value); setExistingSelected(''); setExistingBrowseNote(''); setExistingBrowseError('') },
+            style: { display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '4px', padding: '7px', background: 'var(--ui-bg-secondary)', color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px' }
+          })
+        ] }),
+        jsx('p', { id: 'open-existing-dialog-hint', 'data-testid': 'open-existing-dialog-hint', style: { margin: 0, fontSize: '11.5px', color: 'var(--ui-text-secondary)' }, children: 'Type the absolute path as the backend sees it. The backend validates every open; Browse is optional and picks on this computer only.' }),
+        jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }, children: [
+          jsx(Button, { 'data-testid': 'open-existing-browse', disabled: Boolean(current.existingOpenBusy), onClick: browseExistingFolder, children: 'Browse this computer…' }),
+          existingBrowseNote ? jsx('span', { 'data-testid': 'open-existing-browse-note', style: { fontSize: '11.5px', color: 'var(--ui-text-secondary)', overflowWrap: 'anywhere' }, children: existingBrowseNote }) : null
+        ] }),
+        existingBrowseError ? jsx('p', { 'data-testid': 'open-existing-browse-error', role: 'alert', style: { margin: 0 }, children: existingBrowseError }) : null,
+        current.existingOpenError ? jsx('p', { 'data-testid': 'open-existing-error', role: 'alert', style: { margin: 0, overflowWrap: 'anywhere' }, children: current.existingOpenError }) : null,
+        current.existingOpenNotice ? jsx('p', { 'data-testid': 'open-existing-notice', role: 'status', style: { margin: 0 }, children: current.existingOpenNotice }) : null,
+        jsxs('footer', { style: { display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }, children: [
+          jsx(Button, { 'data-testid': 'open-existing-cancel', disabled: Boolean(current.existingOpenBusy), onClick: closeExistingModal, children: 'Cancel' }),
+          jsx(Button, { 'data-testid': 'open-existing-confirm', className: 'primary', disabled: Boolean(current.existingOpenBusy) || (!existingSelected && !existingPath.trim()), onClick: confirmOpenExisting, children: current.existingOpenBusy ? 'Opening…' : 'Open' })
         ] })
       ] })
     ] }) : null,

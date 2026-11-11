@@ -39,8 +39,9 @@ test('Settings tools cards preserve installed evidence without AuditPaneView', (
   const items = [{ name: 'ruff', expected_version: '1', installed_version: null, executable_path: null, status: 'missing' }]
   const tree = ui.ComputerToolsSection({ model, state: { ...model.get(), tools: { items } }, project: '', projectState: [] })
   assert.equal(byId(tree, 'settings-computer-tools')?.props['data-color-scheme'], 'no-red-green')
-  const outputs = nodes(tree).filter(n => typeof n.props?.children === 'string' && n.props.children.includes('installed_version'))
-  assert.deepEqual(JSON.parse(outputs.at(-1).props.children), items)
+  const pills = nodes(tree).filter(n => n.props?.['data-testid'] === 'tool-pill')
+  assert.deepEqual(pills.map(n => n.props['data-tool']), ['ruff'], 'installed evidence is shown through the compact pill, not raw JSON')
+  assert.equal(nodes(tree).some(n => typeof n.props?.children === 'string' && n.props.children.includes('installed_version')), false, 'redundant expanded JSON is gone')
   assert.equal(ui.AuditPaneView, undefined)
   assert.equal(nodes(tree).filter(n => n.type === 'section' && n.props.style?.borderLeft).length, 6)
   assert.deepEqual(calls, [])

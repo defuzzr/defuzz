@@ -412,6 +412,41 @@ def _connect(db_path: Optional[Path | str] = None) -> sqlite3.Connection:
     return conn
 
 
+def _existing_db_path(db_path: Optional[Path | str] = None) -> Path:
+    """Resolve a state DB path without creating folders or migrating legacy state."""
+    if db_path is not None:
+        target = Path(db_path).expanduser()
+    else:
+        try:
+            from hermes_constants import get_hermes_home
+
+            target = Path(get_hermes_home()) / "plugin-data" / "defuzz" / "state.db"
+        except Exception:  # noqa: BLE001 - fall back to the documented default folder
+            target = Path(_state_dir_hint()) / "state.db"
+    return Path(os.path.abspath(target))
+
+
+def _connect_existing(db_path: Optional[Path | str] = None) -> Optional[sqlite3.Connection]:
+    """Open only an already-existing state DB, read/write, with no schema work.
+
+    ``mode=rw`` makes SQLite refuse to create the file, and nothing here runs the
+    schema script or provenance migrations. Callers that only need to delete an
+    exact row therefore cannot conjure a profile folder, database or lock, and cannot
+    add columns to a legacy schema they are merely cleaning up.
+    """
+    target = _existing_db_path(db_path)
+    if not target.is_file():
+        return None
+    try:
+        conn = sqlite3.connect(target.as_uri() + "?mode=rw", uri=True)
+    except sqlite3.OperationalError:
+        if not target.exists():
+            return None
+        raise
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def _normalize_path_key(path: Path | str) -> str:
     """Convert a project path to a consistent resolved string key."""
     return str(Path(path).expanduser().resolve())
@@ -766,3 +801,111 @@ def is_registered(
 ) -> bool:
     """Return True if path exists in the projects table."""
     return get_project(path, db_path=db_path) is not None
+
+
+# How a registered project folder looks right now. Only ``exists`` folders belong in the
+# workspace listing; the other values are reported for records that are still registered.
+PROJECT_FOLDER_EXISTS = "exists"
+PROJECT_FOLDER_MISSING = "missing"
+PROJECT_FOLDER_NOT_DIRECTORY = "not_directory"
+PROJECT_FOLDER_UNAVAILABLE = "unavailable"
+PROJECT_FOLDER_STATUSES: tuple[str, ...] = (
+    PROJECT_FOLDER_MISSING,
+    PROJECT_FOLDER_NOT_DIRECTORY,
+    PROJECT_FOLDER_UNAVAILABLE,
+)
+
+
+def project_folder_status(path: Path | str | None) -> str:
+    """Classify a registered project path with one read-only ``lstat``.
+
+    No file is opened and this ``lstat`` does not follow a link. The caller normally
+    supplies the registration's ``canonical_path`` (the resolved target), so a project
+    folder reached through a symlink is intentionally classified as the existing
+    canonical directory. A raw symlink string supplied instead of its canonical target is
+    not itself a directory and classifies as ``not_directory``. A path that cannot be
+    inspected (permissions, I/O error, relative or malformed record) is ``unavailable``,
+    never ``missing``.
+    """
+    if not isinstance(path, (str, os.PathLike)):
+        return PROJECT_FOLDER_UNAVAILABLE
+    try:
+        text = os.fspath(path)
+    except TypeError:
+        return PROJECT_FOLDER_UNAVAILABLE
+    if not isinstance(text, str) or not text.strip() or "\x00" in text:
+        return PROJECT_FOLDER_UNAVAILABLE
+    expanded = os.path.expanduser(text)
+    if not os.path.isabs(expanded):
+        return PROJECT_FOLDER_UNAVAILABLE
+    try:
+        st = os.lstat(expanded)
+    except FileNotFoundError:
+        return PROJECT_FOLDER_MISSING
+    except NotADirectoryError:
+        return PROJECT_FOLDER_NOT_DIRECTORY
+    except OSError:
+        return PROJECT_FOLDER_UNAVAILABLE
+    if stat.S_ISDIR(st.st_mode):
+        return PROJECT_FOLDER_EXISTS
+    # A raw symlink is not itself a project folder; callers pass canonical_path instead.
+    return PROJECT_FOLDER_NOT_DIRECTORY
+
+
+def split_registered_projects(
+    records: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split registration records into existing folders and unavailable records.
+
+    Classification prefers ``canonical_path`` (the intentionally resolved registration
+    target), so an alias registration whose target is a real directory is listed as
+    present while its distinct ``raw_path`` identity is preserved for exact deletion.
+    The unavailable records are copies carrying ``folder_status``. Nothing is deleted:
+    stale registrations stay in the DB (the audit reader still reports them) until an
+    explicit forget request removes the registration.
+    """
+    present: list[dict[str, Any]] = []
+    unavailable: list[dict[str, Any]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        candidate = record.get("canonical_path") or record.get("raw_path")
+        status = project_folder_status(candidate)
+        if status == PROJECT_FOLDER_EXISTS:
+            present.append(dict(record))
+        else:
+            entry = dict(record)
+            entry["folder_status"] = status
+            unavailable.append(entry)
+    return present, unavailable
+
+
+def forget_project(
+    path: str,
+    db_path: Optional[Path | str] = None,
+) -> bool:
+    """Delete the registration whose stored ``path`` is exactly ``path``.
+
+    The supplied string is the stored identifier, not a filesystem alias to resolve:
+    it is compared verbatim (``DELETE ... WHERE path = ?``), so an alias, a canonical
+    spelling, a trailing slash or a differently-normalised form selects a different row
+    or no row at all. Any nonempty NUL-free string is accepted as a delete key, including
+    legacy relative and ``~`` spellings; the string is never used as a filesystem path
+    and no absolute-path check applies. Only the projects row is deleted. No file, folder
+    or link is created, changed or removed. A missing state DB returns False without
+    creating the profile folder, database, journal or lock, and an existing legacy schema
+    is not initialized or migrated. Returns True when a row was deleted; repeating the
+    call with the same string is a no-op returning False.
+    """
+    if not isinstance(path, str):
+        raise ValueError("Project path must be a string")
+    if not path:
+        raise ValueError("Project path must be a non-empty string")
+    if "\x00" in path:
+        raise ValueError("Project path is invalid")
+    conn = _connect_existing(db_path)
+    if conn is None:
+        return False
+    with closing(conn) as conn, conn:
+        deleted = conn.execute("DELETE FROM projects WHERE path = ?", (path,)).rowcount
+    return deleted > 0

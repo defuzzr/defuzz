@@ -36,9 +36,11 @@ test('Settings tools section installed readback preserves null and mismatch evid
     { name: 'go', expected_version: '1.27.3', installed_version: null, executable_path: null, status: 'missing' },
   ]
   const tree = ui.ComputerToolsSection({ model, state: { ...model.get(), tools: { items } }, project: '', projectState: [] })
-  const outputs = nodes(tree, n => typeof n.props?.children === 'string' && n.props.children.includes('installed_version'))
-  const readback = JSON.parse(outputs.at(-1).props.children)
-  assert.deepEqual(readback, items)
+  const pills = nodes(tree, n => n.props?.['data-testid'] === 'tool-pill')
+  assert.deepEqual(pills.map(p => p.props['data-tool']), ['biome', 'go'])
+  assert.match(pills[0].props.title, /expected 2\.6\.6/)
+  assert.match(pills[0].props.title, /installed 1\.0\.0/)
+  assert.match(pills[1].props.title, /installed unknown/, 'a null installed version stays explicitly unknown')
 })
 
 test('seeded rules inherit tool severity', () => {

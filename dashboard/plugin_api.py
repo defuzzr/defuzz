@@ -102,6 +102,8 @@ _componentize_routes = _load("dashboard.routes.componentize_routes")
 router.include_router(_workspace_routes.router)
 router.include_router(_audit_routes.router)
 router.include_router(_componentize_routes.router)
+_existing_project_routes = _load("dashboard.routes.existing_project_routes")
+router.include_router(_existing_project_routes.router)
 
 # A write that fails (read-only folder, full disk, locked or read-only state database)
 # is answered with one plain sentence; see _boundary_handler.
@@ -984,6 +986,19 @@ def _check_workspace_file_query(request: Any) -> None:
         raise _Refusal("path must not contain control characters.")
 
 
+def _check_workspace_tree_query(request: Any) -> None:
+    _query_path(request, "project", required=True)
+
+
+def _check_existing_open_body(body: Any, _request: Any) -> None:
+    if not isinstance(body, dict):
+        return
+    try:
+        _abs_path_text(body.get("path"), "path")
+    except ValueError as exc:
+        raise _Refusal(str(exc)) from None
+
+
 def _check_componentize_status_query(request: Any) -> None:
     _query_path(request, "project_root", required=False)
 
@@ -1019,6 +1034,8 @@ _ROUTE_RULES: dict[Any, dict[str, Any]] = {
     _workspace_routes.save_ui_state: {"body": _check_ui_state_body},
     _workspace_routes.get_ui_state: {"query": _check_ui_state_query},
     _workspace_routes.workspace_file: {"query": _check_workspace_file_query},
+    _existing_project_routes.project_tree: {"query": _check_workspace_tree_query},
+    _existing_project_routes.open_existing_project: {"body": _check_existing_open_body},
     _componentize_routes.get_status: {"query": _check_componentize_status_query},
     _componentize_routes.put_settings: {"body": _check_componentize_settings_body},
     _audit_routes.start: {"body": _check_audit_start_body},

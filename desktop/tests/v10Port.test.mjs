@@ -408,7 +408,7 @@ test('Gap 8 & 9: Settings Lint rules (12 tools) tab label, ← Workspace button,
   assert.ok(h.calls.some(c => c.path.startsWith('/ui-state')), 'Save checks persists via /ui-state')
 })
 
-test('V10 main workspace: project strip with TS / R / Py / Go / C++ / C# badges, filter pills for all 6 templates + csharpier, resizable tree + file viewer, top-bar Start project modal', async t => {
+test('V10 main workspace: project strip shows names only with template metadata for filtering, filter pills for all 6 templates + csharpier, resizable tree + file viewer, top-bar Start project modal', async t => {
   const projectsPayload = {
     coverage: 'verified',
     projects: [
@@ -436,10 +436,12 @@ test('V10 main workspace: project strip with TS / R / Py / Go / C++ / C# badges,
 
   const strip = byId(tree, 'v10-project-strip') || byDomId(tree, 'project-cards')
   assert.ok(strip, 'project strip exists')
-  const stripText = textOf(strip)
-  for (const badge of ['TS', 'R', 'Py', 'Go', 'C++', 'C#']) {
-    assert.ok(stripText.includes(badge), `project strip includes badge ${badge}`)
-  }
+  const cards = nodes(strip, n => n.props?.['data-project'] !== undefined)
+  assert.deepEqual(cards.map(c => c.props['data-project']), ['invoice-tracker', 'rust-cli', 'data-tools', 'go-svc', 'cpp-engine', 'dotnet-api'])
+  assert.deepEqual(cards.map(c => textOf(c)), ['invoice-tracker', 'rust-cli', 'data-tools', 'go-svc', 'cpp-engine', 'dotnet-api'], 'strip labels are project names only, with no badge or status text')
+  assert.equal(nodes(strip, n => n.props?.className === 'project-symbol').length, 0, 'no language badge rendered in the strip')
+  assert.deepEqual(cards.map(c => c.props['data-template']), ['ts-node-golden', 'rust-golden', 'python-golden', 'go-golden', 'cpp-golden', 'dotnet-golden'], 'template metadata still drives badge/filter classification')
+  assert.equal(cards[0].props.title, '/p/ts', 'full path stays available for telling duplicate names apart')
 
   const filterBar = byId(tree, 'v10-template-filter-pills')
   assert.ok(filterBar, 'template filter pills exist')
