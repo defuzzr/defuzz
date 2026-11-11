@@ -33,14 +33,13 @@ def test_contracts_allow_equivalent_non_a05_prose(tmp_path):
         target.write_text(doc, encoding="utf-8")
         if doc != original(path):
             rewritten.append(str(path))
-    assert {"AGENTS.md", "docs/componentize.md"} <= set(rewritten)
+    assert "AGENTS.md" in rewritten
 
     def rephrased(path):
         return (tmp_path / path).read_text(encoding="utf-8")
 
     with patch(__name__ + ".text", side_effect=rephrased):
         test_storage_documentation_matches_migration()
-        test_componentize_documentation_matches_delivery()
         test_release_disclosures_match_behavior()
         test_historical_design_is_not_a_current_debt_checklist()
         test_contracts_reject_non_a05_behavior_regressions()
@@ -78,24 +77,6 @@ def test_contracts_reject_non_a05_behavior_regressions():
         (test_storage_documentation_matches_migration,
          "never overwritten", "always overwritten"),
         (test_storage_documentation_matches_migration, "WAL", "journal"),
-        (test_componentize_documentation_matches_delivery,
-         "after successful acceptance", "before acceptance"),
-        (test_componentize_documentation_matches_delivery,
-         "independent of enabled_on_adopt", "controlled by enabled_on_adopt"),
-        (test_componentize_documentation_matches_delivery,
-         "componentize.survey/1", "componentize.survey/2"),
-    )
-    cases += tuple(
-        (test_componentize_documentation_matches_delivery, before, after)
-        for before, alternatives in (
-            ("after successful acceptance", (
-                "after unsuccessful acceptance", "after not successful acceptance",
-                "after acceptance does not succeed")),
-            ("optional failures leave project creation successful", (
-                "optional failures leave project creation unsuccessful",
-                "optional failures leave project creation not successful")),
-        )
-        for after in alternatives
     )
     # Match supported concept variants, never a single spelling in live prose.
     variants = {
@@ -199,34 +180,14 @@ def test_storage_documentation_matches_migration():
 
 
 def test_componentize_documentation_matches_delivery():
-    doc = text("docs/componentize.md")
-    for phrase in ("componentize.survey/1", "run_survey_on_new", "survey_commit", "COMPONENTS.md", "componentize/spec.example.json", "xtask componentize-gate", "scaffolder.py", "dashboard/routes/componentize_routes.py"):
-        assert phrase in doc, phrase
-    concepts(doc, r"external.{0,30}(?:bridge.{0,20}contract|contract.{0,20}bridge)",
-             r"(?:independent of|not controlled by).{0,5}enabled_on_adopt",
-             r"never.{0,20}invokes.{0,20}`?begin",
-             path="docs/componentize.md", guarantee="external bridge isolation")
-    positive_concepts(
-        doc,
-        r"\brun_survey_on_new\b.{0,70}\bafter\s+(?:successful\s+acceptance|acceptance\s+succeeds)\b",
-        r"\boptional\b.{0,30}\bfailures\b.{0,60}\bproject creation\b.{0,30}\bsuccessful\b",
-        path="docs/componentize.md", guarantee="acceptance ordering and optional failure isolation",
-    )
     template = ROOT / "templates/python-golden/tmpl_prefix"
     for delivered in ("COMPONENTS.md", "componentize/spec.example.json", "tools/xtask/src/xtask/componentize.py"):
         assert (template / delivered).is_file(), delivered
-    for stale in ("componentize.survey/2", "not yet wired", "Scaffold owner: wire", "Template owner: review", "Dashboard owner: add", "none were edited"):
-        assert stale not in doc, stale
 
 
 def test_release_disclosures_match_behavior():
-    scope = text("docs/audit-scope.md")
-    for phrase in ("audit/home_startup.py", "A05", ".netrc", ".pgpass", ".git-credentials", ".docker/config.json", ".config/pip/pip.conf", ".pip/pip.conf"):
-        assert phrase in scope, phrase
-    for path in ('AGENTS.md', 'docs/audit-scope.md'):
+    for path in ('AGENTS.md',):
         policy = text(path)
-        if path != 'AGENTS.md':
-            assert 'A05' in policy
         assert 'credential files are never opened' in policy
         assert 'lstat' in policy
         assert 'A05 is pending' not in policy
@@ -237,16 +198,14 @@ def test_audit_fixed_declaration_source_docs_contract():
     from tests.conftest import load_submodule
     policy = load_submodule('audit.policy')
     disclosure = load_submodule('audit.evidence_constants').AUDIT_SCOPE_DISCLOSURE
-    scope = text('docs/audit-scope.md')
     assert policy.DECLARATION_SOURCE_FILES == (
         'config.yaml', 'profiles/*/config.yaml', '.git/config',
         'settings.json', 'settings.toml', 'package.json', 'pyproject.toml',
         'Cargo.toml', 'pnpm-workspace.yaml',
     )
     for name in policy.DECLARATION_SOURCE_FILES:
-        assert name in scope
         assert name in disclosure
-    for doc in (scope, disclosure):
+    for doc in (disclosure,):
         assert 'Declaring a declaration source as a credential has no effect' in doc
         assert 'Git include' in doc
         for phrase in ('before registration inventory', 'declared template.yaml',

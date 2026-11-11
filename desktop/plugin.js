@@ -13,6 +13,9 @@ import {
   PALETTE_AREA
 } from '@hermes/plugin-sdk'
 
+const RAISED_FILL = 'var(--ui-bg-elevated, #1f2428)'
+const MODAL_SCRIM = { position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.55)', display: 'grid', placeItems: 'center', zIndex: 50 }
+
 export const DEFAULT_AUTOSAVE_DEBOUNCE_MS = 150
 
 function normalizeToken(val, fallback, name) {
@@ -1800,7 +1803,7 @@ export function ToolsLockSection({
                         'data-nudge': isNudge ? 'true' : 'false',
                         style: {
                           borderBottom: '1px solid var(--ui-stroke-secondary)',
-                          background: isNudge ? 'var(--ui-surface-secondary)' : 'transparent'
+                          background: isNudge ? 'var(--ui-bg-secondary)' : 'transparent'
                         },
                         children: [
                           jsx('td', {
@@ -2225,7 +2228,7 @@ export function AdoptBeforeAfterPage({ ctx }) {
       },
       children: [
         jsxs('div', {
-          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', padding: '14px', border: '1px solid var(--ui-stroke-secondary)', borderLeft: '3px solid var(--ui-accent)', borderRadius: '10px', background: 'var(--ui-surface-secondary)' },
+          style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', padding: '14px', border: '1px solid var(--ui-stroke-secondary)', borderLeft: '3px solid var(--ui-accent)', borderRadius: '10px', background: 'var(--ui-bg-secondary)' },
           children: [
             jsxs('div', {
               children: [
@@ -3322,11 +3325,11 @@ export function ComputerToolsSection({ model, state, project, projectState }) {
     jsx('p', { role: 'status', children: state.busy ? 'Checking tools…' : state.proLoaded ? 'Tool status loaded. Press Check tools now to check again.' : 'Not checked yet.' }),
     state.error ? jsx('p', { role: 'alert', children: state.error }) : null,
     ...Object.entries(state.resourceErrors || {}).map(([key, error]) => jsx('p', { role: 'alert', children: `${key}: ${error}` }, key)),
-    jsxs('section', { style: card('var(--ui-surface-secondary)'), children: [
+    jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'Lint tools, expected versions and setup plan' }),
     outputView(state.tools || 'Tools not checked yet'),
     ] }),
-    jsxs('section', { style: card('var(--ui-surface-secondary)'), children: [
+    jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'Installed tool versions' }),
     jsx('p', { children: 'Read from /tools/status, separately from the selected project and TOOLS.lock. An expected version does not prove a tool is installed; a missing answer means unknown.' }),
     outputView(state.tools ? (state.tools.items || []).map(item => ({ name: item.name,
@@ -3336,34 +3339,35 @@ export function ComputerToolsSection({ model, state, project, projectState }) {
       status: item.status ?? 'could_not_verify',
       ...(item.error ? { error: item.error } : {}) })) : 'Installed versions not checked yet'),
     ] }),
-    jsxs('section', { style: card('var(--ui-surface-secondary)'), children: [
+    jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'Setup status' }), outputView(state.setup || 'Setup not checked yet'),
     jsx('p', { children: 'Tools are downloaded only after you read the plan above and confirm. Opening this page never installs or runs anything.' }),
     action('Review setup confirmation', () => setConfirmSetup(true), state.busy || !state.tools?.plan || state.tools?.lazy_installs_allowed !== true || state.setup?.state === 'running'),
-    confirmSetup ? jsxs('div', { role: 'group', 'aria-label': 'Confirm tool setup', children: [
+    // data-glass-raised has no effect here: Hermes remaps unused variables; opacity comes from --ui-bg-elevated.
+    confirmSetup ? jsxs('div', { role: 'group', 'aria-label': 'Confirm tool setup', 'data-glass-raised': true, style: card(RAISED_FILL), children: [
       jsx('p', { children: 'Download and install the disclosed tools into the user-space cache? Review plan and total size above before proceeding.' }),
       action('Confirm download and setup', async () => { await model.setup(); setConfirmSetup(false) }, state.busy),
       action('Cancel setup confirmation', () => setConfirmSetup(false))
     ] }) : null,
     action('Cancel running setup', () => model.setup(true), state.busy || state.setup?.state !== 'running'),
     ] }),
-    jsxs('section', { style: card('var(--ui-surface-secondary)'), children: [
+    jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'TOOLS.lock trust and hash' }),
     !project ? jsx('p', { children: 'Choose a project on the main page to see its TOOLS.lock.' }) : outputView(state.lock || 'Lock not checked yet'),
     action('Review trust confirmation', () => setConfirmTrust(true), state.busy || !state.lock?.trust?.tools_lock_hash || state.project !== project),
-    confirmTrust ? jsxs('div', { role: 'group', 'aria-label': 'Confirm lock trust', children: [
+    confirmTrust ? jsxs('div', { role: 'group', 'aria-label': 'Confirm lock trust', 'data-glass-raised': true, style: card(RAISED_FILL), children: [
       jsx('p', { children: 'Trust only after reviewing the lock bytes and hash below. Trust is provenance, not a safety guarantee.' }),
       outputView(state.lock?.trust?.tools_lock_hash),
       action('Trust displayed hash', async () => { await model.trustLock(project); setConfirmTrust(false) }, state.busy),
       action('Cancel trust', () => setConfirmTrust(false))
     ] }) : null,
     ] }),
-    jsxs('section', { style: card('var(--ui-surface-secondary)'), children: [
+    jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'TOOLS.lock contents (read only, nothing is run)' }),
     outputView(state.lockFile?.content || state.lockFile || 'Lock bytes not loaded; missing or unreadable is not a pass.'),
     jsx('p', { children: 'This only reads the file. It does not run any tool and does not prove the tools are correct. To run a read-only audit, use AUDIT Full ▶ or Quick ▶ at the bottom of the main page.' }),
     ] }),
-    jsxs('section', { style: card('var(--ui-surface-secondary)'), children: [
+    jsxs('section', { style: card('var(--ui-bg-secondary)'), children: [
     jsx('h3', { children: 'Saved project list (raw data)' }), outputView(projectState || []),
     ] })
   ] })
@@ -3844,7 +3848,7 @@ export function CompanionPrefsSection({ ctx, rest, kitsUnavailable = false }) {
     ] }),
     jsxs('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px' }, children: [
       jsx('label', { htmlFor: 'companion-cli-path', children: 'Path to the componentize command (optional)' }),
-      jsx('input', { id: 'companion-cli-path', type: 'text', value: draft.cli_path_override, disabled: locked, spellCheck: false, 'aria-describedby': described('companion-cli-path-help'), onChange: e => model.edit({ cli_path_override: e?.target?.value ?? '' }), style: { padding: '6px 8px', background: 'var(--ui-surface-secondary)', color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px', fontFamily: 'var(--font-mono)' } }),
+      jsx('input', { id: 'companion-cli-path', type: 'text', value: draft.cli_path_override, disabled: locked, spellCheck: false, 'aria-describedby': described('companion-cli-path-help'), onChange: e => model.edit({ cli_path_override: e?.target?.value ?? '' }), style: { padding: '6px 8px', background: 'var(--ui-bg-secondary)', color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px', fontFamily: 'var(--font-mono)' } }),
       jsx('p', { id: 'companion-cli-path-help', style: helpStyle, children: 'Leave empty to find it automatically (hermes componentize, then componentize on PATH). This page does not check that the file exists.' })
     ] }),
     errorId ? jsx('p', { id: errorId, role: 'alert', style: { margin: 0, overflowWrap: 'anywhere' }, children: s.error }) : null,
@@ -4079,7 +4083,7 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
       : pipeStep === 1
         ? `Memory: ${activeScript.module} checks captured profile memory references in both modes; incomplete coverage remains unknown.`
         : pipeStep === 2
-          ? `Static Python [${activeScript.idx}/07]: ${activeScript.module} reads ${activeScript.reads[0]} statically — zero repo hooks, scripts or network launched.`
+          ? `Static Python [${activeScript.idx}/${String(V10_AUDIT_SCRIPTS.length).padStart(2, '0')}]: ${activeScript.module} reads ${activeScript.reads[0]} statically — zero repo hooks, scripts or network launched.`
           : `Outward scope: ${activeScript.module} traces evidenced paths in Full; Quick skips this collector and reports COULD NOT VERIFY.`
     : pipeStep === 0
       ? `Select checks: Toggle ${activeTool.tool} for ${projectName}; saving checkboxes updates preferences only and never triggers a background run.`
@@ -4093,14 +4097,14 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
     jsxs('header', { className: 'settings-top', 'data-testid': 'settings-top-header', style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '16px', borderBottom: '1px solid var(--ui-stroke-secondary)', paddingBottom: '12px' }, children: [
       jsx('h1', { style: { margin: 0, fontSize: '15px', color: 'var(--ui-text-primary)' }, children: 'Project settings' }),
       jsxs('nav', { className: 'setting-tabs', 'aria-label': 'Settings sections', style: { display: 'flex', gap: '8px' }, children: [
-        jsxs(Button, { id: 'auditor-tab', 'data-testid': 'auditor-tab', 'aria-pressed': tab === 'auditor', onClick: () => switchTab('auditor'), children: ['Auditor ', jsx('span', { className: 'tab-count', children: '7 scripts' })] }),
-        jsxs(Button, { id: 'lint-tab', 'data-testid': 'lint-tab', 'aria-pressed': tab === 'lint', onClick: () => switchTab('lint'), children: ['Lint rules ', jsx('span', { className: 'tab-count', children: '6 tools' })] })
+        jsxs(Button, { id: 'auditor-tab', 'data-testid': 'auditor-tab', 'aria-pressed': tab === 'auditor', onClick: () => switchTab('auditor'), children: ['Auditor ', jsx('span', { className: 'tab-count', children: `${V10_AUDIT_SCRIPTS.length} scripts` })] }),
+        jsxs(Button, { id: 'lint-tab', 'data-testid': 'lint-tab', 'aria-pressed': tab === 'lint', onClick: () => switchTab('lint'), children: ['Lint rules ', jsx('span', { className: 'tab-count', children: `${Object.values(V10_LINT_CHECK_GROUPS).flat().length} tools` })] })
       ] }),
       jsx('span', { style: { marginLeft: 'auto' } }),
       jsx(Button, { id: 'tutorial-toggle', 'data-testid': 'tutorial-toggle', 'aria-expanded': guideOpen, 'aria-pressed': guideOpen, onClick: () => { if (guideOpen) stopDryRun(); setGuideOpen(!guideOpen) }, children: `✦ Interactive guide [${playing ? 'Playing' : 'Preview'}]` }),
       jsx(Button, { id: 'back-button', 'data-testid': 'back-button', 'aria-label': 'Back to workspace', onClick: () => { stopDryRun(); model?.screen?.('main'); host.navigate(ROUTE_PATH) }, children: '← Workspace' })
     ] }),
-    guideOpen ? jsxs('section', { id: 'tutorial-strip', 'data-testid': 'tutorial-strip', 'aria-label': 'Educational pipeline preview', style: { padding: '10px 14px', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }, children: [
+    guideOpen ? jsxs('section', { id: 'tutorial-strip', 'data-testid': 'tutorial-strip', 'aria-label': 'Educational pipeline preview', 'data-glass-raised': true, style: { background: RAISED_FILL, color: 'var(--ui-text-primary)', padding: '10px 14px', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }, children: [
       jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }, children: [
         jsx(Badge, { children: 'Preview demo' }),
         jsxs('div', { id: 'pipeline-bar', role: 'group', 'aria-label': 'Pipeline stages', style: { flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '6px' }, children: stages.map((s, i) => jsx(Button, {
@@ -4119,7 +4123,7 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
       jsxs('div', { 'data-testid': 'guide-context-line', style: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: 'var(--ui-text-secondary)' }, children: [
         jsx(Badge, { id: 'spot-badge', 'data-testid': 'spot-badge', children: `${tab === 'auditor' ? 'AUDITOR' : 'LINT'} · STAGE ${pipeStep + 1} OF ${stages.length}` }),
         jsx('p', { id: 'spot-text', 'data-testid': 'spot-text', style: { margin: 0, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, children: contextLine }),
-        jsx('span', { id: 'spot-sync', 'data-testid': 'spot-sync', children: tab === 'auditor' ? `Synced: Script ${activeScript.idx}/07 (${activeScript.id})` : `Synced: ${activeTool.tool} (${lintLang})` })
+        jsx('span', { id: 'spot-sync', 'data-testid': 'spot-sync', children: tab === 'auditor' ? `Synced: Script ${activeScript.idx}/${String(V10_AUDIT_SCRIPTS.length).padStart(2, '0')} (${activeScript.id})` : `Synced: ${activeTool.tool} (${lintLang})` })
       ] })
     ] }) : null,
     tab === 'auditor' ? jsxs('div', { id: 'auditor-panel', 'data-testid': 'auditor-panel', style: { display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.95fr)', gap: '16px' }, children: [
@@ -4276,11 +4280,11 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
           jsx('h3', { style: { margin: 0, fontSize: '13px' }, children: 'How Auditor & Lint differ' }),
           jsxs('div', { className: 'gate-grid', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11.5px' }, children: [
             jsxs('div', { className: 'gate-kv', style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '5px', padding: '6px 9px' }, children: [
-              jsx('span', { style: { display: 'block', fontSize: '10px', color: 'var(--ui-text-quaternary)' }, children: 'Auditor (7 scripts)' }),
+              jsx('span', { style: { display: 'block', fontSize: '10px', color: 'var(--ui-text-quaternary)' }, children: `Auditor (${V10_AUDIT_SCRIPTS.length} scripts)` }),
               jsx('b', { children: 'Static Python readers' })
             ] }),
             jsxs('div', { className: 'gate-kv', style: { border: '1px solid var(--ui-stroke-secondary)', borderRadius: '5px', padding: '6px 9px' }, children: [
-              jsx('span', { style: { display: 'block', fontSize: '10px', color: 'var(--ui-text-quaternary)' }, children: 'Lint rules (6 tools)' }),
+              jsx('span', { style: { display: 'block', fontSize: '10px', color: 'var(--ui-text-quaternary)' }, children: `Lint rules (${Object.values(V10_LINT_CHECK_GROUPS).flat().length} tools)` }),
               jsx('b', { children: 'Spawns CLI binaries' })
             ] })
           ] }),
@@ -4489,7 +4493,7 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
         setMdMode('preview')
         return pending
       },
-      style: { display: 'flex', alignItems: 'center', gap: '6px', padding: `4px 8px 4px ${8 + depth * 14}px`, textAlign: 'left', background: file === node.path ? 'var(--ui-surface-secondary)' : 'transparent', border: `1px solid ${file === node.path ? 'var(--ui-accent)' : 'transparent'}`, borderRadius: '4px', color: 'var(--ui-text-primary)', fontFamily: 'var(--font-mono)', fontSize: '11px', cursor: 'pointer' },
+      style: { display: 'flex', alignItems: 'center', gap: '6px', padding: `4px 8px 4px ${8 + depth * 14}px`, textAlign: 'left', background: file === node.path ? 'var(--ui-bg-secondary)' : 'transparent', border: `1px solid ${file === node.path ? 'var(--ui-accent)' : 'transparent'}`, borderRadius: '4px', color: 'var(--ui-text-primary)', fontFamily: 'var(--font-mono)', fontSize: '11px', cursor: 'pointer' },
       children: [
         jsx('span', { className: 'chevron', children: '' }),
         jsx('span', { className: 'file-icon', children: icon }),
@@ -5428,7 +5432,7 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
             else if (e.key === 'End') setSplitVal(80)
             else setSplitVal(splitVal + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 10 : 4))
           },
-          style: { width: '7px', cursor: 'col-resize', background: 'var(--ui-surface-secondary)', borderInline: '1px solid var(--ui-stroke-secondary)' }
+          style: { width: '7px', cursor: 'col-resize', background: 'var(--ui-bg-tertiary)', borderInline: '1px solid var(--ui-stroke-secondary)' }
         }),
         jsxs('section', { className: 'inspector', 'aria-label': 'File preview', style: { minWidth: 0, padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }, children: [
           jsxs('div', { className: 'pane-head', style: { display: 'flex', alignItems: 'center', gap: '8px' }, children: [
@@ -5507,8 +5511,8 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
         auditActionState.report && !(auditSummaryShown && !auditSummary.raw) ? outputView(auditSafeBlock(auditActionState.report)) : null
       ] }) : null
     ] }),
-    newProjectModalOpen ? jsxs('div', { 'data-testid': 'modal-backdrop', 'data-modal-backdrop': 'true', inert: folderDialogOpen ? true : undefined, 'aria-hidden': folderDialogOpen ? 'true' : undefined, onClick: e => { if (!folderDialogOpen && e?.target === e?.currentTarget) closeNewProjectModal() }, style: { position: 'fixed', inset: 0, background: 'var(--ui-surface-secondary)', display: 'grid', placeItems: 'center', zIndex: 50 }, children: [
-      jsxs('div', { id: 'new-project-dialog', 'data-testid': 'new-project-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'new-project-title', tabIndex: -1, onKeyDown: e => { if (!folderDialogOpen) handleModalKeyDown(closeNewProjectModal)(e) }, style: { width: 'min(960px, 92vw)', maxWidth: '100%', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box', padding: '16px', background: 'var(--ui-surface-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px' }, children: [
+    newProjectModalOpen ? jsxs('div', { 'data-testid': 'modal-backdrop', 'data-modal-backdrop': 'true', inert: folderDialogOpen ? true : undefined, 'aria-hidden': folderDialogOpen ? 'true' : undefined, onClick: e => { if (!folderDialogOpen && e?.target === e?.currentTarget) closeNewProjectModal() }, style: { ...MODAL_SCRIM }, children: [
+      jsxs('div', { id: 'new-project-dialog', 'data-testid': 'new-project-modal', role: 'dialog', 'data-glass-raised': true, 'aria-modal': 'true', 'aria-labelledby': 'new-project-title', tabIndex: -1, onKeyDown: e => { if (!folderDialogOpen) handleModalKeyDown(closeNewProjectModal)(e) }, style: { width: 'min(960px, 92vw)', maxWidth: '100%', maxHeight: '92vh', overflowY: 'auto', boxSizing: 'border-box', padding: '16px', background: RAISED_FILL, color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px' }, children: [
         jsxs('header', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }, children: [
           jsx('h2', { id: 'new-project-title', style: { margin: 0 }, children: 'Start project' }),
           jsx(Button, { 'aria-label': 'Close project setup', disabled: current.busy && !current.acceptJob, onClick: closeNewProjectModal, children: '×' })
@@ -5597,8 +5601,8 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
         ] })
       ] })
     ] }) : null,
-    folderDialogOpen ? jsxs('div', { 'data-testid': 'projects-folder-backdrop', onClick: e => { if (e?.target === e?.currentTarget) closeFolderDialog() }, style: { position: 'fixed', inset: 0, background: 'var(--ui-surface-secondary)', display: 'grid', placeItems: 'center', zIndex: 60, padding: '12px' }, children: [
-      jsxs('div', { id: 'projects-folder-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'projects-folder-title', tabIndex: -1, onKeyDown: handleModalKeyDown(closeFolderDialog), style: { width: 'min(28rem, 100%)', maxWidth: '100%', boxSizing: 'border-box', padding: '16px', background: 'var(--ui-surface-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '12px' }, children: [
+    folderDialogOpen ? jsxs('div', { 'data-testid': 'projects-folder-backdrop', onClick: e => { if (e?.target === e?.currentTarget) closeFolderDialog() }, style: { ...MODAL_SCRIM, zIndex: 60, padding: '12px' }, children: [
+      jsxs('div', { id: 'projects-folder-dialog', role: 'dialog', 'data-glass-raised': true, 'aria-modal': 'true', 'aria-labelledby': 'projects-folder-title', tabIndex: -1, onKeyDown: handleModalKeyDown(closeFolderDialog), style: { width: 'min(28rem, 100%)', maxWidth: '100%', boxSizing: 'border-box', padding: '16px', background: RAISED_FILL, color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '12px' }, children: [
         jsx('h2', { id: 'projects-folder-title', style: { margin: 0, fontSize: '1.05rem' }, children: 'Where should your projects go?' }),
         jsx('p', { style: { margin: 0 }, children: 'Choose the folder where Defuzz creates new projects. Only new projects go here; nothing else on your machine is touched, and the folder is created when you create your first project.' }),
         folderMode === 'change' ? jsx('p', { id: 'projects-folder-change-note', style: { margin: 0 }, children: 'Existing projects stay where they are; only new projects will be created in this folder.' }) : null,
@@ -5612,7 +5616,7 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
             'data-initial-focus': 'true',
             disabled: folderBusy,
             onChange: e => { setFolderDraft(e.target.value); setFolderError('') },
-            style: { display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '4px', padding: '8px', background: 'var(--ui-surface-secondary)', color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px' }
+            style: { display: 'block', width: '100%', boxSizing: 'border-box', marginTop: '4px', padding: '8px', background: 'var(--ui-bg-secondary)', color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '6px' }
           })
         ] }),
         jsx('p', { id: 'projects-folder-help', style: { margin: 0, fontSize: '12px', color: 'var(--ui-text-secondary)' }, children: 'Type a full path, or keep the suggestion.' }),
@@ -5628,8 +5632,8 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
         ] })
       ] })
     ] }) : null,
-    auditModalOpen ? jsxs('div', { 'data-testid': 'modal-backdrop', 'data-modal-backdrop': 'true', onClick: e => { if (e?.target === e?.currentTarget) closeAuditModal() }, style: { position: 'fixed', inset: 0, background: 'var(--ui-surface-secondary)', display: 'grid', placeItems: 'center', zIndex: 50 }, children: [
-      jsxs('div', { id: 'audit-review-dialog', 'data-testid': 'audit-review-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'audit-review-title', tabIndex: -1, onKeyDown: handleModalKeyDown(closeAuditModal), style: { width: 'min(540px, 92vw)', padding: '16px', background: 'var(--ui-surface-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px' }, children: [
+    auditModalOpen ? jsxs('div', { 'data-testid': 'modal-backdrop', 'data-modal-backdrop': 'true', onClick: e => { if (e?.target === e?.currentTarget) closeAuditModal() }, style: { ...MODAL_SCRIM }, children: [
+      jsxs('div', { id: 'audit-review-dialog', 'data-testid': 'audit-review-dialog', role: 'dialog', 'data-glass-raised': true, 'aria-modal': 'true', 'aria-labelledby': 'audit-review-title', tabIndex: -1, onKeyDown: handleModalKeyDown(closeAuditModal), style: { width: 'min(540px, 92vw)', padding: '16px', background: RAISED_FILL, color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px' }, children: [
         jsxs('header', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }, children: [
           jsx('h2', { id: 'audit-review-title', style: { margin: 0 }, children: auditMode === 'quick' ? 'Review quick audit' : 'Review full audit' }),
           jsx(Button, { 'aria-label': 'Close audit review', autoFocus: true, 'data-initial-focus': 'true', onClick: closeAuditModal, children: '×' })
@@ -5681,8 +5685,8 @@ export function WorkspacePage({ ctx, initialScreen = 'main' }) {
         ] })
       ] })
     ] }) : null,
-    storageModalOpen ? jsxs('div', { 'data-testid': 'modal-backdrop', 'data-modal-backdrop': 'true', onClick: e => { if (e?.target === e?.currentTarget) closeStorageModal() }, style: { position: 'fixed', inset: 0, background: 'var(--ui-surface-secondary)', display: 'grid', placeItems: 'center', zIndex: 50 }, children: [
-      jsxs('div', { id: 'plugin-storage-dialog', 'data-testid': 'plugin-storage-dialog', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'plugin-storage-title', tabIndex: -1, onKeyDown: handleModalKeyDown(closeStorageModal), style: { width: 'min(540px, 92vw)', padding: '16px', background: 'var(--ui-surface-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px' }, children: [
+    storageModalOpen ? jsxs('div', { 'data-testid': 'modal-backdrop', 'data-modal-backdrop': 'true', onClick: e => { if (e?.target === e?.currentTarget) closeStorageModal() }, style: { ...MODAL_SCRIM }, children: [
+      jsxs('div', { id: 'plugin-storage-dialog', 'data-testid': 'plugin-storage-dialog', role: 'dialog', 'data-glass-raised': true, 'aria-modal': 'true', 'aria-labelledby': 'plugin-storage-title', tabIndex: -1, onKeyDown: handleModalKeyDown(closeStorageModal), style: { width: 'min(540px, 92vw)', padding: '16px', background: RAISED_FILL, color: 'var(--ui-text-primary)', border: '1px solid var(--ui-stroke-secondary)', borderRadius: '10px' }, children: [
         jsxs('header', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }, children: [
           jsx('h2', { id: 'plugin-storage-title', style: { margin: 0 }, children: 'Plugin storage' }),
           jsx(Button, { 'aria-label': 'Close storage information', autoFocus: true, 'data-initial-focus': 'true', onClick: closeStorageModal, children: '×' })

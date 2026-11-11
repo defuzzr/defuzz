@@ -78,25 +78,25 @@
     },
     "kit:studio-3d": {
       "title": "3D art for many tools",
-      "line": "Models and scenes sent to Blender, Unreal, Godot or web; for one Unreal game, pick Unreal game.",
+      "line": "Folders for 3D sources and exports across tools; for one Unreal game, pick Unreal game.",
       "group": "workspace",
       "order": 60
     },
     "kit:game-assets": {
       "title": "Unreal game with its art",
-      "line": "One Unreal game plus its Blender and Houdini source art; for art only, pick 3D art.",
+      "line": "Folders for an Unreal game and its Blender/Houdini source art; for art only, pick 3D art.",
       "group": "workspace",
       "order": 70
     },
     "kit:godot-game": {
       "title": "Game made with Godot",
-      "line": "A solo game: scenes, scripts, game-ready art, with source art kept apart. Godot",
+      "line": "Folders for game scenes, scripts and art, with source art kept apart. Godot",
       "group": "workspace",
       "order": 80
     },
     "kit:lora-training": {
       "title": "Train a custom AI model",
-      "line": "Training pictures or text, captions, runs and fixed tests; not for making images. LoRA",
+      "line": "Folders for training data, captions, runs and evaluations; not for making images. LoRA",
       "group": "workspace",
       "order": 90
     },
@@ -114,13 +114,13 @@
     },
     "kit:web-app": {
       "title": "Web app with design files",
-      "line": "App code and tests beside the designer's files; for plain pages, pick Website.",
+      "line": "Folders for app code, tests and design files; for plain pages, pick Website.",
       "group": "workspace",
       "order": 130
     },
     "kit:component-library": {
       "title": "Library of reusable Python code",
-      "line": "Small tested pieces other scripts reuse; for a server or tool, pick Python service. Python",
+      "line": "Folders for reusable code and tests; for a server or tool, pick Python service. Python",
       "group": "workspace",
       "order": 140
     },

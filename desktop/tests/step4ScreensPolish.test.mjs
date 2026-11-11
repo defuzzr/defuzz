@@ -57,6 +57,7 @@ test('adopt inspector has a station accent without loading on render', () => {
 
 test('screen-owned color literals use var(--ui-*) tokens outside the git diff palette', () => {
   for (const view of [ui.WorkspacePage, ui.SettingsView, ui.ComputerToolsSection, ui.AdoptBeforeAfterPage]) {
+    // Modal dimming lives in the shared MODAL_SCRIM, outside these views.
     const source = view.toString()
     assert.doesNotMatch(source, /(?:color|background|border\w*):\s*['"](?:red|green|#[0-9a-f]+|rgba?\([^)]*\)|[^'"]*var\(--[^)]*(?:red|green|success|danger))/i)
   }

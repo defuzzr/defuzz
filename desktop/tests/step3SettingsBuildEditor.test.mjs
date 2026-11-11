@@ -22,7 +22,7 @@ function harness(t, project) {
   return { calls, model, render() { cursor = 0; return SettingsView({ model, state: model.get(), project }) } }
 }
 
-test('V10 settings header has Project settings, Auditor (7 scripts), Lint rules (6 tools), and ← Workspace without legacy * Settings MENU or [RETURN]', t => {
+test('V10 settings header has Project settings, Auditor (7 scripts), Lint rules (12 tools), and ← Workspace without legacy * Settings MENU or [RETURN]', t => {
   const h = harness(t, 'invoice-tracker')
   const tree = h.render()
   assert.equal(ui.ComponentizeSettingsView, undefined)
@@ -30,7 +30,7 @@ test('V10 settings header has Project settings, Auditor (7 scripts), Lint rules 
   assert.equal(byId(tree, 'project-build-editor'), undefined)
   assert.equal(byDomId(tree, 'settings').props['data-project-name'], 'invoice-tracker')
   assert.match(JSON.stringify(byDomId(tree, 'auditor-tab')), /Auditor.*7 scripts/)
-  assert.match(JSON.stringify(byDomId(tree, 'lint-tab')), /Lint rules.*6 tools/)
+  assert.match(JSON.stringify(byDomId(tree, 'lint-tab')), /Lint rules.*12 tools/)
 
   const previous = host.navigate
   let destination

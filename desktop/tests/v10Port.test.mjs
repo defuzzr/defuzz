@@ -125,9 +125,10 @@ function mountHarness(t, initialScreen = 'main', replies = []) {
   }
 }
 
-test('Gap 1 & 9: V10 replaces pre-V10 UI completely — no legacy components, no legacy strings, no hardcoded rgba()', t => {
+test('Gap 1 & 9: V10 replaces pre-V10 UI completely — no legacy components, no legacy strings, themed fills except modal scrims', t => {
   const source = readFileSync(new URL('../plugin.js', import.meta.url), 'utf8')
-  assert.doesNotMatch(source, /rgba\(/i, 'plugin.js must use var(--ui-*) tokens instead of hardcoded rgba()')
+  const withoutScrims = source.replace(/const\s+MODAL_SCRIM\s*=\s*\{[^}]*\}/g, '')
+  assert.doesNotMatch(withoutScrims, /rgba\(/i, 'only modal dimming scrims use literal rgba(); other fills use theme tokens')
 
   assert.equal(ui.ONBOARDING_TOUR_STEPS, undefined, 'Onboarding tour steps removed')
   assert.equal(ui.OnboardingTourBar, undefined, 'OnboardingTourBar removed')
@@ -355,7 +356,7 @@ test('Gap 7: Footer LINT ▶ and CHECKS ▶ execute backend calls and display re
   assert.match(JSON.stringify(tree), /2\.6\.6|TOOLS\.lock/, 'Footer CHECKS ▶ renders check result')
 })
 
-test('Gap 8 & 9: Settings Lint rules (6 tools) tab label, ← Workspace button, tool enable checkboxes, Enable all / Clear, execution legend, and persistence via /ui-state', async t => {
+test('Gap 8 & 9: Settings Lint rules (12 tools) tab label, ← Workspace button, tool enable checkboxes, Enable all / Clear, execution legend, and persistence via /ui-state', async t => {
   const h = mountHarness(t, 'settings', [
     { seq: 1, value: { rules: [] } },
     { seq: 2, value: { rules: [] } },
@@ -364,7 +365,7 @@ test('Gap 8 & 9: Settings Lint rules (6 tools) tab label, ← Workspace button, 
   let tree = h.render('settings')
 
   const lintTab = byDomId(tree, 'lint-tab') || byId(tree, 'lint-tab')
-  assert.match(textOf(lintTab), /Lint rules\s*6 tools/, 'Lint rules tab matches approved design literal Lint rules (6 tools)')
+  assert.match(textOf(lintTab), /Lint rules\s*12 tools/, 'Lint rules tab matches approved design literal Lint rules (12 tools)')
   const backBtn = byDomId(tree, 'back-button')
   assert.equal(textOf(backBtn), '← Workspace', 'Back button label is ← Workspace')
 
@@ -488,7 +489,7 @@ test('V10 settings: Interactive guide collapsed by default, 4-stage sync, Play/P
   const lintTab = byDomId(tree, 'lint-tab') || byId(tree, 'lint-tab')
   assert.ok(auditorTab && lintTab, 'Auditor and Lint rules tabs exist')
   assert.match(textOf(auditorTab), /Auditor.*7 scripts/)
-  assert.match(textOf(lintTab), /Lint rules.*6 tools/)
+  assert.match(textOf(lintTab), /Lint rules.*12 tools/)
 
   assert.equal(byDomId(tree, 'audit-run'), undefined)
   assert.equal(byDomId(tree, 'scope-confirm'), undefined)

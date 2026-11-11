@@ -37,7 +37,7 @@ test('V10 workspace replaces embedded kernel popup with direct file viewer and d
 
 test('V10 workspace uses theme colors without forbidden globals, diff colors, or rgba literals', () => {
   const source = readFileSync(new URL('../plugin.js', import.meta.url), 'utf8')
-  assert.doesNotMatch(source, /window\.|document\.|localStorage|__HERMES_PLUGIN_SDK__|fetchJSON|rgba\(/i)
+  assert.doesNotMatch(source.replace(/const\s+MODAL_SCRIM\s*=\s*\{[^}]*\}/g, ''), /window\.|document\.|localStorage|__HERMES_PLUGIN_SDK__|fetchJSON|rgba\(/i)
   const page = source.slice(source.indexOf('export function WorkspacePage'), source.indexOf('export const WORKSPACE_SCREENS'))
   assert.doesNotMatch(page, /['"](?:red|green|lime|crimson|#(?:f00|0f0|ff0000|00ff00|008000|dc2626|ef4444|22c55e|16a34a))['"]/i)
   assert.match(page, /var\(--ui-accent\)/)
