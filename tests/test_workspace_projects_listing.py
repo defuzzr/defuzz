@@ -270,6 +270,20 @@ def test_forget_default_missing_state_db_creates_nothing(tmp_path, monkeypatch):
     assert not home.exists()
 
 
+def test_forget_route_missing_profile_creates_nothing(tmp_path, monkeypatch):
+    home = tmp_path / 'absent-route-profile'
+    monkeypatch.setenv('HERMES_HOME', str(home))
+    client = _client()
+    assert not home.exists()
+
+    response = client.post('/workspace/projects/forget', json={'path': '/any/identifier'})
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {'status': 'forgotten', 'removed': False}
+    # The mounted route must not initialize directories, state.db or migration locks.
+    assert not home.exists()
+
+
 def test_forget_leaves_a_minimal_old_schema_unchanged(tmp_path):
     store = load_submodule('state_store')
     db = tmp_path / 'old-profile' / 'plugin-data' / 'defuzz' / 'state.db'

@@ -650,7 +650,7 @@ def workspace_projects():
 @router.post('/workspace/projects/forget')
 def forget_workspace_project(body: Any = Body(default_factory=dict)):
     """Forget one registration in the active profile; the project folder itself is never touched."""
-    from ...state_store import forget_project, state_db_path
+    from ...state_store import forget_project
     body = _object(body)
     raw_path = body.get('path')
     if not isinstance(raw_path, str) or not raw_path or '\x00' in raw_path:
@@ -658,7 +658,7 @@ def forget_workspace_project(body: Any = Body(default_factory=dict)):
     # An exact SQL registration identifier, not a filesystem path: legacy relative,
     # tilde and whitespace spellings must be passed through without normalisation.
     try:
-        removed = forget_project(raw_path, db_path=state_db_path())
+        removed = forget_project(raw_path)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except WRITE_ERRORS as exc:
