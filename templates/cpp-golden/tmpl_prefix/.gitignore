@@ -1,0 +1,17 @@
+# Build artifacts
+/build
+/out
+
+# Environment & local overrides
+.env
+.env.*
+!.env.example
+
+# Editor & OS junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+.idea/
+.vscode/

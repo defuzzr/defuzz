@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <PackageId>xtask</PackageId>
+        <RootNamespace>Xtask</RootNamespace>
+        <AssemblyName>xtask</AssemblyName>
+        <IsTestProject>true</IsTestProject>
+        <TestRunnerArgs>self-test</TestRunnerArgs>
+    </PropertyGroup>
+</Project>

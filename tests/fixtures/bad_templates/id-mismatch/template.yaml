@@ -1,0 +1,10 @@
+id: wrong-folder-id
+name: Mismatched ID Template
+summary: ID does not match folder name.
+kind: tool
+layout: single
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py"]
+repos:
+  - name: tmpl_prefix

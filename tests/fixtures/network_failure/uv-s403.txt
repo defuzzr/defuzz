@@ -1,0 +1,5 @@
+Using CPython 3.11.16 interpreter at: /home/user/.local/bin/python3.11
+error: No solution found when resolving dependencies
+  cause: Because requests was not found in the package registry and you require requests, we can conclude that your requirements are unsatisfiable.
+
+hint: An index (http://127.0.0.1:18080/s403/simple) returned a 403 Forbidden error. Check that the index URL is correct and the credentials are valid.

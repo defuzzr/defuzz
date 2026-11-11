@@ -1,0 +1,3 @@
+# example.com/demo/pkg/api
+pkg/api/handler.go:34:12: Printf format %d has arg name of wrong type string
+./main.go:10:2: unreachable code

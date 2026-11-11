@@ -1,0 +1,19 @@
+{
+  "name": "tmpl-prefix-accounts",
+  "version": "0.1.0",
+  "description": "Accounts domain model, repository port, service, and runtime component.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "tmpl-prefix-core": "workspace:*"
+  }
+}

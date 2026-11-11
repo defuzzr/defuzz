@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { __PASCAL_NAME__PackageName, describe__PASCAL_NAME__ } from "./index.js";
+
+describe("__PACKAGE_NAME__", () => {
+  it("exports package metadata", () => {
+    assert.equal(__PASCAL_NAME__PackageName, "__PACKAGE_NAME__");
+    assert.equal(describe__PASCAL_NAME__(), "__DESCRIPTION__");
+  });
+});

@@ -1,0 +1,3 @@
+# Files listed here are copied into each new git worktree.
+# Secret files such as .env are deliberately not copied: create each
+# worktree's own .env from .env.example (or by hand) instead.

@@ -1,0 +1,85 @@
+id: ts-node-golden
+name: TypeScript Node Golden Workspace
+summary: Layered TypeScript / Node.js pnpm workspace template with foundation, domain, adapters (Hono + node:http), apps, and zero-dep xtask CI.
+kind: service
+layout: mono
+languages: [typescript]
+tags: [typescript, node, pnpm, workspace, layered, hono, service]
+needs: [node, pnpm]
+placeholder: tmpl_prefix
+substitute_in:
+  - "**/*.ts"
+  - "**/*.json"
+  - "**/*.md"
+  - "**/*.yml"
+  - "**/*.yaml"
+  - ".env.example"
+  - "**/*.tmpl"
+  - "pnpm-lock.yaml"
+  - ".github/CODEOWNERS"
+locked:
+  - package.json
+  - pnpm-workspace.yaml
+  - biome.json
+  - tsconfig.base.json
+  - tsconfig.json
+  - .nvmrc
+  - .npmrc
+  - .github/workflows/*
+  - tools/xtask/**
+approved_deps:
+  typescript:
+    - "@biomejs/biome"
+    - "@biomejs/cli-android-arm64"
+    - "@biomejs/cli-android-x64"
+    - "@biomejs/cli-darwin-arm64"
+    - "@biomejs/cli-darwin-x64"
+    - "@biomejs/cli-linux-arm64"
+    - "@biomejs/cli-linux-arm64-musl"
+    - "@biomejs/cli-linux-x64"
+    - "@biomejs/cli-linux-x64-musl"
+    - "@biomejs/cli-win32-arm64"
+    - "@biomejs/cli-win32-x64"
+    - "@hono/node-server"
+    - "@pnpm/exe.android-arm64"
+    - "@pnpm/exe.android-x64"
+    - "@pnpm/exe.darwin-arm64"
+    - "@pnpm/exe.darwin-x64"
+    - "@pnpm/exe.freebsd-x64"
+    - "@pnpm/exe.linux-arm64"
+    - "@pnpm/exe.linux-arm64-musl"
+    - "@pnpm/exe.linux-ppc64"
+    - "@pnpm/exe.linux-riscv64"
+    - "@pnpm/exe.linux-s390x"
+    - "@pnpm/exe.linux-x64"
+    - "@pnpm/exe.linux-x64-musl"
+    - "@pnpm/exe.win32-arm64"
+    - "@pnpm/exe.win32-x64"
+    - "@types/node"
+    - commander
+    - drizzle-orm
+    - fastify
+    - hono
+    - pino
+    - pnpm
+    - postgres
+    - tsx
+    - typescript
+    - undici-types
+    - vitest
+    - zod
+options:
+  http_adapter:
+    label: "HTTP adapter"
+    choices: [hono, node_http]
+    default: hono
+    env_key: TMPL_PREFIX_HTTP_ADAPTER
+    description: "Both adapters ship; this picks the default wired in config."
+repos:
+  - name: tmpl_prefix
+    check:
+      prepare: ["pnpm", "xtask", "prepare-scaffold"]
+      cmd: ["pnpm", "xtask", "ci"]
+      cwd: "."
+      format_cmds:
+        - ["biome", "ci", "."]

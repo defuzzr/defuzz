@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <PackageId>tmpl-prefix-cli</PackageId>
+        <RootNamespace>TmplPrefix.Cli</RootNamespace>
+        <AssemblyName>tmpl-prefix</AssemblyName>
+        <IsTestProject>true</IsTestProject>
+        <TestRunnerArgs>--self-test</TestRunnerArgs>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../foundation/TmplPrefix.Foundation.csproj" />
+        <ProjectReference Include="../../domain/TmplPrefix.Domain.csproj" />
+        <ProjectReference Include="../../adapters/TmplPrefix.Adapters.csproj" />
+    </ItemGroup>
+</Project>

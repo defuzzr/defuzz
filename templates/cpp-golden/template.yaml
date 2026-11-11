@@ -1,0 +1,38 @@
+---
+id: cpp-golden
+name: C++ Golden Workspace
+summary: >-
+  Layered C++20 CMake and Ninja workspace template with foundation, domain,
+  adapters, cli, and xtask CI.
+kind: tool
+layout: mono
+languages: [cpp]
+tags: [cpp, cmake, ninja, workspace, layered, cli]
+needs: [cmake, ninja, clang, clang-format, clang-tidy]
+placeholder: tmpl_prefix
+substitute_in:
+  - "**/CMakeLists.txt"
+  - "**/*.cmake"
+  - "**/*.hpp"
+  - "**/*.cpp"
+  - "**/*.h"
+  - "**/*.md"
+  - "**/*.yml"
+  - "**/*.yaml"
+locked:
+  - CMakeLists.txt
+  - .clang-format
+  - .clang-tidy
+  - .editorconfig
+  - .github/workflows/*
+  - cmake/**
+approved_deps:
+  cpp: []
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["cmake", "-P", "cmake/xtask.cmake", "--", "ci"]
+      cwd: "."
+      format_cmds:
+        - cmd: ["clang-format", "--dry-run", "-Werror"]
+          suffixes: [".c", ".cc", ".cpp", ".cxx", ".h", ".hpp"]

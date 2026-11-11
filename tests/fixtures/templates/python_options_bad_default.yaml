@@ -1,0 +1,17 @@
+id: python-options-bad-default
+name: Python Options Bad Default Fixture
+summary: Fixture with invalid default choice not in choices list.
+kind: service
+layout: mono
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py"]
+options:
+  http_adapter:
+    label: "HTTP adapter"
+    choices: [fastapi, stdlib_http]
+    default: flask
+    env_key: TMPL_PREFIX_HTTP__ADAPTER
+    description: "Both adapters ship; this picks the default wired in config."
+repos:
+  - name: tmpl_prefix

@@ -1,0 +1,107 @@
+{
+  "declared_dirs": [
+    {
+      "dir": "packages",
+      "summary": "Layered uv workspace packages and per-package pytest suites",
+      "why": "Keep foundation, domain, adapters, and apps isolated by layer",
+      "source": "explicit"
+    },
+    {
+      "dir": "tools",
+      "summary": "Zero-dependency xtask workspace automation package",
+      "why": "Run CI, architecture checks, package generators, and renames",
+      "source": "explicit"
+    },
+    {
+      "dir": "templates",
+      "summary": "Scaffolding templates consumed by xtask generators",
+      "why": "Keep .tmpl package and component skeletons together",
+      "source": "explicit"
+    },
+    {
+      "dir": "componentize",
+      "summary": "Componentize gate specifications and examples",
+      "why": "Store declarative component extraction specs in componentize/",
+      "source": "explicit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Architecture and component boundary documentation",
+      "why": "Keep project Markdown notes and design docs out of the root",
+      "source": "explicit"
+    },
+    {
+      "dir": "docs/adr",
+      "summary": "Architecture Decision Records",
+      "why": "Keep numbered and adr-* decision records under docs/adr/",
+      "source": "explicit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Shell and PowerShell helper scripts",
+      "why": "Keep small automation scripts out of the root and out of the code folders",
+      "source": "explicit"
+    }
+  ],
+  "placement_rules": [
+    {
+      "kind": "adr",
+      "match_ext": [
+        ".md"
+      ],
+      "match_glob": [
+        "adr-*.md",
+        "ADR-*.md",
+        "0[0-9][0-9][0-9]-*.md"
+      ],
+      "root_only": true,
+      "dest_dir": "docs/adr",
+      "lfs": false,
+      "reason": "Decision records such as adr-0003-name.md or 0003-name.md live in docs/adr/ in this workspace",
+      "source": "explicit"
+    },
+    {
+      "kind": "docs",
+      "match_ext": [
+        ".md",
+        ".rst",
+        ".adoc",
+        ".mmd",
+        ".puml",
+        ".drawio"
+      ],
+      "root_only": true,
+      "dest_dir": "docs",
+      "lfs": false,
+      "reason": "Notes, guides and diagram sources live in docs/ in this workspace",
+      "source": "explicit"
+    },
+    {
+      "kind": "scripts",
+      "match_ext": [
+        ".sh",
+        ".bash",
+        ".ps1"
+      ],
+      "root_only": true,
+      "dest_dir": "scripts",
+      "lfs": false,
+      "reason": "Shell and PowerShell scripts live in scripts/ in this workspace",
+      "source": "explicit"
+    }
+  ],
+  "protected_root_files": [
+    "pyproject.toml",
+    "uv.lock",
+    "uv.toml",
+    ".python-version",
+    "conftest.py",
+    "py.typed",
+    "AGENT.md",
+    "WARP.md",
+    "QWEN.md",
+    "CRUSH.md",
+    "DCO.md",
+    "ACKNOWLEDGMENTS.md"
+  ]
+}

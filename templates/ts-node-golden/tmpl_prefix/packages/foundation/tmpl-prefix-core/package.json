@@ -1,0 +1,16 @@
+{
+  "name": "tmpl-prefix-core",
+  "version": "0.1.0",
+  "description": "Shared primitives, AppError/Result, Component lifecycle, and HttpServer port.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false
+}

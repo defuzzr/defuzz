@@ -1,0 +1,276 @@
+{
+  "agents_block": "<!-- kit:godot-game v1 begin (managed block: edit outside it) -->\n## Godot solo game\n\n`project` is a solo Godot game workspace separating editable source art from game-ready assets, scenes, scripts and builds.\n\n### Layout\n\n- `addons/`: Third-party plugins, unmodified. Read-only.\n- `assets/`: Game-ready files only, no editable sources.\n- `scenes/`: `.tscn` files, each with its attached script.\n- `scripts/`: Shared GDScript not tied to one scene.\n- `autoload/`: Singletons registered in project settings.\n- `resources/`: Custom Resource data: items, stats, dialogue.\n- `localization/`: Translation `.csv` or `.po` files.\n- `tests/`: Automated tests.\n- `source-art/`: Editable sources; `.gdignore` keeps Godot out.\n- `docs/`: Design doc, controls, level plans.\n- `tools/`: Export and conversion scripts.\n- `builds/`: Exported builds per platform. Ignored by Git and disposable.\n- `release/`: Store text, screenshots, trailer, changelog.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Editable sources go in `source-art/`; only exported, game-ready files go in `assets/` (`assets/materials/` for material `.tres` files; other custom Resource data goes in `resources/`).\n- Commit `.import` and `.uid` files next to their assets; `.godot/` is created by the Godot editor, is ignored by Git and must never be committed.\n- Move or rename project files only inside the Godot editor, never with the shell.\n- Files and folders use `snake_case`; node and class names use `PascalCase`.\n- A scene and its script share one name and one folder under `scenes/`: for example `scenes/actors/player.tscn` and `scenes/actors/player.gd`.\n- Never edit anything in `addons/`.\n- Models are exported as `.glb`; do not import `.blend` or `.fbx` directly.\n- Create `project.godot` and `export_presets.cfg` with the Godot editor; changing `project.godot` input maps, autoloads, physics layers or `export_presets.cfg` needs approval.\n- Adding an addon needs approval.\n- Builds go to `builds/<platform>/`; nothing in `builds/` is ever committed.\n- Run `git lfs install` once before the first commit.\n<!-- kit:godot-game end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "addons",
+      "summary": "Third-party plugins, unmodified. Read-only.",
+      "why": "upstream plugins stay untouched"
+    },
+    {
+      "dir": "assets",
+      "summary": "Game-ready files only, no editable sources.",
+      "why": "engine imports stay separate from editable originals"
+    },
+    {
+      "dir": "assets/models",
+      "summary": "`.glb` files with their `.import` files.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/textures",
+      "summary": "Textures for 3D materials.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/sprites",
+      "summary": "2D art, atlases and sprite sheets.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/materials",
+      "summary": "`.tres` materials.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/shaders",
+      "summary": "`.gdshader` files.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/animations",
+      "summary": "Animation libraries.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/audio",
+      "summary": "Game-ready sound.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/audio/music",
+      "summary": "Looping `.ogg` tracks.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/audio/sfx",
+      "summary": "Short `.wav` effects.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/fonts",
+      "summary": "`.ttf` and `.otf` with licences.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "assets/ui",
+      "summary": "Icons, themes and nine-patch images.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "scenes",
+      "summary": "`.tscn` files, each with its attached script.",
+      "why": "scenes and their attached scripts stay paired"
+    },
+    {
+      "dir": "scenes/levels",
+      "summary": "Playable levels.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "scenes/actors",
+      "summary": "Player, enemies and NPCs.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "scenes/props",
+      "summary": "Interactable and decorative objects.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "scenes/ui",
+      "summary": "Menus and HUD.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Shared GDScript not tied to one scene.",
+      "why": "reusable code stays decoupled from individual scenes"
+    },
+    {
+      "dir": "autoload",
+      "summary": "Singletons registered in project settings.",
+      "why": "global singletons are explicit and kept in one place"
+    },
+    {
+      "dir": "resources",
+      "summary": "Custom Resource data: items, stats, dialogue.",
+      "why": "game data stays separate from scenes and code"
+    },
+    {
+      "dir": "localization",
+      "summary": "Translation `.csv` or `.po` files.",
+      "why": "translations live in one place"
+    },
+    {
+      "dir": "tests",
+      "summary": "Automated tests.",
+      "why": "gameplay and script logic stays verified"
+    },
+    {
+      "dir": "source-art",
+      "summary": "Editable sources; `.gdignore` keeps Godot out.",
+      "why": "raw authoring files are not imported by the engine"
+    },
+    {
+      "dir": "source-art/blender",
+      "summary": "`.blend` files.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "source-art/textures",
+      "summary": "Layered paint files.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "source-art/audio",
+      "summary": "DAW sessions and uncompressed recordings.",
+      "why": "declared by the godot-game kit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Design doc, controls, level plans.",
+      "why": "design intent survives between sessions"
+    },
+    {
+      "dir": "tools",
+      "summary": "Export and conversion scripts.",
+      "why": "pipeline scripts stay out of runtime game code"
+    },
+    {
+      "dir": "builds",
+      "summary": "Exported builds per platform. Ignored by Git and disposable.",
+      "why": "packaged builds are rebuildable and never committed"
+    },
+    {
+      "dir": "release",
+      "summary": "Store text, screenshots, trailer, changelog.",
+      "why": "release and store materials stay in one folder"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "godot-game",
+    "name": "Godot solo game",
+    "summary": "Solo Godot game workspace with game-ready assets, scenes, GDScript, resources, source art hidden via .gdignore, and Git LFS rules.",
+    "tags": [
+      "godot",
+      "game",
+      "gdscript",
+      "scenes",
+      "shaders",
+      "indie",
+      "games"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [
+    {
+      "dest_dir": "source-art/blender",
+      "kind": "blender-source",
+      "lfs": true,
+      "match_ext": [
+        ".blend"
+      ],
+      "reason": "Blender source files live in source-art/blender/"
+    },
+    {
+      "dest_dir": "assets/shaders",
+      "kind": "shaders",
+      "lfs": false,
+      "match_ext": [
+        ".gdshader"
+      ],
+      "reason": "Godot shader files live in assets/shaders/"
+    },
+    {
+      "dest_dir": "assets/fonts",
+      "kind": "fonts",
+      "lfs": true,
+      "match_ext": [
+        ".ttf",
+        ".otf"
+      ],
+      "reason": "font files live in assets/fonts/"
+    }
+  ],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "addons/",
+    "addons/.gitkeep",
+    "assets/",
+    "assets/animations/",
+    "assets/animations/.gitkeep",
+    "assets/audio/",
+    "assets/audio/music/",
+    "assets/audio/music/.gitkeep",
+    "assets/audio/sfx/",
+    "assets/audio/sfx/.gitkeep",
+    "assets/fonts/",
+    "assets/fonts/.gitkeep",
+    "assets/materials/",
+    "assets/materials/.gitkeep",
+    "assets/models/",
+    "assets/models/.gitkeep",
+    "assets/shaders/",
+    "assets/shaders/.gitkeep",
+    "assets/sprites/",
+    "assets/sprites/.gitkeep",
+    "assets/textures/",
+    "assets/textures/.gitkeep",
+    "assets/ui/",
+    "assets/ui/.gitkeep",
+    "autoload/",
+    "autoload/.gitkeep",
+    "builds/",
+    "builds/.gitkeep",
+    "docs/",
+    "docs/.gitkeep",
+    "localization/",
+    "localization/.gitkeep",
+    "release/",
+    "release/.gitkeep",
+    "resources/",
+    "resources/.gitkeep",
+    "scenes/",
+    "scenes/actors/",
+    "scenes/actors/.gitkeep",
+    "scenes/levels/",
+    "scenes/levels/.gitkeep",
+    "scenes/props/",
+    "scenes/props/.gitkeep",
+    "scenes/ui/",
+    "scenes/ui/.gitkeep",
+    "scripts/",
+    "scripts/.gitkeep",
+    "source-art/",
+    "source-art/.gdignore",
+    "source-art/audio/",
+    "source-art/audio/.gitkeep",
+    "source-art/blender/",
+    "source-art/blender/.gitkeep",
+    "source-art/textures/",
+    "source-art/textures/.gitkeep",
+    "tests/",
+    "tests/.gitkeep",
+    "tools/",
+    "tools/.gitkeep"
+  ]
+}

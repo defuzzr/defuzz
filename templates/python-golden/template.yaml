@@ -1,0 +1,102 @@
+id: python-golden
+name: Python Golden Workspace
+summary: Layered Python uv workspace template with foundation, domain, adapters (FastAPI + http.server), apps, and zero-dep xtask CI.
+kind: service
+layout: mono
+languages: [python]
+tags: [python, uv, workspace, layered, fastapi, service]
+needs: [uv]
+placeholder: tmpl_prefix
+substitute_in:
+  - "**/*.py"
+  - "**/*.toml"
+  - "**/*.md"
+  - "**/*.yml"
+  - ".env.example"
+  - "**/*.tmpl"
+  - "uv.lock"
+  - ".github/CODEOWNERS"
+locked:
+  - pyproject.toml
+  - .editorconfig
+  - .github/workflows/*
+  - tools/xtask/**
+approved_deps:
+  python:
+    - annotated-doc
+    - annotated-types
+    - anyio
+    - asyncpg
+    - boolean-py
+    - cachecontrol
+    - certifi
+    - charset-normalizer
+    - click
+    - colorama
+    - cyclonedx-python-lib
+    - defusedxml
+    - fastapi
+    - filelock
+    - grimp
+    - h11
+    - httpx
+    - hypothesis
+    - idna
+    - import-linter
+    - iniconfig
+    - librt
+    - license-expression
+    - markdown-it-py
+    - mdurl
+    - msgpack
+    - mypy
+    - mypy-extensions
+    - opentelemetry-api
+    - orjson
+    - packageurl-python
+    - packaging
+    - pathspec
+    - pip
+    - pip-api
+    - pip-audit
+    - pip-requirements-parser
+    - platformdirs
+    - pluggy
+    - py-serializable
+    - pydantic
+    - pydantic-core
+    - pydantic-settings
+    - pygments
+    - pyparsing
+    - pytest
+    - pytest-asyncio
+    - python-dotenv
+    - requests
+    - rich
+    - ruff
+    - sortedcontainers
+    - sqlalchemy
+    - starlette
+    - structlog
+    - tomli
+    - tomli-w
+    - typer
+    - typing-extensions
+    - typing-inspection
+    - urllib3
+    - uvicorn
+options:
+  http_adapter:
+    label: "HTTP adapter"
+    choices: [fastapi, stdlib_http]
+    default: fastapi
+    env_key: TMPL_PREFIX_HTTP__ADAPTER
+    description: "Both adapters ship; this picks the default wired in config."
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["uv", "run", "xtask", "ci"]
+      cwd: "."
+      format_cmds:
+        - ["ruff", "format", "--check", "."]
+        - ["ruff", "check", "."]

@@ -1,0 +1,267 @@
+{
+  "error": null,
+  "findings": [],
+  "kits": [
+    {
+      "availability": "available",
+      "id": "client-job",
+      "name": "Client / freelance job",
+      "summary": "Client or freelance job workspace: read-only brief, contract, references and intake, working files, review rounds, frozen deliveries, finance and licences.",
+      "tags": [
+        "client",
+        "job",
+        "freelance",
+        "agency",
+        "contract",
+        "invoice",
+        "commission",
+        "clients"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "comic-storyboard",
+      "name": "Comic and storyboard",
+      "summary": "Comic and storyboard workspace with script, character sheets, per-page stage folders, animatics, review rounds and Git LFS rules.",
+      "tags": [
+        "comic",
+        "storyboard",
+        "manga",
+        "panels",
+        "illustration",
+        "comics",
+        "storyboards",
+        "graphic",
+        "novel",
+        "animatic",
+        "character"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "component-library",
+      "name": "Reusable Python code library",
+      "summary": "Reusable Python code library: snake_case.py modules with a COMPONENTS.md index and tests, thin runner scripts and componentize specs; not a UI or design-system component library.",
+      "tags": [
+        "python",
+        "code",
+        "modules",
+        "components",
+        "reuse",
+        "componentize"
+      ],
+      "version": 3
+    },
+    {
+      "availability": "available",
+      "id": "game-assets",
+      "name": "Game workspace: Unreal + Blender + Houdini",
+      "summary": "Game workspace with one folder per source asset, an explicit source-to-Unreal manifest, and Git LFS rules for Blender, Houdini and texture files.",
+      "tags": [
+        "game",
+        "unreal",
+        "ue5",
+        "blender",
+        "houdini",
+        "assets",
+        "lfs"
+      ],
+      "version": 2
+    },
+    {
+      "availability": "available",
+      "id": "godot-game",
+      "name": "Godot solo game",
+      "summary": "Solo Godot game workspace with game-ready assets, scenes, GDScript, resources, source art hidden via .gdignore, and Git LFS rules.",
+      "tags": [
+        "godot",
+        "game",
+        "gdscript",
+        "scenes",
+        "shaders",
+        "indie",
+        "games"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "homelab",
+      "name": "Homelab infrastructure",
+      "summary": "Homelab and infrastructure workspace: host inventory, per-host configs, shared Compose stacks, network rules, runbooks, backup records and changelog.",
+      "tags": [
+        "homelab",
+        "infra",
+        "infrastructure",
+        "selfhosted",
+        "servers",
+        "network",
+        "sysadmin",
+        "nas",
+        "host",
+        "hosts",
+        "inventory",
+        "runbooks",
+        "lab"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "image-set",
+      "name": "Image generation set",
+      "summary": "AI still-image generation workspace: read-only references, prompts, ComfyUI workflows, model notes, staged outputs from raw to approved finals, and contact sheets; not LoRA training or a render queue.",
+      "tags": [
+        "image",
+        "images",
+        "stills",
+        "comfyui",
+        "diffusion",
+        "generative",
+        "prompts",
+        "upscale",
+        "inpaint"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "lora-training",
+      "name": "LoRA and model training",
+      "summary": "LoRA adapter training workspace for image or text models: staged dataset and captions, datasheets, configs, isolated run folders, fixed evaluation sets and versioned releases; not prompt-based image generation.",
+      "tags": [
+        "lora",
+        "training",
+        "dataset",
+        "captions",
+        "finetune",
+        "checkpoint",
+        "eval",
+        "weights"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "music-production",
+      "name": "Music and audio production",
+      "summary": "Music and audio production workspace with a shared library, per-song folders for generations, recordings, stems, mixes and masters, and releases.",
+      "tags": [
+        "music",
+        "production",
+        "audio",
+        "song",
+        "songs",
+        "track",
+        "album",
+        "ep",
+        "daw",
+        "mixing",
+        "mastering",
+        "stems"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "research-writing",
+      "name": "Research and writing",
+      "summary": "Research and writing workspace: read-only sources, reading and synthesis notes, versioned outlines, section drafts, figures, citations and frozen releases.",
+      "tags": [
+        "research",
+        "writing",
+        "paper",
+        "report",
+        "citations",
+        "bibtex",
+        "thesis",
+        "literature",
+        "essay",
+        "academic",
+        "outline",
+        "dissertation"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "studio-3d",
+      "name": "3D design studio: Blender, Houdini, UE5, Godot & web",
+      "summary": "Multi-tool 3D design studio workspace: per-asset sources/exports, Blender and Houdini DCC trees, UE5, Godot and Three.js targets, shots and deliveries; not a single-engine game project or an Unreal asset pipeline.",
+      "tags": [
+        "3d",
+        "studio",
+        "dcc",
+        "blender",
+        "houdini",
+        "unreal",
+        "ue5",
+        "godot",
+        "three",
+        "threejs",
+        "webgl",
+        "web",
+        "assets",
+        "shots",
+        "lfs"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "video-channel",
+      "name": "YouTube and short-form video channel",
+      "summary": "YouTube and short-form channel workspace with brand assets, reusable library, idea backlog, episode template, shorts, analytics and Git LFS rules.",
+      "tags": [
+        "video",
+        "channel",
+        "youtube",
+        "shorts",
+        "episodes",
+        "editing",
+        "captions",
+        "thumbnails",
+        "vlog"
+      ],
+      "version": 1
+    },
+    {
+      "availability": "available",
+      "id": "video-production",
+      "name": "Video production",
+      "summary": "AI-assisted video production workspace: locked canon references, generated candidates, approved assets, storyboards, footage, audio, renders and numbered deliverables; not a YouTube channel or a comic.",
+      "tags": [
+        "video",
+        "ai",
+        "storyboard",
+        "footage",
+        "production",
+        "generative",
+        "lfs"
+      ],
+      "version": 2
+    },
+    {
+      "availability": "available",
+      "id": "web-app",
+      "name": "Web app + design assets",
+      "summary": "Web application workspace with handed-over design sources, design tokens, raw and optimised assets, app code, unit and e2e tests, and Git LFS rules.",
+      "tags": [
+        "frontend",
+        "website",
+        "figma",
+        "tokens",
+        "css",
+        "handoff",
+        "ui",
+        "github"
+      ],
+      "version": 1
+    }
+  ],
+  "ok": true,
+  "schema": "componentize.kit/1",
+  "status": "pass"
+}

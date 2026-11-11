@@ -1,0 +1,15 @@
+{
+  "groups": [
+    {"id": "workspace", "title": "Workspaces for creative work"},
+    {"id": "code", "title": "Code projects"}
+  ],
+  "entries": {
+    "template:rust-golden": {"title": "Rust program", "line": "A Rust project with tests and checks ready to run", "group": "code", "order": 20},
+    "template:python-golden": {"title": "Python program", "line": "A Python project with tests and checks ready to run", "group": "code", "order": 10},
+    "kit:video-production": {"title": "Video production", "line": "Folders for making videos with AI tools", "group": "workspace", "order": 10},
+    "kit:client-job": {"title": "Client job", "line": "A job for a client: brief, work files, deliveries", "group": "workspace", "order": 10},
+    "kit:research-writing": {"title": "Research and writing", "line": "Sources, notes and drafts for a long text", "group": "nowhere", "order": 5},
+    "kit:does-not-exist": {"title": "Ghost", "line": "No such kit", "group": "workspace", "order": 1},
+    "template:not-a-template": {"title": "Ghost template", "line": "No such template", "group": "code", "order": 1}
+  }
+}

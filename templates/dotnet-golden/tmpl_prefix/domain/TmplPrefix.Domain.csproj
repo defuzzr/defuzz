@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <PackageId>tmpl-prefix-domain</PackageId>
+        <RootNamespace>TmplPrefix.Domain</RootNamespace>
+        <AssemblyName>TmplPrefix.Domain</AssemblyName>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../foundation/TmplPrefix.Foundation.csproj" />
+    </ItemGroup>
+</Project>

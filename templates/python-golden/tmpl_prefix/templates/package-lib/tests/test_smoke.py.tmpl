@@ -1,0 +1,10 @@
+"""Smoke tests for __PKG_DIST__."""
+
+from __future__ import annotations
+
+from __PKG_MOD__ import PACKAGE_NAME
+
+
+def test_package_name() -> None:
+    """Verify scaffolded package metadata constant."""
+    assert PACKAGE_NAME == "__PKG_DIST__"

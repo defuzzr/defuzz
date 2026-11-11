@@ -1,0 +1,53 @@
+# Template floor lock. Each `version` equals `minimum` here and `source = "auto"`, so
+# `hermes defuzz new` re-probes every tool and records the versions found on the user's
+# machine; `minimum` (the oldest version this template's build files need) is kept.
+[lock]
+schema = 1
+enforce = "warn"
+age_nudge_months = 12
+network = false
+
+[clang]
+version = "14.0"
+minimum = "14.0"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 14.0: CMakeLists.txt builds C++20 (designated initializers need Clang 10+); 14 is the oldest Clang in supported LTS distributions."
+probe = "command"
+argv = ["clang", "--version"]
+source = "auto"
+
+[clang-format]
+version = "23.1"
+minimum = "23.1"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 23.1: the template sources are formatted by the Defuzz plugin clang-format 23 wheel; older majors format differently."
+probe = "command"
+argv = ["clang-format", "--version"]
+source = "auto"
+
+[clang-tidy]
+version = "23.1"
+minimum = "23.1"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 23.1: .clang-tidy is verified with the Defuzz plugin clang-tidy 23 wheel."
+probe = "command"
+argv = ["clang-tidy", "--version"]
+source = "auto"
+
+[cmake]
+version = "3.20"
+minimum = "3.20"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 3.20: cmake_minimum_required(VERSION 3.20...3.28); xtask uses ctest --test-dir (CMake 3.20)."
+probe = "command"
+argv = ["cmake", "--version"]
+source = "auto"
+
+[ninja]
+version = "1.10"
+minimum = "1.10"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 1.10: CMake Ninja generator without C++ module scanning."
+probe = "command"
+argv = ["ninja", "--version"]
+source = "auto"

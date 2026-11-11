@@ -1,0 +1,21 @@
+{
+  "profiles": [
+    {
+      "profile": "default",
+      "profile_dir": "/hermes",
+      "config_path": "/hermes/config.yaml",
+      "world_writable_paths": ["/tmp/world_writable_bin"],
+      "config_text": "hooks:\n  pre_tool_call:\n    - command: \"/usr/local/bin/audit-hook --token sk-secret1234567890abcdef\"\n      matcher: \"terminal\"\n      timeout: 30\n      fail_closed: true\n  outbound:\n    - name: \"sec-webhook\"\n      url: \"https://ops:topsecretpw@hooks.example.com/events?api_key= secret_key_999\"\n      events:\n        - \"on_session_start\"\n      secret: \"whsec_super_secret\"\nmcp_servers:\n  safe_stdio:\n    command: \"npx\"\n    args:\n      - \"-y\"\n      - \"@modelcontextprotocol/server-filesystem\"\n      - \"--api-key=ghp_1234567890abcdefghijklmnopqrstuv\"\n    env:\n      GITHUB_TOKEN: \"ghp_1234567890abcdefghijklmnopqrstuv\"\n      SAFE_MODE: \"1\"\n  unsafe_rel:\n    command: \"./bin/local-mcp-server\"\n    args:\n      - \"--serve\"\n",
+      "plugin_manifests": [
+        {
+          "profile": "default",
+          "plugin_id": "defuzz",
+          "source_path": "/hermes/plugins/defuzz/plugin.yaml",
+          "plugin_dir": "/hermes/plugins/defuzz",
+          "manifest_text": "name: defuzz\nversion: 0.2.0\ndescription: Project Defuzz\nprovides_tools:\n  - defuzz_project\nprovides_hooks:\n  - pre_tool_call\nrequires_env:\n  - DEFUZZ_TOKEN\n",
+          "has_init_py": true
+        }
+      ]
+    }
+  ]
+}

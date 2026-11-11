@@ -1,0 +1,5 @@
+[tool.uv.workspace]
+members = ["packages/*/*", "tools/xtask"]
+
+[dependency-groups]
+dev = ["pytest>=9.0.3,<10"]

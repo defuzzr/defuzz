@@ -1,0 +1,172 @@
+{
+  "agents_block": "<!-- kit:client-job v1 begin (managed block: edit outside it) -->\n## Client / freelance job\n\n`project` is a client / freelance job workspace (`job.yaml` at the root).\nStart a new review round by copying `review/_template/` to `review/rNN/`.\n\n### Layout\n\n- `brief/`: Read-only client brief and scope as received.\n- `contract/`: Read-only signed contract, SOW, NDA and change orders.\n- `comms/`: Dated summaries of calls, emails and decisions.\n- `refs/`: Read-only client references and brand kit.\n- `intake/`: Read-only files received from the client, in dated folders.\n- `licences/`: Licences for fonts, stock and music used here.\n- `work/`: All working files for the job.\n- `review/`: One folder per review round (`r01`, `r02` ...; copy `review/_template/`).\n- `deliveries/`: One dated folder per handover, frozen once sent.\n- `finance/`: Money records for this job (`quotes/`, `invoices/`, `expenses/`).\n- `archive/`: Close-out summary and final handover record.\n- `tmp/`: Scratch space, ignored by Git and disposable.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Keep this repo private; never push it to a public remote.\n- Never change or delete existing files in `brief/`, `contract/`, `refs/` or `intake/`; new client files are added only as the next rule says.\n- Files from the client go in `intake/YYYY-MM-DD/` unchanged; work on copies in `work/wip/`, and put disposable test exports and previews in `work/exports/`.\n- Each review round gets a new `review/rNN/` (copy `review/_template/` for `review/rNN/sent/` and `review/rNN/feedback/`); `review/rNN/sent/` is frozen as soon as it is shared.\n- Every feedback item becomes a line in that round's change list in `review/rNN/feedback/`, marked done or declined.\n- A request not covered by `brief/` or `contract/` is logged in `comms/` and flagged; do not start it.\n- Sending anything to the client needs approval.\n- A delivery folder is `deliveries/YYYY-MM-DD_vN/` and is never modified after sending; put the close-out summary and final handover record in `archive/`.\n- Creating or changing anything in `finance/` (`finance/quotes/`, `finance/invoices/`, `finance/expenses/`, `finance/timesheet.csv`) needs approval.\n- Every third-party asset used must have a licence in `licences/`.\n- Run `git lfs install` once before the first commit.\n<!-- kit:client-job end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "brief",
+      "summary": "Read-only client brief and scope as received.",
+      "why": "original client scope stays untouched"
+    },
+    {
+      "dir": "contract",
+      "summary": "Read-only signed contract, SOW, NDA and change orders.",
+      "why": "legal terms and change orders are never altered in place"
+    },
+    {
+      "dir": "comms",
+      "summary": "Dated summaries of calls, emails and decisions.",
+      "why": "decisions and out-of-scope requests are logged"
+    },
+    {
+      "dir": "refs",
+      "summary": "Read-only client references and brand kit.",
+      "why": "client brand assets stay separate from working files"
+    },
+    {
+      "dir": "intake",
+      "summary": "Read-only files received from the client, in dated folders.",
+      "why": "incoming client files are preserved unchanged"
+    },
+    {
+      "dir": "licences",
+      "summary": "Licences for fonts, stock and music used here.",
+      "why": "every third-party asset has proof of rights"
+    },
+    {
+      "dir": "work",
+      "summary": "All working files for the job.",
+      "why": "editable work stays separate from client intake and deliveries"
+    },
+    {
+      "dir": "work/wip",
+      "summary": "In-progress files, laid out to suit the job type.",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "work/exports",
+      "summary": "Disposable test exports and previews, safe to delete and regenerate.",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "review",
+      "summary": "One folder per review round (`r01`, `r02` ...; copy `review/_template/`).",
+      "why": "what the client saw and their feedback are tracked per round"
+    },
+    {
+      "dir": "review/_template",
+      "summary": "Template for a review round (`r01`, `r02` ...).",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "review/_template/sent",
+      "summary": "Exactly what the client saw, frozen once shared.",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "review/_template/feedback",
+      "summary": "Client notes and mark-ups plus the change list.",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "deliveries",
+      "summary": "One dated folder per handover, frozen once sent.",
+      "why": "delivered handovers stay reproducible and unmodified"
+    },
+    {
+      "dir": "finance",
+      "summary": "Money records for this job (`quotes/`, `invoices/`, `expenses/`).",
+      "why": "quotes, invoices, expenses and time logs stay together"
+    },
+    {
+      "dir": "finance/quotes",
+      "summary": "Estimates and quotes sent.",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "finance/invoices",
+      "summary": "Invoices issued, numbered.",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "finance/expenses",
+      "summary": "Receipts charged to this job.",
+      "why": "declared by the client-job kit"
+    },
+    {
+      "dir": "archive",
+      "summary": "Close-out summary and final handover record.",
+      "why": "close-out records have a single home"
+    },
+    {
+      "dir": "tmp",
+      "summary": "Scratch space, ignored by Git and disposable.",
+      "why": "temporary scratch files are never committed"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "client-job",
+    "name": "Client / freelance job",
+    "summary": "Client or freelance job workspace: read-only brief, contract, references and intake, working files, review rounds, frozen deliveries, finance and licences.",
+    "tags": [
+      "client",
+      "job",
+      "freelance",
+      "agency",
+      "contract",
+      "invoice",
+      "commission",
+      "clients"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "archive/",
+    "archive/.gitkeep",
+    "brief/",
+    "brief/.gitkeep",
+    "comms/",
+    "comms/.gitkeep",
+    "contract/",
+    "contract/.gitkeep",
+    "deliveries/",
+    "deliveries/.gitkeep",
+    "finance/",
+    "finance/expenses/",
+    "finance/expenses/.gitkeep",
+    "finance/invoices/",
+    "finance/invoices/.gitkeep",
+    "finance/quotes/",
+    "finance/quotes/.gitkeep",
+    "finance/timesheet.csv",
+    "intake/",
+    "intake/.gitkeep",
+    "job.yaml",
+    "licences/",
+    "licences/.gitkeep",
+    "refs/",
+    "refs/.gitkeep",
+    "review/",
+    "review/_template/",
+    "review/_template/feedback/",
+    "review/_template/feedback/.gitkeep",
+    "review/_template/sent/",
+    "review/_template/sent/.gitkeep",
+    "tmp/",
+    "tmp/.gitkeep",
+    "work/",
+    "work/exports/",
+    "work/exports/.gitkeep",
+    "work/wip/",
+    "work/wip/.gitkeep"
+  ]
+}

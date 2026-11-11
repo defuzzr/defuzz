@@ -1,0 +1,184 @@
+{
+  "agents_block": "<!-- kit:web-app v1 begin (managed block: edit outside it) -->\n## Web app + design assets\n\n`project` is a web application workspace with handed-over design sources, tokens, application code, tests and deployment config.\n\n### Layout\n\n- `design/`: Everything from the design side.\n- `public/`: Served as-is: favicon, `robots.txt`, OG images.\n- `src/`: Application source.\n- `tests/`: Automated tests.\n- `scripts/`: Asset optimisation, token build, codegen.\n- `deploy/`: Hosting config.\n- `.github/`: GitHub settings; Actions workflows live in `.github/workflows/`.\n- `docs/`: Architecture notes and decisions.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Never edit `design/sources/`; a design change comes from the designer.\n- Asset flow is one way: `design/exports/` -> the optimise script in `scripts/` (if none exists yet, ask) -> `src/assets/` or `public/`.\n- Colours, font sizes and spacing come from `design/tokens/`; never hard-code a value that has a token.\n- Generated token CSS in `src/styles/` is rebuilt by script, never hand-edited.\n- A file goes in `public/` only if it needs a fixed URL (self-hosted web fonts served by URL go in `public/fonts/`); everything else goes in `src/assets/`.\n- Never commit `.env`; add new variable names to `.env.example` with no value.\n- Create `package.json` with your package manager, not by hand. Adding or upgrading a dependency needs approval.\n- Every new component gets a unit test in `tests/unit/`.\n- Deploying, or changing anything in `deploy/` or `.github/workflows/`, needs approval.\n- Never commit `dist/`, `node_modules/` or `coverage/`. The build tool, package manager and test runner create them.\n- Run `git lfs install` once before the first commit.\n<!-- kit:web-app end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "design",
+      "summary": "Everything from the design side.",
+      "why": "design inputs stay separate from application code"
+    },
+    {
+      "dir": "design/sources",
+      "summary": "Read-only `.fig`, `.sketch`, `.psd`, `.ai` as handed over.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "design/tokens",
+      "summary": "Colour, type and spacing tokens as `.json`.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "design/specs",
+      "summary": "Screens, flows, redlines, component notes.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "design/exports",
+      "summary": "Raw exports from the design tool, unoptimised.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "public",
+      "summary": "Served as-is: favicon, `robots.txt`, OG images.",
+      "why": "fixed-URL static files stay separate from bundled assets"
+    },
+    {
+      "dir": "public/fonts",
+      "summary": "Self-hosted web fonts with licences.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "src",
+      "summary": "Application source.",
+      "why": "application code lives in one tree"
+    },
+    {
+      "dir": "src/assets",
+      "summary": "Optimised images and icons imported by code.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "src/components",
+      "summary": "Reusable UI components.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "src/pages",
+      "summary": "Routes and page-level views.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "src/styles",
+      "summary": "Global CSS and generated token CSS.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "src/lib",
+      "summary": "API clients, helpers, shared logic.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "src/state",
+      "summary": "Stores and data hooks.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "tests",
+      "summary": "Automated tests.",
+      "why": "unit and browser tests stay with the project"
+    },
+    {
+      "dir": "tests/unit",
+      "summary": "Component and logic tests.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "tests/e2e",
+      "summary": "Browser tests.",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Asset optimisation, token build, codegen.",
+      "why": "build and asset scripts stay out of application code"
+    },
+    {
+      "dir": "deploy",
+      "summary": "Hosting config.",
+      "why": "deployment changes are isolated for review"
+    },
+    {
+      "dir": ".github",
+      "summary": "GitHub settings; Actions workflows live in `.github/workflows/`.",
+      "why": "GitHub only runs workflows from this folder"
+    },
+    {
+      "dir": ".github/workflows",
+      "summary": "GitHub Actions workflow files (CI and deploy).",
+      "why": "declared by the web-app kit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Architecture notes and decisions.",
+      "why": "decisions survive between sessions"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "web-app",
+    "name": "Web app + design assets",
+    "summary": "Web application workspace with handed-over design sources, design tokens, raw and optimised assets, app code, unit and e2e tests, and Git LFS rules.",
+    "tags": [
+      "frontend",
+      "website",
+      "figma",
+      "tokens",
+      "css",
+      "handoff",
+      "ui",
+      "github"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".env.example",
+    ".gitattributes",
+    ".github/",
+    ".github/workflows/",
+    ".github/workflows/.gitkeep",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "deploy/",
+    "deploy/.gitkeep",
+    "design/",
+    "design/exports/",
+    "design/exports/.gitkeep",
+    "design/sources/",
+    "design/sources/.gitkeep",
+    "design/specs/",
+    "design/specs/.gitkeep",
+    "design/tokens/",
+    "design/tokens/.gitkeep",
+    "docs/",
+    "docs/.gitkeep",
+    "public/",
+    "public/fonts/",
+    "public/fonts/.gitkeep",
+    "scripts/",
+    "scripts/.gitkeep",
+    "src/",
+    "src/assets/",
+    "src/assets/.gitkeep",
+    "src/components/",
+    "src/components/.gitkeep",
+    "src/lib/",
+    "src/lib/.gitkeep",
+    "src/pages/",
+    "src/pages/.gitkeep",
+    "src/state/",
+    "src/state/.gitkeep",
+    "src/styles/",
+    "src/styles/.gitkeep",
+    "tests/",
+    "tests/e2e/",
+    "tests/e2e/.gitkeep",
+    "tests/unit/",
+    "tests/unit/.gitkeep"
+  ]
+}

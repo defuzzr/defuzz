@@ -1,0 +1,5 @@
+npm warn Unknown env config "store-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm error code FETCH_ERROR
+npm error errno FETCH_ERROR
+npm error invalid json response body at http://127.0.0.1:18080/html/left-pad reason: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+npm error A complete log of this run can be found in: /home/user/probe/w/npmcache/_logs/2026-11-11T06_37_04_070Z-debug-0.log

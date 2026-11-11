@@ -1,0 +1,31 @@
+Using CPython 3.14.9 interpreter at: /home/user/.hermes/tools/python-3.14.9+20261021-linux-x64/bin/python3
+Creating virtual environment at: .venv
+   Building tmpl-prefix-storage-memory @ file:///home/user/probe/w/p/a4/packages/adapters/tmpl-prefix-storage-memory
+   Building tmpl-prefix-cli @ file:///home/user/probe/w/p/a4/packages/apps/tmpl-prefix-cli
+   Building tmpl-prefix-http-fastapi @ file:///home/user/probe/w/p/a4/packages/adapters/tmpl-prefix-http-fastapi
+   Building tmpl-prefix-config @ file:///home/user/probe/w/p/a4/packages/foundation/tmpl-prefix-config
+   Building tmpl-prefix-http-stdlib @ file:///home/user/probe/w/p/a4/packages/adapters/tmpl-prefix-http-stdlib
+   Building tmpl-prefix-core @ file:///home/user/probe/w/p/a4/packages/foundation/tmpl-prefix-core
+   Building tmpl-prefix-server @ file:///home/user/probe/w/p/a4/packages/apps/tmpl-prefix-server
+      Built tmpl-prefix-server @ file:///home/user/probe/w/p/a4/packages/apps/tmpl-prefix-server
+   Building tmpl-prefix-telemetry @ file:///home/user/probe/w/p/a4/packages/foundation/tmpl-prefix-telemetry
+   Building xtask @ file:///home/user/probe/w/p/a4/tools/xtask
+      Built xtask @ file:///home/user/probe/w/p/a4/tools/xtask
+   Building tmpl-prefix-accounts @ file:///home/user/probe/w/p/a4/packages/domain/tmpl-prefix-accounts
+      Built tmpl-prefix-accounts @ file:///home/user/probe/w/p/a4/packages/domain/tmpl-prefix-accounts
+      Built tmpl-prefix-cli @ file:///home/user/probe/w/p/a4/packages/apps/tmpl-prefix-cli
+      Built tmpl-prefix-http-fastapi @ file:///home/user/probe/w/p/a4/packages/adapters/tmpl-prefix-http-fastapi
+      Built tmpl-prefix-core @ file:///home/user/probe/w/p/a4/packages/foundation/tmpl-prefix-core
+      Built tmpl-prefix-config @ file:///home/user/probe/w/p/a4/packages/foundation/tmpl-prefix-config
+      Built tmpl-prefix-storage-memory @ file:///home/user/probe/w/p/a4/packages/adapters/tmpl-prefix-storage-memory
+      Built tmpl-prefix-http-stdlib @ file:///home/user/probe/w/p/a4/packages/adapters/tmpl-prefix-http-stdlib
+      Built tmpl-prefix-telemetry @ file:///home/user/probe/w/p/a4/packages/foundation/tmpl-prefix-telemetry
+error: Failed to download `py-serializable==2.2.0`
+  cause: Request failed after 1 retry in 1.1s
+  cause: Failed to fetch: https://files.pythonhosted.org/packages/7e/56/94f6a9ac81193713e6be0d41c62d6b916b53c814c05d8b3a0d90976db0d6/py_serializable-2.2.0-py3-none-any.whl
+  cause: error sending request for url (https://files.pythonhosted.org/packages/7e/56/94f6a9ac81193713e6be0d41c62d6b916b53c814c05d8b3a0d90976db0d6/py_serializable-2.2.0-py3-none-any.whl)
+  cause: client error (Connect)
+  cause: dns error
+  cause: failed to lookup address information: Temporary failure in name resolution
+
+hint: `py-serializable` (v2.2.0) was included because `pip-audit` (v2.10.1) depends on `cyclonedx-python-lib` (v11.12.0) which depends on `py-serializable`

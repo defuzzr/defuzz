@@ -1,0 +1,3 @@
+Using CPython 3.11.16 interpreter at: /home/user/.local/bin/python3.11
+error: No solution found when resolving dependencies
+  cause: Because requests was not found in the package registry and you require requests, we can conclude that your requirements are unsatisfiable.

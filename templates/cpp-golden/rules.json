@@ -1,0 +1,99 @@
+{
+  "declared_dirs": [
+    {
+      "dir": "foundation",
+      "summary": "Layer 0 shared C++ primitives and error types",
+      "why": "Keep base error and workspace types free of upward dependencies",
+      "source": "explicit"
+    },
+    {
+      "dir": "domain",
+      "summary": "Layer 1 pure C++ domain logic",
+      "why": "Isolate business rules from external storage and CLI entrypoints",
+      "source": "explicit"
+    },
+    {
+      "dir": "adapters",
+      "summary": "Layer 2 storage and integration adapters",
+      "why": "Implement domain ports behind explicit CMake targets",
+      "source": "explicit"
+    },
+    {
+      "dir": "apps",
+      "summary": "Layer 3 CLI composition root",
+      "why": "Wire foundation, domain, and adapters into executable targets",
+      "source": "explicit"
+    },
+    {
+      "dir": "tests",
+      "summary": "CMake and CTest workspace test suite",
+      "why": "Compile and run targets listed explicitly in tests/CMakeLists.txt",
+      "source": "explicit"
+    },
+    {
+      "dir": "cmake",
+      "summary": "Workspace CMake automation scripts",
+      "why": "Keep xtask formatting, layer, test, and clang-tidy gates together",
+      "source": "explicit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Architecture and component boundary documentation",
+      "why": "Keep project Markdown notes and design docs out of the root",
+      "source": "explicit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Shell and PowerShell helper scripts",
+      "why": "Keep small automation scripts out of the root and out of the code folders",
+      "source": "explicit"
+    }
+  ],
+  "placement_rules": [
+    {
+      "kind": "docs",
+      "match_ext": [
+        ".md",
+        ".rst",
+        ".adoc",
+        ".mmd",
+        ".puml",
+        ".drawio"
+      ],
+      "root_only": true,
+      "dest_dir": "docs",
+      "lfs": false,
+      "reason": "Notes, guides and diagram sources live in docs/ in this workspace",
+      "source": "explicit"
+    },
+    {
+      "kind": "scripts",
+      "match_ext": [
+        ".sh",
+        ".bash",
+        ".ps1"
+      ],
+      "root_only": true,
+      "dest_dir": "scripts",
+      "lfs": false,
+      "reason": "Shell and PowerShell scripts live in scripts/ in this workspace",
+      "source": "explicit"
+    }
+  ],
+  "protected_root_files": [
+    "CTestConfig.cmake",
+    "CTestCustom.cmake",
+    "CPackConfig.cmake",
+    "compile_commands.json",
+    "vcpkg-configuration.json",
+    "conandata.yml",
+    "build",
+    "out",
+    "AGENT.md",
+    "WARP.md",
+    "QWEN.md",
+    "CRUSH.md",
+    "DCO.md",
+    "ACKNOWLEDGMENTS.md"
+  ]
+}

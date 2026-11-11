@@ -1,0 +1,36 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/foundation/tmpl-prefix-core"
+    },
+    {
+      "path": "./packages/foundation/tmpl-prefix-config"
+    },
+    {
+      "path": "./packages/foundation/tmpl-prefix-telemetry"
+    },
+    {
+      "path": "./packages/domain/tmpl-prefix-accounts"
+    },
+    {
+      "path": "./packages/adapters/tmpl-prefix-storage-memory"
+    },
+    {
+      "path": "./packages/adapters/tmpl-prefix-http-hono"
+    },
+    {
+      "path": "./packages/adapters/tmpl-prefix-http-node"
+    },
+    {
+      "path": "./packages/apps/tmpl-prefix-server"
+    },
+    {
+      "path": "./packages/apps/tmpl-prefix-cli"
+    },
+    {
+      "path": "./tools/xtask"
+    }
+    // @xtask:references
+  ]
+}

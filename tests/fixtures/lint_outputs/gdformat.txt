@@ -1,0 +1,3 @@
+would reformat scripts/player.gd
+would reformat ./scripts/enemy.gd
+2 files would be reformatted, 1 file would be left unchanged.

@@ -1,0 +1,25 @@
+id: ts-node-golden
+name: TS-Node Golden Workspace
+summary: Mini TS-Node golden fixture for template drift and static code audit tests.
+kind: service
+layout: mono
+languages: [typescript]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.ts", "**/*.json", "**/*.md", "**/*.yaml", ".env.example", "pnpm-lock.yaml"]
+locked:
+  - package.json
+  - tsconfig.base.json
+  - biome.json
+  - tools/xtask/**
+approved_deps:
+  ts-node:
+    - "@hono/node-server"
+    - hono
+    - pnpm
+    - typescript
+    - zod
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["pnpm", "xtask", "ci"]
+      cwd: "."

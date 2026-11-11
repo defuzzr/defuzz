@@ -1,0 +1,19 @@
+[package]
+name = "tmpl-prefix-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "tmpl-prefix"
+path = "src/main.rs"
+
+[dependencies]
+tmpl-prefix-adapters.workspace = true
+tmpl-prefix-domain.workspace = true
+tmpl-prefix-foundation.workspace = true
+
+[lints]
+workspace = true

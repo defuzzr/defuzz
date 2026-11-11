@@ -1,0 +1,10 @@
+<Project>
+    <Target Name="VSTest">
+        <CallTarget Targets="Build" Condition="'$(VSTestNoBuild)' != 'true'" />
+        <Exec
+            Command="dotnet &quot;$(TargetPath)&quot; $(TestRunnerArgs)"
+            WorkingDirectory="$(MSBuildThisFileDirectory)"
+            Condition="'$(IsTestProject)' == 'true'"
+        />
+    </Target>
+</Project>

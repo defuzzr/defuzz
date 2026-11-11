@@ -1,0 +1,20 @@
+{
+  "name": "tmpl-prefix-config",
+  "version": "0.1.0",
+  "description": "Typed, zod-validated configuration loader reading TMPL_PREFIX_* environment variables.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "tmpl-prefix-core": "workspace:*",
+    "zod": "catalog:"
+  }
+}

@@ -1,0 +1,10 @@
+id: repo-folder-missing
+name: Missing Repo Folder
+summary: Repo directory does not exist inside template folder.
+kind: tool
+layout: single
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py"]
+repos:
+  - name: non_existent_repo_dir

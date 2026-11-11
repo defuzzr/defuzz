@@ -1,0 +1,6 @@
+go: downloading github.com/google/uuid v1.6.0
+--- FAIL: TestDB (0.00s)
+    x_test.go:3: dial tcp 127.0.0.1:1: connect: connection refused
+FAIL
+FAIL	demo	0.004s
+FAIL

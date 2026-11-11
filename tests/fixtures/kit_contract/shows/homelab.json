@@ -1,0 +1,200 @@
+{
+  "agents_block": "<!-- kit:homelab v1 begin (managed block: edit outside it) -->\n## Homelab infrastructure\n\n`project` is a homelab and infrastructure workspace. Add a host by copying `hosts/_template/` to `hosts/<hostname>/`.\n\n### Layout\n\n- `inventory/`: What exists: hosts, IPs, VLANs and hardware (`hosts.yaml`, `network.md`).\n- `hosts/`: One folder per machine by hostname; copy `hosts/_template/` to add a host.\n- `stacks/`: Compose stacks used on more than one host.\n- `network/`: Network-wide config: `dns/`, `dhcp/`, `firewall/`, `vpn/` and `proxy/`.\n- `secrets/`: Pointers only: secret name and where it is stored.\n- `scripts/`: Deploy, update and health-check scripts.\n- `runbooks/`: Step-by-step: restore, add host, rotate cert, outage.\n- `backups/`: Backup records, not backup data: `index.md`, `jobs/` and `restore-tests/`.\n- `monitoring/`: Alert rules, dashboards, uptime checks.\n- `docs/`: Diagrams, decisions, hardware manuals.\n- `changelog/`: Dated entry for every change applied to a live host.\n- `tmp/`: Scratch, rendered configs, dry-run output. Ignored by Git and disposable.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Never write a secret value in any file: no passwords, tokens, private keys or `.env` contents.\n- VPN configs (`network/vpn/*.conf`) hold private keys and are ignored by Git; commit a `.conf.example` with the keys removed.\n- `.env.example` lists variable names only; `secrets/` records where the real value is kept. A stack used on one host goes in `hosts/<hostname>/compose/<stack>/`; a stack used on more than one host goes in `stacks/<stack>/`. Each gets a `compose.yaml` and a `.env.example`.\n- Change the file in this repo first, then deploy it; never edit a live host directly.\n- Running any command that changes a live host needs approval; read-only commands do not.\n- Destroying data needs explicit approval every time: removing volumes, wiping disks, dropping databases, pruning backups.\n- Every applied change gets an entry in `changelog/`: date, host, what changed, how to undo it.\n- Pin image tags to a version; never use `latest`.\n- A new service is not done until it has a line in `backups/index.md` and a check in `monitoring/`.\n- Changes to `network/firewall/`, `network/vpn/` or anything that opens a port need approval.\n- If a step fails partway, stop and report the current state; do not improvise a fix.\n- Backups, disk images and volume data never go in git.\n- Run `git lfs install` once before the first commit.\n<!-- kit:homelab end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "inventory",
+      "summary": "What exists: hosts, IPs, VLANs and hardware (`hosts.yaml`, `network.md`).",
+      "why": "single source of truth for machines and network addressing"
+    },
+    {
+      "dir": "hosts",
+      "summary": "One folder per machine by hostname; copy `hosts/_template/` to add a host.",
+      "why": "each machine's configuration is isolated by hostname"
+    },
+    {
+      "dir": "hosts/_template",
+      "summary": "Copy this folder to `hosts/<hostname>/` when adding a host.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "hosts/_template/compose",
+      "summary": "One subfolder per stack with `compose.yaml` and `.env.example`.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "hosts/_template/etc",
+      "summary": "Tracked system config, mirroring `/etc` paths.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "hosts/_template/systemd",
+      "summary": "Unit and timer files for this host.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "stacks",
+      "summary": "Compose stacks used on more than one host.",
+      "why": "shared service definitions are maintained in one place"
+    },
+    {
+      "dir": "network",
+      "summary": "Network-wide config: `dns/`, `dhcp/`, `firewall/`, `vpn/` and `proxy/`.",
+      "why": "shared routing, firewall and name resolution stay tracked"
+    },
+    {
+      "dir": "network/dns",
+      "summary": "Zone files and local DNS records.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "network/dhcp",
+      "summary": "DHCP reservations and scopes.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "network/firewall",
+      "summary": "Firewall rules and port forwards.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "network/vpn",
+      "summary": "VPN peer definitions without private keys; *.conf files are ignored by Git.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "network/proxy",
+      "summary": "Reverse-proxy routes and certificate config.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "secrets",
+      "summary": "Pointers only: secret name and where it is stored.",
+      "why": "documents where credentials live without storing secret values"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Deploy, update and health-check scripts.",
+      "why": "operational automation stays separate from host state"
+    },
+    {
+      "dir": "runbooks",
+      "summary": "Step-by-step: restore, add host, rotate cert, outage.",
+      "why": "recovery and maintenance procedures are repeatable"
+    },
+    {
+      "dir": "backups",
+      "summary": "Backup records, not backup data: `index.md`, `jobs/` and `restore-tests/`.",
+      "why": "tracks backup coverage and restore verification without storing dumps"
+    },
+    {
+      "dir": "backups/jobs",
+      "summary": "Backup job definitions without credentials.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "backups/restore-tests",
+      "summary": "Dated record of each restore drill.",
+      "why": "declared by the homelab kit"
+    },
+    {
+      "dir": "monitoring",
+      "summary": "Alert rules, dashboards, uptime checks.",
+      "why": "every service has tracked health and alert checks"
+    },
+    {
+      "dir": "docs",
+      "summary": "Diagrams, decisions, hardware manuals.",
+      "why": "architecture context and manuals stay with the repo"
+    },
+    {
+      "dir": "changelog",
+      "summary": "Dated entry for every change applied to a live host.",
+      "why": "live changes can be audited and rolled back"
+    },
+    {
+      "dir": "tmp",
+      "summary": "Scratch, rendered configs, dry-run output. Ignored by Git and disposable.",
+      "why": "temporary dry-run and rendered output never pollutes tracked configs"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "homelab",
+    "name": "Homelab infrastructure",
+    "summary": "Homelab and infrastructure workspace: host inventory, per-host configs, shared Compose stacks, network rules, runbooks, backup records and changelog.",
+    "tags": [
+      "homelab",
+      "infra",
+      "infrastructure",
+      "selfhosted",
+      "servers",
+      "network",
+      "sysadmin",
+      "nas",
+      "host",
+      "hosts",
+      "inventory",
+      "runbooks",
+      "lab"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "backups/",
+    "backups/index.md",
+    "backups/jobs/",
+    "backups/jobs/.gitkeep",
+    "backups/restore-tests/",
+    "backups/restore-tests/.gitkeep",
+    "changelog/",
+    "changelog/.gitkeep",
+    "docs/",
+    "docs/.gitkeep",
+    "hosts/",
+    "hosts/_template/",
+    "hosts/_template/compose/",
+    "hosts/_template/compose/.gitkeep",
+    "hosts/_template/etc/",
+    "hosts/_template/etc/.gitkeep",
+    "hosts/_template/host.yaml",
+    "hosts/_template/notes.md",
+    "hosts/_template/systemd/",
+    "hosts/_template/systemd/.gitkeep",
+    "inventory/",
+    "inventory/hosts.yaml",
+    "inventory/network.md",
+    "monitoring/",
+    "monitoring/.gitkeep",
+    "network/",
+    "network/dhcp/",
+    "network/dhcp/.gitkeep",
+    "network/dns/",
+    "network/dns/.gitkeep",
+    "network/firewall/",
+    "network/firewall/.gitkeep",
+    "network/proxy/",
+    "network/proxy/.gitkeep",
+    "network/vpn/",
+    "network/vpn/.gitkeep",
+    "runbooks/",
+    "runbooks/.gitkeep",
+    "scripts/",
+    "scripts/.gitkeep",
+    "secrets/",
+    "secrets/.gitkeep",
+    "stacks/",
+    "stacks/.gitkeep",
+    "tmp/",
+    "tmp/.gitkeep"
+  ]
+}

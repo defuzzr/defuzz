@@ -1,0 +1,22 @@
+import type { Component, Context, Health } from "tmpl-prefix-core";
+
+export class __COMPONENT_CLASS__ implements Component {
+  public readonly name = "__COMPONENT_NAME__";
+  private started = false;
+
+  public async start(ctx: Context): Promise<void> {
+    ctx.logger.info("Starting component", { component: this.name });
+    this.started = true;
+  }
+
+  public async stop(): Promise<void> {
+    this.started = false;
+  }
+
+  public async health(): Promise<Health> {
+    if (!this.started) {
+      return { status: "unhealthy", reason: `${this.name} has not been started` };
+    }
+    return { status: "healthy" };
+  }
+}

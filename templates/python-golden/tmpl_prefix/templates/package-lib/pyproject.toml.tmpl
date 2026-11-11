@@ -1,0 +1,18 @@
+[project]
+name = "__PKG_DIST__"
+version = "0.1.0"
+description = "__PKG_DESC__"
+requires-python = ">=3.13"
+dependencies = [
+    # @xtask:dependencies
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+# @xtask:sources
+
+[build-system]
+requires = ["uv_build>=0.6,<1"]
+build-backend = "uv_build"

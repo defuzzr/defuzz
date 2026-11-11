@@ -1,0 +1,8 @@
+CMake Error at cmake/xtask.cmake:76 (message):
+  Tool version too old for 'clang-format' (/usr/bin/clang-format): need >=
+  23.1 from TOOLS.lock, found '18.1.3'
+Call Stack (most recent call first):
+  cmake/xtask.cmake:123 (resolve_and_verify_tool)
+  cmake/xtask.cmake:300 (cmd_fmt_check)
+
+

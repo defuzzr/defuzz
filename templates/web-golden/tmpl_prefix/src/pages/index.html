@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- include: head.html -->
+    <title>
+      tmpl_prefix
+    </title>
+    <meta name="description" content="A small static website: what it is, how it is built and where to start editing." />
+  </head>
+  <body>
+    <!-- include: header.html current=/ -->
+    <main id="main" tabindex="-1">
+      <h1>
+        tmpl_prefix
+      </h1>
+      <p class="lead">
+        A small static website. Each page is plain HTML, styled by one stylesheet and
+        built into a folder of files you can put on any web host.
+      </p>
+
+      <h2>What you get</h2>
+      <ul>
+        <li>Pages that read well on a phone, a tablet and a desktop screen.</li>
+        <li>A light and a dark colour theme that follow your system setting.</li>
+        <li>Text and controls with enough contrast in both themes.</li>
+        <li>Content that works with JavaScript turned off.</li>
+      </ul>
+
+      <figure class="figure">
+        <img
+          src="/src/assets/page-layout.svg"
+          width="480"
+          height="300"
+          alt="Diagram of a page: a header with the site name and menu at the top, the main content in the middle, and a footer at the bottom."
+        />
+        <figcaption>Every page shares the same header and footer.</figcaption>
+      </figure>
+
+      <h2>Where to start</h2>
+      <p>
+        Change the text of this page in <code>src/pages/index.html</code>. Change colours,
+        type sizes and spacing in <code>design/tokens/tokens.css</code>. Read more
+        <a href="/about/">about how this site is built</a>.
+      </p>
+    </main>
+    <!-- include: footer.html -->
+  </body>
+</html>

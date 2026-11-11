@@ -1,0 +1,20 @@
+{
+  "name": "tmpl-prefix-storage-memory",
+  "version": "0.1.0",
+  "description": "In-memory Map-backed implementation of AccountRepository.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "tmpl-prefix-accounts": "workspace:*",
+    "tmpl-prefix-core": "workspace:*"
+  }
+}

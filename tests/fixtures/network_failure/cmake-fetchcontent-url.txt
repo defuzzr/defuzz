@@ -1,0 +1,124 @@
+CMake Warning (dev) at /usr/share/cmake-3.28/Modules/FetchContent.cmake:1331 (message):
+  The DOWNLOAD_EXTRACT_TIMESTAMP option was not given and policy CMP0135 is
+  not set.  The policy's OLD behavior will be used.  When using a URL
+  download, the timestamps of extracted files should preferably be that of
+  the time of extraction, otherwise code that depends on the extracted
+  contents might not be rebuilt if the URL changes.  The OLD behavior
+  preserves the timestamps from the archive instead, but this is usually not
+  what you want.  Update your project to the NEW behavior or specify the
+  DOWNLOAD_EXTRACT_TIMESTAMP option with a value of true to avoid this
+  robustness issue.
+Call Stack (most recent call first):
+  CMakeLists.txt:4 (FetchContent_Declare)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+[ 11%] Creating directories for 'googletest-populate'
+[ 22%] Performing download step (download, verify and extract) for 'googletest-populate'
+-- Downloading...
+   dst='/home/user/probe/w/p/g2/b/_deps/googletest-subbuild/googletest-populate-prefix/src/v1.14.0.tar.gz'
+   timeout='none'
+   inactivity timeout='none'
+-- Using src='https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz'
+-- Retrying...
+-- Using src='https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz'
+-- Retry after 5 seconds (attempt #2) ...
+-- Using src='https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz'
+-- Retry after 5 seconds (attempt #3) ...
+-- Using src='https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz'
+-- Retry after 15 seconds (attempt #4) ...
+-- Using src='https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz'
+-- Retry after 60 seconds (attempt #5) ...
+-- Using src='https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz'
+CMake Error at googletest-subbuild/googletest-populate-prefix/src/googletest-populate-stamp/download-googletest-populate.cmake:170 (message):
+  Each download failed!
+
+    error: downloading 'https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz' failed
+          status_code: 6
+          status_string: "Couldn't resolve host name"
+          log:
+          --- LOG BEGIN ---
+          Could not resolve host: github.com
+
+  Closing connection
+
+
+
+          --- LOG END ---
+          error: downloading 'https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz' failed
+          status_code: 6
+          status_string: "Couldn't resolve host name"
+          log:
+          --- LOG BEGIN ---
+          Could not resolve host: github.com
+
+  Closing connection
+
+
+
+          --- LOG END ---
+          error: downloading 'https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz' failed
+          status_code: 6
+          status_string: "Couldn't resolve host name"
+          log:
+          --- LOG BEGIN ---
+          Could not resolve host: github.com
+
+  Closing connection
+
+
+
+          --- LOG END ---
+          error: downloading 'https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz' failed
+          status_code: 6
+          status_string: "Couldn't resolve host name"
+          log:
+          --- LOG BEGIN ---
+          Could not resolve host: github.com
+
+  Closing connection
+
+
+
+          --- LOG END ---
+          error: downloading 'https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz' failed
+          status_code: 6
+          status_string: "Couldn't resolve host name"
+          log:
+          --- LOG BEGIN ---
+          Could not resolve host: github.com
+
+  Closing connection
+
+
+
+          --- LOG END ---
+          error: downloading 'https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz' failed
+          status_code: 6
+          status_string: "Couldn't resolve host name"
+          log:
+          --- LOG BEGIN ---
+          Could not resolve host: github.com
+
+  Closing connection
+
+
+
+          --- LOG END ---
+          
+    
+
+
+gmake[2]: *** [CMakeFiles/googletest-populate.dir/build.make:100: googletest-populate-prefix/src/googletest-populate-stamp/googletest-populate-download] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:83: CMakeFiles/googletest-populate.dir/all] Error 2
+gmake: *** [Makefile:91: all] Error 2
+
+CMake Error at /usr/share/cmake-3.28/Modules/FetchContent.cmake:1679 (message):
+  Build step for googletest failed: 2
+Call Stack (most recent call first):
+  /usr/share/cmake-3.28/Modules/FetchContent.cmake:1819:EVAL:2 (__FetchContent_directPopulate)
+  /usr/share/cmake-3.28/Modules/FetchContent.cmake:1819 (cmake_language)
+  /usr/share/cmake-3.28/Modules/FetchContent.cmake:2033 (FetchContent_Populate)
+  CMakeLists.txt:5 (FetchContent_MakeAvailable)
+
+
+-- Configuring incomplete, errors occurred!

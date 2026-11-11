@@ -1,0 +1,49 @@
+version = 1
+revision = 5
+requires-python = ">=3.13"
+
+[manifest]
+members = [
+    "my-service-http-fastapi",
+    "xtask",
+]
+
+[manifest.dependency-groups]
+dev = [
+    { name = "pytest", specifier = ">=9.0.3,<10" },
+]
+
+[[package]]
+name = "fastapi"
+version = "0.115.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "my-service-http-fastapi"
+version = "0.1.0"
+source = { editable = "packages/adapters/my-service-http-fastapi" }
+
+[[package]]
+name = "pydantic"
+version = "2.10.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pydantic-settings"
+version = "2.7.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "9.0.3"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "uvicorn"
+version = "0.34.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "xtask"
+version = "0.1.0"
+source = { editable = "tools/xtask" }

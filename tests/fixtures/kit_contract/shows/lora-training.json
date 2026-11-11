@@ -1,0 +1,212 @@
+{
+  "agents_block": "<!-- kit:lora-training v1 begin (managed block: edit outside it) -->\n## LoRA and model training\n\n`project` is a LoRA and model training workspace.\nStart a run by copying `runs/_template/` to `runs/<run>/` and a release by copying `release/_template/` to `release/<version>/`.\n\n### Layout\n\n- `data/`: The dataset, by stage.\n- `datasheets/`: Source, licence and consent record per data batch.\n- `scripts/`: Dedupe, resize, caption, tag and split scripts.\n- `configs/`: One training config per planned run.\n- `base-models/`: Base weights or symlinks (ignored by Git); `sources.md` is tracked.\n- `runs/`: One folder per run (`YYYYMMDD_name_vNN`), copied from `runs/_template/`.\n- `eval/`: Fixed tests applied to every candidate.\n- `release/`: One folder per release (`v1.0`, `v1.1` ...), copied from `release/_template/`.\n- `cache/`: Latents, bucket and tokeniser caches. Ignored by Git and disposable.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Never modify or delete `data/raw/`; cleaning writes new files to `data/clean/`.\n- Every sample in `data/clean/` has exactly one caption file in `data/captions/` with the same basename.\n- A removed sample is moved to `data/rejected/` with a one-line reason added to a reasons log in `data/rejected/`; never just deleted.\n- Every run gets a new folder in `runs/` (copied from `runs/_template/`); never reuse or overwrite a run folder.\n- Write one training config per planned run in `configs/`; copy it unchanged into `runs/<run>/` (keep its file name and extension) before training starts and do not edit it afterwards.\n- Never change `eval/prompts/` or the seeds once the first run has been evaluated.\n- Every checkpoint under consideration is evaluated with the full fixed prompt set, with grids saved in `eval/samples/` and comparisons in `eval/reports/`.\n- Checkpoints stay in `runs/<run>/checkpoints/` (ignored by Git); only the final weights file in `release/<version>/weights/` is committed.\n- Adding data from a new source needs a datasheet in `datasheets/` and approval.\n- Creating a `release/` version (copied from `release/_template/`) or publishing weights needs approval.\n- Run `git lfs install` once before the first commit.\n<!-- kit:lora-training end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "data",
+      "summary": "The dataset, by stage.",
+      "why": "raw, cleaned, captions, splits and rejected samples stay separated"
+    },
+    {
+      "dir": "data/raw",
+      "summary": "Read-only images or text exactly as collected.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "data/clean",
+      "summary": "Deduped, cropped, resized, filtered copies of raw.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "data/captions",
+      "summary": "One .txt per sample, same basename as the sample.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "data/reg",
+      "summary": "Regularisation or class samples.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "data/splits",
+      "summary": "Train, val and test manifests.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "data/rejected",
+      "summary": "Disposable removed samples plus a reasons log.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "datasheets",
+      "summary": "Source, licence and consent record per data batch.",
+      "why": "provenance and rights are recorded before training"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Dedupe, resize, caption, tag and split scripts.",
+      "why": "dataset preparation is reproducible"
+    },
+    {
+      "dir": "configs",
+      "summary": "One training config per planned run.",
+      "why": "planned runs are versioned before execution"
+    },
+    {
+      "dir": "base-models",
+      "summary": "Base weights or symlinks (ignored by Git); `sources.md` is tracked.",
+      "why": "heavy base weights stay out of Git while provenance stays tracked"
+    },
+    {
+      "dir": "runs",
+      "summary": "One folder per run (`YYYYMMDD_name_vNN`), copied from `runs/_template/`.",
+      "why": "runs never overwrite each other"
+    },
+    {
+      "dir": "runs/_template",
+      "summary": "Copy this to start a run.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "runs/_template/checkpoints",
+      "summary": "Weights saved per step or epoch. Ignored by Git.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "runs/_template/samples",
+      "summary": "Previews generated during training. Ignored by Git and disposable.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "runs/_template/logs",
+      "summary": "Loss curves, tensorboard, stdout. Ignored by Git and disposable.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "eval",
+      "summary": "Fixed tests applied to every candidate.",
+      "why": "every candidate checkpoint is compared on the same fixed test set"
+    },
+    {
+      "dir": "eval/prompts",
+      "summary": "Fixed eval prompts and seeds.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "eval/samples",
+      "summary": "Eval grids per checkpoint, same prompts and seeds.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "eval/reports",
+      "summary": "Comparisons and the chosen checkpoint with reason.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "release",
+      "summary": "One folder per release (`v1.0`, `v1.1` ...), copied from `release/_template/`.",
+      "why": "only approved final weights and model cards are published"
+    },
+    {
+      "dir": "release/_template",
+      "summary": "Copy this to start a release (`v1.0`, `v1.1` ...).",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "release/_template/weights",
+      "summary": "Final weights file, the only weights in LFS.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "release/_template/card",
+      "summary": "Trigger words, settings, licence, known limits.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "release/_template/showcase",
+      "summary": "Curated outputs with their prompts.",
+      "why": "declared by the lora-training kit"
+    },
+    {
+      "dir": "cache",
+      "summary": "Latents, bucket and tokeniser caches. Ignored by Git and disposable.",
+      "why": "cached tensors can always be regenerated"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "lora-training",
+    "name": "LoRA and model training",
+    "summary": "LoRA adapter training workspace for image or text models: staged dataset and captions, datasheets, configs, isolated run folders, fixed evaluation sets and versioned releases; not prompt-based image generation.",
+    "tags": [
+      "lora",
+      "training",
+      "dataset",
+      "captions",
+      "finetune",
+      "checkpoint",
+      "eval",
+      "weights"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "base-models/",
+    "base-models/.gitkeep",
+    "base-models/sources.md",
+    "cache/",
+    "cache/.gitkeep",
+    "configs/",
+    "configs/.gitkeep",
+    "data/",
+    "data/captions/",
+    "data/captions/.gitkeep",
+    "data/clean/",
+    "data/clean/.gitkeep",
+    "data/raw/",
+    "data/raw/.gitkeep",
+    "data/reg/",
+    "data/reg/.gitkeep",
+    "data/rejected/",
+    "data/rejected/.gitkeep",
+    "data/splits/",
+    "data/splits/.gitkeep",
+    "datasheets/",
+    "datasheets/.gitkeep",
+    "eval/",
+    "eval/prompts/",
+    "eval/prompts/.gitkeep",
+    "eval/reports/",
+    "eval/reports/.gitkeep",
+    "eval/samples/",
+    "eval/samples/.gitkeep",
+    "release/",
+    "release/_template/",
+    "release/_template/card/",
+    "release/_template/card/.gitkeep",
+    "release/_template/showcase/",
+    "release/_template/showcase/.gitkeep",
+    "release/_template/weights/",
+    "release/_template/weights/.gitkeep",
+    "runs/",
+    "runs/_template/",
+    "runs/_template/checkpoints/",
+    "runs/_template/checkpoints/.gitkeep",
+    "runs/_template/logs/",
+    "runs/_template/logs/.gitkeep",
+    "runs/_template/notes.md",
+    "runs/_template/samples/",
+    "runs/_template/samples/.gitkeep",
+    "scripts/",
+    "scripts/.gitkeep"
+  ]
+}

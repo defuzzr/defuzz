@@ -1,0 +1,24 @@
+id: rust-golden
+name: Rust Golden Workspace
+summary: Mini Rust golden fixture for template drift and static code audit tests.
+kind: app
+layout: mono
+languages: [rust]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.rs", "**/*.toml", "**/*.md", "**/*.yml", "**/Cargo.lock"]
+locked:
+  - Cargo.toml
+  - clippy.toml
+  - rustfmt.toml
+  - rust-toolchain.toml
+  - .github/workflows/*
+  - xtask/**
+approved_deps:
+  rust:
+    - serde
+    - toml
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["cargo", "xtask", "ci"]
+      cwd: "."

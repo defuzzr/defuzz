@@ -1,0 +1,4 @@
+Using CPython 3.11.16 interpreter at: /home/user/.local/bin/python3.11
+error: Request failed after 1 retry in 1.9s
+  cause: Failed to fetch: http://127.0.0.1:18080/s500/simple/requests/
+  cause: HTTP status server error (500 Internal Server Error) for url (http://127.0.0.1:18080/s500/simple/requests/)

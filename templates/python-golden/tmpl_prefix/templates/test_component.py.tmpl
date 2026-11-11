@@ -1,0 +1,51 @@
+"""Unit tests for the __COMP_NAME__ component."""
+
+from __future__ import annotations
+
+from __PKG_MOD__ import __COMP_CLASS__
+from __PKG_MOD__.__COMP_MOD__ import TmplPrefix__COMP_CLASS__
+from tmpl_prefix_core import Component, Context
+
+
+class _NoopLogger:
+    """Minimal logger double for component tests."""
+
+    def debug(self, message: str, **fields: object) -> None:
+        _ = (message, fields)
+
+    def info(self, message: str, **fields: object) -> None:
+        _ = (message, fields)
+
+    def warning(self, message: str, **fields: object) -> None:
+        _ = (message, fields)
+
+    def error(self, message: str, **fields: object) -> None:
+        _ = (message, fields)
+
+    def bind(self, **fields: object) -> _NoopLogger:
+        _ = fields
+        return self
+
+
+async def test___COMP_MOD___component_lifecycle() -> None:
+    """Verify __COMP_CLASS__ starts, reports healthy, and stops cleanly."""
+    comp = TmplPrefix__COMP_CLASS__()
+    assert isinstance(comp, __COMP_CLASS__)
+    assert isinstance(comp, Component)
+    assert comp.name == "__COMP_NAME__"
+
+    before = await comp.health()
+    assert before.status == "unhealthy"
+
+    ctx = Context(
+        environment="test",
+        service_name="tmpl-prefix-test",
+        logger=_NoopLogger(),
+    )
+    await comp.start(ctx)
+    during = await comp.health()
+    assert during.status == "healthy"
+
+    await comp.stop()
+    after = await comp.health()
+    assert after.status == "unhealthy"

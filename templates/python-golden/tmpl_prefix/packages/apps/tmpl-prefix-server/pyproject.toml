@@ -1,0 +1,35 @@
+[project]
+name = "tmpl-prefix-server"
+version = "0.1.0"
+description = "HTTP server application composition root and entrypoint."
+requires-python = ">=3.13"
+dependencies = [
+  "tmpl-prefix-accounts",
+  "tmpl-prefix-config",
+  "tmpl-prefix-core",
+  "tmpl-prefix-http-fastapi",
+  "tmpl-prefix-http-stdlib",
+  "tmpl-prefix-storage-memory",
+  "tmpl-prefix-telemetry",
+  # @xtask:dependencies
+]
+
+[project.scripts]
+tmpl-prefix-server = "tmpl_prefix_server.main:main"
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+tmpl-prefix-accounts = { workspace = true }
+tmpl-prefix-config = { workspace = true }
+tmpl-prefix-core = { workspace = true }
+tmpl-prefix-http-fastapi = { workspace = true }
+tmpl-prefix-http-stdlib = { workspace = true }
+tmpl-prefix-storage-memory = { workspace = true }
+tmpl-prefix-telemetry = { workspace = true }
+# @xtask:sources
+
+[build-system]
+requires = ["uv_build>=0.6,<1"]
+build-backend = "uv_build"

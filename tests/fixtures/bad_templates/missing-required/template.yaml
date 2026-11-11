@@ -1,0 +1,9 @@
+id: missing-required
+name: Missing Summary Template
+kind: tool
+layout: single
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py"]
+repos:
+  - name: tmpl_prefix

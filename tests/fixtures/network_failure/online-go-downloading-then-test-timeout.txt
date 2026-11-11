@@ -1,0 +1,5 @@
+go: downloading github.com/google/uuid v1.6.0
+panic: test timed out after 2s
+	running tests:
+		TestSlow (2s)
+

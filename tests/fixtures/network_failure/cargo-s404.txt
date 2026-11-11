@@ -1,0 +1,4 @@
+    Updating `loc` index
+error: no matching package named `serde` found
+location searched: `loc` index (which is replacing registry `crates-io`)
+required by package `demo v0.1.0 (/home/user/probe/w/p/cargos404/demo)`

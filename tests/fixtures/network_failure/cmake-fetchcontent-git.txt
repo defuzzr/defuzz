@@ -1,0 +1,27 @@
+[ 11%] Creating directories for 'googletest-populate'
+[ 22%] Performing download step (git clone) for 'googletest-populate'
+Cloning into 'googletest-src'...
+fatal: unable to access 'https://github.com/google/googletest.git/': Could not resolve host: github.com
+Cloning into 'googletest-src'...
+fatal: unable to access 'https://github.com/google/googletest.git/': Could not resolve host: github.com
+Cloning into 'googletest-src'...
+fatal: unable to access 'https://github.com/google/googletest.git/': Could not resolve host: github.com
+-- Had to git clone more than once: 3 times.
+CMake Error at googletest-subbuild/googletest-populate-prefix/tmp/googletest-populate-gitclone.cmake:39 (message):
+  Failed to clone repository: 'https://github.com/google/googletest.git'
+
+
+gmake[2]: *** [CMakeFiles/googletest-populate.dir/build.make:102: googletest-populate-prefix/src/googletest-populate-stamp/googletest-populate-download] Error 1
+gmake[1]: *** [CMakeFiles/Makefile2:83: CMakeFiles/googletest-populate.dir/all] Error 2
+gmake: *** [Makefile:91: all] Error 2
+
+CMake Error at /usr/share/cmake-3.28/Modules/FetchContent.cmake:1679 (message):
+  Build step for googletest failed: 2
+Call Stack (most recent call first):
+  /usr/share/cmake-3.28/Modules/FetchContent.cmake:1819:EVAL:2 (__FetchContent_directPopulate)
+  /usr/share/cmake-3.28/Modules/FetchContent.cmake:1819 (cmake_language)
+  /usr/share/cmake-3.28/Modules/FetchContent.cmake:2033 (FetchContent_Populate)
+  CMakeLists.txt:5 (FetchContent_MakeAvailable)
+
+
+-- Configuring incomplete, errors occurred!

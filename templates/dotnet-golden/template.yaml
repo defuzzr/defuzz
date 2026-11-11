@@ -1,0 +1,36 @@
+---
+id: dotnet-golden
+name: .NET Golden Workspace
+summary: Layered .NET C# solution template with foundation, domain, adapters, cli, and xtask CI.
+kind: service
+layout: mono
+languages: [csharp]
+tags: [csharp, dotnet, workspace, layered, cli, service]
+needs: [dotnet]
+placeholder: tmpl_prefix
+substitute_in:
+  - "**/*.cs"
+  - "**/*.csproj"
+  - "**/*.sln"
+  - "**/*.props"
+  - "**/*.targets"
+  - "**/*.md"
+  - "**/*.yml"
+  - "**/packages.lock.json"
+locked:
+  - Directory.Build.props
+  - Directory.Build.targets
+  - NuGet.Config
+  - global.json
+  - .editorconfig
+  - .github/workflows/*
+  - xtask/**
+approved_deps:
+  csharp: []
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["dotnet", "run", "--project", "xtask", "--", "ci"]
+      cwd: "."
+      format_cmds:
+        - ["dotnet", "format", "whitespace", "--folder", "--verify-no-changes"]

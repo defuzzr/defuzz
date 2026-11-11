@@ -1,0 +1,34 @@
+Scope: all 11 workspace projects
+? Verifying lockfile against supply-chain policies (17 entries)...
+[WARN] GET https://registry.npmjs.org/hono/-/hono-4.13.10.tgz error (Failed to fetch https://registry.npmjs.org/hono/-/hono-4.13.10.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/@biomejs/biome/-/biome-2.6.4.tgz error (Failed to fetch https://registry.npmjs.org/@biomejs/biome/-/biome-2.6.4.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.5.tgz error (Failed to fetch https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.5.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz error (Failed to fetch https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/@types/node/-/node-24.19.2.tgz error (Failed to fetch https://registry.npmjs.org/@types/node/-/node-24.19.2.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/zod/-/zod-3.25.76.tgz error (Failed to fetch https://registry.npmjs.org/zod/-/zod-3.25.76.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/@biomejs/cli-linux-x64/-/cli-linux-x64-2.6.4.tgz error (Failed to fetch https://registry.npmjs.org/@biomejs/cli-linux-x64/-/cli-linux-x64-2.6.4.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz error (Failed to fetch https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 1
+Will retry in 10s. 1 retries left.
+[WARN] GET https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.5.tgz error (Failed to fetch https://registry.npmjs.org/@hono/node-server/-/node-server-2.1.5.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.
+[WARN] GET https://registry.npmjs.org/hono/-/hono-4.13.10.tgz error (Failed to fetch https://registry.npmjs.org/hono/-/hono-4.13.10.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.
+[WARN] GET https://registry.npmjs.org/@biomejs/biome/-/biome-2.6.4.tgz error (Failed to fetch https://registry.npmjs.org/@biomejs/biome/-/biome-2.6.4.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.
+[WARN] GET https://registry.npmjs.org/@types/node/-/node-24.19.2.tgz error (Failed to fetch https://registry.npmjs.org/@types/node/-/node-24.19.2.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.
+[WARN] GET https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz error (Failed to fetch https://registry.npmjs.org/typescript/-/typescript-5.9.3.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.
+[WARN] GET https://registry.npmjs.org/zod/-/zod-3.25.76.tgz error (Failed to fetch https://registry.npmjs.org/zod/-/zod-3.25.76.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.
+[WARN] GET https://registry.npmjs.org/@biomejs/cli-linux-x64/-/cli-linux-x64-2.6.4.tgz error (Failed to fetch https://registry.npmjs.org/@biomejs/cli-linux-x64/-/cli-linux-x64-2.6.4.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.
+[WARN] GET https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz error (Failed to fetch https://registry.npmjs.org/undici-types/-/undici-types-7.24.6.tgz: error sending request: client error (Connect): dns error: failed to lookup address information: Temporary failure in name resolution) — 2
+Will retry in 1m. 0 retries left.

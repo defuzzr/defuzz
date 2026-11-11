@@ -1,0 +1,10 @@
+id: poly-one-repo
+name: Poly With One Repo
+summary: Poly layout requires at least two repos.
+kind: service
+layout: poly
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py"]
+repos:
+  - name: tmpl_prefix

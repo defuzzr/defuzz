@@ -1,0 +1,84 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/test-results",
+      "!**/playwright-report",
+      "!pnpm-lock.yaml",
+      "!design/sources",
+      "!design/exports"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "json": {
+    "formatter": {
+      "expand": "always"
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "formatter": {
+      "enabled": true
+    },
+    "linter": {
+      "enabled": true
+    }
+  },
+  "html": {
+    "formatter": {
+      "enabled": false
+    },
+    "linter": {
+      "enabled": true
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "useLiteralKeys": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "error",
+        "noEnum": "error",
+        "noNamespace": "error",
+        "noParameterProperties": "error",
+        "useNamingConvention": "off",
+        "noDefaultExport": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      },
+      "correctness": {
+        "useImportExtensions": "error"
+      }
+    }
+  }
+}

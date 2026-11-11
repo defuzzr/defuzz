@@ -1,0 +1,4 @@
+shaders/water.frag
+ERROR: shaders/water.frag:23: 'uv_coord' : undeclared identifier
+ERROR: ./shaders/water.frag:24: '' : compilation terminated
+ERROR: 2 compilation errors.  No code generated.

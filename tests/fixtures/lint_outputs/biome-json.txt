@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "errors": 1,
+    "warnings": 1
+  },
+  "diagnostics": [
+    {
+      "category": "lint/suspicious/noDoubleEquals",
+      "severity": "error",
+      "description": "Use === instead of ==.",
+      "message": [
+        {
+          "content": "Use === instead of ==."
+        }
+      ],
+      "location": {
+        "path": {
+          "file": "src/index.ts"
+        },
+        "start": {
+          "line": 8,
+          "column": 4
+        },
+        "span": [18, 20]
+      }
+    },
+    {
+      "category": "format",
+      "severity": "warning",
+      "description": "Formatter would have printed the following content.",
+      "location": {
+        "path": {
+          "file": "./src/util.ts"
+        },
+        "span": [4, 5],
+        "sourceCode": "\u00e9\nx\ny\n"
+      }
+    }
+  ]
+}

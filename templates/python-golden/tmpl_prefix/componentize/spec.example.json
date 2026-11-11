@@ -1,0 +1,29 @@
+{
+	"schema_version": 2,
+	"name": "example",
+	"kind": "component",
+	"attest": {
+		"kind_reason": "Replace this example with the reuse requirement before beginning.",
+		"reuse": "Review COMPONENTS.md and record the APIs considered before beginning."
+	},
+	"files": [
+		{
+			"path": "../example/component.py",
+			"role": "component",
+			"purpose": "Transform fixture inputs without performing external side effects."
+		},
+		{ "path": "../example/runner.py", "role": "runner" }
+	],
+	"original": "../example/original.py",
+	"golden": {
+		"argv": ["python", "example/runner.py", "tests/fixtures/input.json"],
+		"cwd": "..",
+		"compare": ["stdout", "rc"],
+		"isolated": true
+	},
+	"tests": {
+		"argv": ["python", "-m", "pytest", "tests/test_example.py"],
+		"cwd": ".."
+	},
+	"inputs": ["../tests/test_example.py", "../tests/fixtures/input.json"]
+}

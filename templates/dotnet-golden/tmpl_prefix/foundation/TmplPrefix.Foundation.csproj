@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <PackageId>tmpl-prefix-foundation</PackageId>
+        <RootNamespace>TmplPrefix.Foundation</RootNamespace>
+        <AssemblyName>TmplPrefix.Foundation</AssemblyName>
+    </PropertyGroup>
+</Project>

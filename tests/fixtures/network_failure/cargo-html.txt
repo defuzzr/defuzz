@@ -1,0 +1,14 @@
+    Updating `loc` index
+error: failed to get `serde` as a dependency of package `demo v0.1.0 (/home/user/probe/w/p/cargohtml/demo)`
+
+Caused by:
+  failed to load source for dependency `serde`
+
+Caused by:
+  unable to update registry `crates-io`
+
+Caused by:
+  failed to query replaced source registry `crates-io`
+
+Caused by:
+  expected value at line 1 column 1

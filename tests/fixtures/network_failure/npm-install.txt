@@ -1,0 +1,6 @@
+npm warn Unknown env config "store-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm error code EAI_AGAIN
+npm error syscall getaddrinfo
+npm error errno EAI_AGAIN
+npm error request to https://registry.npmjs.org/left-pad failed, reason: getaddrinfo EAI_AGAIN registry.npmjs.org
+npm error A complete log of this run can be found in: /home/user/probe/w/npmcache/_logs/2026-11-11T06_36_52_073Z-debug-0.log

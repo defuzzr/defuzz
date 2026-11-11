@@ -1,0 +1,5 @@
+--- FAIL: TestLookup (0.00s)
+    x_test.go:4: dial tcp: lookup db on 127.0.0.53:53: server misbehaving
+FAIL
+FAIL	demo	0.006s
+FAIL

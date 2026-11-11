@@ -1,0 +1,11 @@
+"""Smoke tests for __PKG_DIST__ application package."""
+
+from __future__ import annotations
+
+from __PKG_MOD__ import PACKAGE_NAME, run
+
+
+def test_app_smoke() -> None:
+    """Verify scaffolded application package runs cleanly."""
+    assert PACKAGE_NAME == "__PKG_DIST__"
+    assert run([]) == 0

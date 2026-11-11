@@ -1,0 +1,7 @@
+Using CPython 3.11.16 interpreter at: /home/user/.local/bin/python3.11
+error: Failed to fetch: https://127.0.0.1:18082/html/simple/requests/
+  cause: error sending request for url (https://127.0.0.1:18082/html/simple/requests/)
+  cause: client error (Connect)
+  cause: invalid peer certificate: Other(OtherError(CaUsedAsEndEntity))
+
+hint: Consider enabling use of system TLS certificates with the `--system-certs` command-line flag

@@ -1,0 +1,20 @@
+    Updating `loc` index
+warning: spurious network error (1 try remaining): failed to get successful HTTP response from `http://127.0.0.1:18080/s503/config.json` (127.0.0.1), got 503
+body:
+503 error from registry
+
+error: failed to get `serde` as a dependency of package `demo v0.1.0 (/home/user/probe/w/p/cargos503/demo)`
+
+Caused by:
+  failed to load source for dependency `serde`
+
+Caused by:
+  unable to update registry `crates-io`
+
+Caused by:
+  failed to query replaced source registry `crates-io`
+
+Caused by:
+  failed to get successful HTTP response from `http://127.0.0.1:18080/s503/config.json` (127.0.0.1), got 503
+  body:
+  503 error from registry

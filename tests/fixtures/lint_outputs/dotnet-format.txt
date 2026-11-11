@@ -1,0 +1,2 @@
+  /repo/src/Game/Player.cs(18,5): warning IDE0055: Fix formatting [/repo/src/Game/Game.csproj]
+  src/Game/Combat.cs(64,13): error CA2000: Call System.IDisposable.Dispose on object [/repo/src/Game/Game.csproj]

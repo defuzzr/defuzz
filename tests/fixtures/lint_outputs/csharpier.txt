@@ -1,0 +1,2 @@
+Warning ./Assets/Scripts/Player.cs - Was not formatted.
+Error ./Assets/Scripts/Broken.cs - Failed to compile so was not formatted.

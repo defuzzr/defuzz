@@ -1,0 +1,20 @@
+id: python-options-valid
+name: Python Options Valid Fixture
+summary: Fixture verifying Python HTTP adapter options schema with double-underscore env_key.
+kind: service
+layout: mono
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py", "**/*.toml", ".env.example", "uv.lock"]
+options:
+  http_adapter:
+    label: "HTTP adapter"
+    choices: [fastapi, stdlib_http]
+    default: fastapi
+    env_key: TMPL_PREFIX_HTTP__ADAPTER
+    description: "Both adapters ship; this picks the default wired in config."
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["uv", "run", "xtask", "ci"]
+      cwd: "."

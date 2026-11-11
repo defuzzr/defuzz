@@ -1,0 +1,8 @@
+Using CPython 3.11.16 interpreter at: /home/user/.local/bin/python3.11
+error: Request failed after 1 retry in 1.8s
+  cause: Failed to fetch: https://pypi.org/simple/requests/
+  cause: error sending request for url (https://pypi.org/simple/requests/)
+  cause: client error (Connect)
+  cause: tunnel error: failed to create underlying connection
+  cause: tcp connect error
+  cause: Connection refused (os error 111)

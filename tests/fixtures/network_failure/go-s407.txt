@@ -1,0 +1,2 @@
+go: github.com/google/uuid@v1.6.0: reading http://127.0.0.1:18080/s407/github.com/google/uuid/@v/v1.6.0.mod: 407 Proxy Authentication Required
+	server response: 407 error from registry

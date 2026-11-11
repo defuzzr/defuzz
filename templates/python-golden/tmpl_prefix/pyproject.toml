@@ -1,0 +1,153 @@
+[tool.uv.workspace]
+members = ["packages/*/*", "tools/xtask"]
+exclude = ["packages/*/tests"]
+
+[tool.uv]
+default-groups = ["dev"]
+# --- Approved Third-Party Catalogue (opt-in per package) ---
+constraint-dependencies = [
+  "asyncpg>=0.30,<1",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "hypothesis>=6.120,<7",
+  "orjson>=3.10,<4",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "sqlalchemy>=2.0,<3",
+  "structlog>=24.4,<26",
+  "typer>=0.15,<1",
+  "uvicorn>=0.34,<1",
+]
+
+[dependency-groups]
+dev = [
+  "import-linter>=2.1,<3",
+  "mypy>=1.14,<2",
+  "pip-audit>=2.7,<3",
+  "pytest>=9.0.3,<10",
+  "pytest-asyncio>=0.25,<2",
+  "ruff>=0.9,<1",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["packages/*/*/src", "tools/xtask/src"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "COM812",
+  "CPY001",
+  "D203",
+  "D213",
+  "FIX002",
+  "ISC001",
+  "PLR0913",
+  "TD002",
+  "TD003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = ["INP001", "PLR2004", "S101"]
+"**/*_test.py" = ["INP001", "PLR2004", "S101"]
+"*/cli/output.py" = ["T201"]
+"**/cli/output.py" = ["T201"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = [
+  "tmpl_prefix_core",
+  "tmpl_prefix_config",
+  "tmpl_prefix_telemetry",
+  "tmpl_prefix_accounts",
+  "tmpl_prefix_storage_memory",
+  "tmpl_prefix_http_fastapi",
+  "tmpl_prefix_http_stdlib",
+  "tmpl_prefix_server",
+  "tmpl_prefix_cli",
+  # @xtask:known-first-party
+]
+
+[tool.ruff.format]
+quote-style = "double"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+explicit_package_bases = true
+namespace_packages = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+plugins = ["pydantic.mypy"]
+files = ["packages", "tools"]
+mypy_path = [
+  "packages/foundation/tmpl-prefix-core/src",
+  "packages/foundation/tmpl-prefix-config/src",
+  "packages/foundation/tmpl-prefix-telemetry/src",
+  "packages/domain/tmpl-prefix-accounts/src",
+  "packages/adapters/tmpl-prefix-storage-memory/src",
+  "packages/adapters/tmpl-prefix-http-fastapi/src",
+  "packages/adapters/tmpl-prefix-http-stdlib/src",
+  "packages/apps/tmpl-prefix-server/src",
+  "packages/apps/tmpl-prefix-cli/src",
+  "tools/xtask/src",
+  # @xtask:mypy-path
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["packages", "tools"]
+addopts = "-q --strict-markers --strict-config"
+xfail_strict = true
+
+[tool.importlinter]
+include_external_packages = true
+root_packages = [
+  "tmpl_prefix_core",
+  "tmpl_prefix_config",
+  "tmpl_prefix_telemetry",
+  "tmpl_prefix_accounts",
+  "tmpl_prefix_storage_memory",
+  "tmpl_prefix_http_fastapi",
+  "tmpl_prefix_http_stdlib",
+  "tmpl_prefix_server",
+  "tmpl_prefix_cli",
+  # @xtask:root-packages
+]
+
+[[tool.importlinter.contracts]]
+name = "Four-layer architecture"
+type = "layers"
+layers = [
+  "tmpl_prefix_server | tmpl_prefix_cli", # @xtask:layer-apps
+
+  "tmpl_prefix_storage_memory : tmpl_prefix_http_fastapi : tmpl_prefix_http_stdlib", # @xtask:layer-adapters
+
+  "tmpl_prefix_accounts", # @xtask:layer-domain
+
+  "tmpl_prefix_config : tmpl_prefix_telemetry : tmpl_prefix_core", # @xtask:layer-foundation
+
+  # @xtask:layers
+]
+
+[[tool.importlinter.contracts]]
+name = "No test tools in production source"
+type = "forbidden"
+source_modules = [
+  "tmpl_prefix_core",
+  "tmpl_prefix_config",
+  "tmpl_prefix_telemetry",
+  "tmpl_prefix_accounts",
+  "tmpl_prefix_storage_memory",
+  "tmpl_prefix_http_fastapi",
+  "tmpl_prefix_http_stdlib",
+  "tmpl_prefix_server",
+  "tmpl_prefix_cli",
+  # @xtask:forbidden-sources
+]
+forbidden_modules = ["pytest", "hypothesis"]

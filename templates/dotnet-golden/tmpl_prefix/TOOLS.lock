@@ -1,0 +1,17 @@
+# Template floor lock. Each `version` equals `minimum` here and `source = "auto"`, so
+# `hermes defuzz new` re-probes every tool and records the versions found on the user's
+# machine; `minimum` (the oldest version this template's build files need) is kept.
+[lock]
+schema = 1
+enforce = "warn"
+age_nudge_months = 12
+network = false
+
+[dotnet]
+version = "10.0.100"
+minimum = "10.0.100"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 10.0.100: projects target net10.0 (Directory.Build.props); global.json accepts 10.0.100 or any newer 10.0 feature band (rollForward latestFeature)."
+probe = "command"
+argv = ["dotnet", "--version"]
+source = "auto"

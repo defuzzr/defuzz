@@ -1,0 +1,48 @@
+Defuzz Hermes plugin
+Copyright (c) 2026 defuzzr
+
+This plugin is licensed under the MIT License; see LICENSE.
+
+It includes text from Hermes Agent (https://github.com/NousResearch/hermes-agent),
+Copyright (c) 2025 Nous Research, used under the MIT License reproduced below.
+
+The audit reports how many characters and estimated tokens Hermes adds to each
+profile's prompt. It must count the same text Hermes adds, but it does not import
+Hermes itself, so these files carry verbatim copies of Hermes prompt text, taken
+from agent/prompt_builder.py, agent/system_prompt.py and
+tools/memory_tool_store.py in Hermes Agent:
+
+- audit/vendor/profile_context.py: the default agent identity, the built-in
+  guidance strings (help, task completion, parallel tool calls, tool-use
+  enforcement, model-specific execution guidance, skills, session search,
+  mid-turn steering), the memory guidance, the skills index header and
+  footer, and related constants.
+- audit/skill_packs.py: the skills index header and footer and the note for a
+  skill that cannot be loaded.
+- audit/facts.py: the marker Hermes inserts when it truncates a context file.
+
+The copies exist so the audit can rebuild and measure that text.
+
+--------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2025 Nous Research
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -1,0 +1,22 @@
+[project]
+name = "tmpl-prefix-http-fastapi"
+version = "0.1.0"
+description = "FastAPI and Uvicorn in-process HTTP server adapter."
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "tmpl-prefix-core",
+  "uvicorn>=0.34,<1",
+  # @xtask:dependencies
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+tmpl-prefix-core = { workspace = true }
+# @xtask:sources
+
+[build-system]
+requires = ["uv_build>=0.6,<1"]
+build-backend = "uv_build"

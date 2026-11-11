@@ -1,0 +1,39 @@
+--- FAIL: TestDB (0.00s)
+    x_test.go:3: dial tcp 127.0.0.1:1: connect: connection refused
+--- FAIL: TestLookup (0.00s)
+    x_test.go:4: dial tcp: lookup db on 127.0.0.53:53: read udp 127.0.0.1:59160->127.0.0.53:53: read: connection refused
+panic: test timed out after 2s
+	running tests:
+		TestSlow (2s)
+
+goroutine 50 [running]:
+testing.(*M).startAlarm.func1()
+	/usr/local/go/src/testing/testing.go:2959 +0x34a
+created by time.goFunc
+	/usr/local/go/src/time/sleep.go:182 +0x2d
+
+goroutine 1 [chan receive]:
+testing.(*T).Run(0x35856bd28008, {0x58ccd5?, 0x35856bc47aa0?}, 0x74e600)
+	/usr/local/go/src/testing/testing.go:2266 +0x4f2
+testing.runTests.func1(0x35856bd28008)
+	/usr/local/go/src/testing/testing.go:2742 +0x37
+testing.tRunner(0x35856bd28008, 0x35856bc47bc8)
+	/usr/local/go/src/testing/testing.go:2193 +0xea
+testing.runTests({0x58c1e5, 0x4}, {0x58c1e5, 0x4}, 0x35856bb90330, {0x76e9a0, 0x3, 0x3}, {0xc2b5212154226cf6, 0x7738fe50, ...})
+	/usr/local/go/src/testing/testing.go:2740 +0x510
+testing.(*M).Run(0x35856bc7a780)
+	/usr/local/go/src/testing/testing.go:2600 +0x6af
+main.main()
+	_testmain.go:50 +0x9b
+
+goroutine 34 [sleep]:
+time.Sleep(0x12a05f200)
+	/usr/local/go/src/runtime/time.go:368 +0x165
+demo.TestSlow(0x35856bcd0008?)
+	/home/user/probe/w/p/t4/x_test.go:5 +0x1d
+testing.tRunner(0x35856bcd0008, 0x74e600)
+	/usr/local/go/src/testing/testing.go:2193 +0xea
+created by testing.(*T).Run in goroutine 1
+	/usr/local/go/src/testing/testing.go:2258 +0x4d4
+FAIL	demo	2.007s
+FAIL

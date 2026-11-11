@@ -1,0 +1,23 @@
+# Build artifacts
+/target
+/[Bb]in/
+/[Oo]bj/
+**/[Bb]in/
+**/[Oo]bj/
+
+# Environment & local overrides
+.env
+.env.*
+!.env.example
+*.user
+*.suo
+
+# Editor & OS junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+.vs/

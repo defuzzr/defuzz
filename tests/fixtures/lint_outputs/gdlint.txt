@@ -1,0 +1,3 @@
+scripts/player.gd:15: Error: Function name "Move_Player" is not valid (function-name)
+./scripts/enemy.gd:44: Error: Max line length exceeded (max-line-length)
+Failure: 2 problems found

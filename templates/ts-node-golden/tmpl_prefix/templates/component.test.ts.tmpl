@@ -1,0 +1,37 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import type { Context, Logger } from "tmpl-prefix-core";
+import { __COMPONENT_CLASS__ } from "./__COMPONENT_NAME__.js";
+
+function createTestContext(): Context {
+  const logger: Logger = {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    child: () => logger,
+  };
+  return {
+    environment: "test",
+    serviceName: "__PACKAGE_NAME__",
+    logger,
+  };
+}
+
+describe("__COMPONENT_CLASS__", () => {
+  it("transitions health state across start and stop", async () => {
+    const component = new __COMPONENT_CLASS__();
+    assert.equal(component.name, "__COMPONENT_NAME__");
+
+    const before = await component.health();
+    assert.equal(before.status, "unhealthy");
+
+    await component.start(createTestContext());
+    const during = await component.health();
+    assert.equal(during.status, "healthy");
+
+    await component.stop();
+    const after = await component.health();
+    assert.equal(after.status, "unhealthy");
+  });
+});

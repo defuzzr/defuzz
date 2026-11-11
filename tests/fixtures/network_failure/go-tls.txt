@@ -1,0 +1,1 @@
+go: github.com/google/uuid@v1.6.0: Get "https://127.0.0.1:18082/html/github.com/google/uuid/@v/v1.6.0.mod": tls: failed to verify certificate: x509: cannot validate certificate for 127.0.0.1 because it doesn't contain any IP SANs

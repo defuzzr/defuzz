@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from pip._vendor import urllib3; urllib3.PoolManager().request('GET','http://db:5432/', retries=False)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'pip'

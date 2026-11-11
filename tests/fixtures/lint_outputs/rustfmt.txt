@@ -1,0 +1,7 @@
+Diff in /repo/src/main.rs:12:
+ fn main() {
+-    println!("hello");
++    println!("hello");
+ }
+Diff in src/lib.rs at line 45:
+ pub fn add(a: i32, b: i32) -> i32 {

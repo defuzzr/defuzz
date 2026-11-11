@@ -1,0 +1,63 @@
+---
+lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    packageManagerDependencies:
+      pnpm:
+        specifier: 12.15.0
+        version: 12.15.0
+
+packages:
+
+  pnpm@12.15.0:
+    resolution: {integrity: sha512-self==}
+---
+lockfileVersion: '9.0'
+
+catalogs:
+  default:
+    '@hono/node-server':
+      specifier: 2.1.5
+      version: 2.1.5
+    hono:
+      specifier: 4.13.10
+      version: 4.13.10
+    zod:
+      specifier: 3.25.76
+      version: 3.25.76
+
+importers:
+
+  .:
+    devDependencies:
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/adapters/my-service-http-hono:
+    dependencies:
+      '@hono/node-server':
+        specifier: 'catalog:'
+        version: 2.1.5(hono@4.13.10)
+      hono:
+        specifier: 'catalog:'
+        version: 4.13.10
+      zod:
+        specifier: 'catalog:'
+        version: 3.25.76
+
+packages:
+
+  '@hono/node-server@2.1.5':
+    resolution: {integrity: sha512-111==}
+
+  hono@4.13.10:
+    resolution: {integrity: sha512-222==}
+
+  typescript@5.9.3:
+    resolution: {integrity: sha512-333==}
+
+  zod@3.25.76:
+    resolution: {integrity: sha512-444==}

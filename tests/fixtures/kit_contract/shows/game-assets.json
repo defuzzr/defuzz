@@ -1,0 +1,159 @@
+{
+  "agents_block": "<!-- kit:game-assets v2 begin (managed block: edit outside it) -->\n## Game workspace: Unreal + Blender + Houdini\n\n`project` is a game workspace: design, the Unreal project, shared source assets and the tools that move assets into the engine.\n\n### Layout\n\n- `design/`: Rules, mechanics and open questions. Design decisions belong to the owner.\n- `game/`: Unreal project (`.uproject`, `Source/`, `Content/`). Unreal assets stay here.\n- `assets/`: Shared source assets, one folder per asset. Read `assets/README.md` first.\n- `tools/assets/`: Asset scripts: manifest validation, export and import helpers.\n- `tests/`: Tests for the tools.\n- `experiments/`: Throwaway trials. Nothing here is part of the main pipeline.\n- `builds/`: Disposable build output. Ignored by Git. Never put a unique file here.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- One folder per asset: `assets/<category>/<asset_id>/` with `asset.json`, `source/` and `exports/`. Categories: `environments/kits`, `environments/locations`, `materials`, `characters`, `props`, `effects`, `audio`, `ui`.\n- `source/` holds the only originals. `exports/` and `builds/` are disposable and ignored: never save a unique file there.\n- Caches (Houdini geometry and simulation caches, Blender bakes) stay outside the repository.\n- Record the exact Blender, Houdini and Unreal versions in `asset.json`. Do not guess a version.\n- Do not rename Unreal modules, change the engine version, or move the Unreal project unless asked.\n- Do not copy an asset that already lives in the Unreal project into `assets/`.\n- Binary sources under `assets/` use Git LFS (see `.gitattributes`). Run `git lfs install` once before the first commit.\n- Design decisions are the owner's. Mark your ideas as proposals.\n<!-- kit:game-assets end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "design",
+      "summary": "Rules, mechanics and open questions. Design decisions belong to the owner.",
+      "why": "design stays separate from implementation"
+    },
+    {
+      "dir": "game",
+      "summary": "Unreal project (`.uproject`, `Source/`, `Content/`). Unreal assets stay here.",
+      "why": "the engine owns its own content tree"
+    },
+    {
+      "dir": "assets",
+      "summary": "Shared source assets, one folder per asset. Read `assets/README.md` first.",
+      "why": "editable originals live in exactly one place"
+    },
+    {
+      "dir": "assets/environments/kits",
+      "summary": "Reusable modular pieces: walls, floors, trim.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/environments/locations",
+      "summary": "Assembled places built from kits.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/materials",
+      "summary": "Shared materials and textures.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/characters",
+      "summary": "Characters and creatures.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/props",
+      "summary": "Standalone objects.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/effects",
+      "summary": "Visual effects sources.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/audio",
+      "summary": "Sound sources.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/ui",
+      "summary": "Interface art.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "assets/templates",
+      "summary": "Example manifests. Illustrations only, never real assets.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "tools/assets",
+      "summary": "Asset scripts: manifest validation, export and import helpers.",
+      "why": "pipeline code is not mixed with art"
+    },
+    {
+      "dir": "tools/blender",
+      "summary": "Blender scripts and add-ons for this project.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "tools/houdini",
+      "summary": "Houdini scripts and HDA tooling for this project.",
+      "why": "declared by the game-assets kit"
+    },
+    {
+      "dir": "tests",
+      "summary": "Tests for the tools.",
+      "why": "pipeline scripts are tested"
+    },
+    {
+      "dir": "experiments",
+      "summary": "Throwaway trials. Nothing here is part of the main pipeline.",
+      "why": "experiments do not leak into production"
+    },
+    {
+      "dir": "builds",
+      "summary": "Disposable build output. Ignored by Git. Never put a unique file here.",
+      "why": "generated output is rebuildable"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "game-assets",
+    "name": "Game workspace: Unreal + Blender + Houdini",
+    "summary": "Game workspace with one folder per source asset, an explicit source-to-Unreal manifest, and Git LFS rules for Blender, Houdini and texture files.",
+    "tags": [
+      "game",
+      "unreal",
+      "ue5",
+      "blender",
+      "houdini",
+      "assets",
+      "lfs"
+    ],
+    "version": 2
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "assets/",
+    "assets/README.md",
+    "assets/audio/",
+    "assets/audio/.gitkeep",
+    "assets/characters/",
+    "assets/characters/.gitkeep",
+    "assets/effects/",
+    "assets/effects/.gitkeep",
+    "assets/environments/",
+    "assets/environments/kits/",
+    "assets/environments/kits/.gitkeep",
+    "assets/environments/locations/",
+    "assets/environments/locations/.gitkeep",
+    "assets/materials/",
+    "assets/materials/.gitkeep",
+    "assets/props/",
+    "assets/props/.gitkeep",
+    "assets/templates/",
+    "assets/templates/asset.example.json",
+    "assets/ui/",
+    "assets/ui/.gitkeep",
+    "builds/",
+    "builds/.gitkeep",
+    "design/",
+    "design/.gitkeep",
+    "experiments/",
+    "experiments/.gitkeep",
+    "game/",
+    "tests/",
+    "tests/.gitkeep",
+    "tools/",
+    "tools/assets/",
+    "tools/assets/.gitkeep",
+    "tools/blender/",
+    "tools/blender/README.md",
+    "tools/houdini/",
+    "tools/houdini/README.md"
+  ]
+}

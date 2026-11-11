@@ -1,0 +1,140 @@
+id: web-golden
+name: Static Website Golden Template
+summary: Static-first website template with Vite and TypeScript, no framework, design tokens as CSS custom properties, accessible pages, and a zero-dep xtask check runner.
+kind: app
+layout: mono
+languages: [typescript]
+tags: [website, static, frontend, vite, typescript]
+needs: [node, pnpm]
+placeholder: tmpl_prefix
+substitute_in:
+  - "**/*.html"
+  - "**/*.ts"
+  - "**/*.json"
+  - "**/*.md"
+  - "**/*.yml"
+  - "**/*.yaml"
+  - "**/*.css"
+  - "pnpm-lock.yaml"
+locked:
+  - package.json
+  - pnpm-lock.yaml
+  - biome.json
+  - tsconfig.json
+  - vite.config.ts
+  - playwright.config.ts
+  - .nvmrc
+  - .npmrc
+  - .github/workflows/*
+  - tools/xtask/**
+approved_deps:
+  typescript:
+    - "@biomejs/biome"
+    - "@biomejs/cli-android-arm64"
+    - "@biomejs/cli-android-x64"
+    - "@biomejs/cli-darwin-arm64"
+    - "@biomejs/cli-darwin-x64"
+    - "@biomejs/cli-linux-arm64"
+    - "@biomejs/cli-linux-arm64-musl"
+    - "@biomejs/cli-linux-x64"
+    - "@biomejs/cli-linux-x64-musl"
+    - "@biomejs/cli-win32-arm64"
+    - "@biomejs/cli-win32-x64"
+    - "@jridgewell/sourcemap-codec"
+    - "@oxc-project/types"
+    - "@playwright/test"
+    - "@pnpm/exe.android-arm64"
+    - "@pnpm/exe.android-x64"
+    - "@pnpm/exe.darwin-arm64"
+    - "@pnpm/exe.darwin-x64"
+    - "@pnpm/exe.freebsd-x64"
+    - "@pnpm/exe.linux-arm64"
+    - "@pnpm/exe.linux-arm64-musl"
+    - "@pnpm/exe.linux-ppc64"
+    - "@pnpm/exe.linux-riscv64"
+    - "@pnpm/exe.linux-s390x"
+    - "@pnpm/exe.linux-x64"
+    - "@pnpm/exe.linux-x64-musl"
+    - "@pnpm/exe.win32-arm64"
+    - "@pnpm/exe.win32-x64"
+    - "@rolldown/binding-android-arm-eabi"
+    - "@rolldown/binding-android-arm64"
+    - "@rolldown/binding-darwin-arm64"
+    - "@rolldown/binding-darwin-x64"
+    - "@rolldown/binding-freebsd-x64"
+    - "@rolldown/binding-linux-arm-gnueabihf"
+    - "@rolldown/binding-linux-arm64-gnu"
+    - "@rolldown/binding-linux-arm64-musl"
+    - "@rolldown/binding-linux-ppc64-gnu"
+    - "@rolldown/binding-linux-s390x-gnu"
+    - "@rolldown/binding-linux-x64-gnu"
+    - "@rolldown/binding-linux-x64-musl"
+    - "@rolldown/binding-openharmony-arm64"
+    - "@rolldown/binding-win32-arm64-msvc"
+    - "@rolldown/binding-win32-x64-msvc"
+    - "@rolldown/pluginutils"
+    - "@standard-schema/spec"
+    - "@types/chai"
+    - "@types/deep-eql"
+    - "@types/estree"
+    - "@types/node"
+    - "@vitest/expect"
+    - "@vitest/mocker"
+    - "@vitest/pretty-format"
+    - "@vitest/runner"
+    - "@vitest/snapshot"
+    - "@vitest/spy"
+    - "@vitest/utils"
+    - "assertion-error"
+    - "chai"
+    - "convert-source-map"
+    - "detect-libc"
+    - "es-module-lexer"
+    - "estree-walker"
+    - "expect-type"
+    - "fdir"
+    - "fsevents"
+    - "lightningcss"
+    - "lightningcss-android-arm64"
+    - "lightningcss-darwin-arm64"
+    - "lightningcss-darwin-x64"
+    - "lightningcss-freebsd-x64"
+    - "lightningcss-linux-arm-gnueabihf"
+    - "lightningcss-linux-arm64-gnu"
+    - "lightningcss-linux-arm64-musl"
+    - "lightningcss-linux-x64-gnu"
+    - "lightningcss-linux-x64-musl"
+    - "lightningcss-win32-arm64-msvc"
+    - "lightningcss-win32-x64-msvc"
+    - "magic-string"
+    - "nanoid"
+    - "obug"
+    - "pathe"
+    - "picocolors"
+    - "picomatch"
+    - "playwright"
+    - "playwright-core"
+    - "pnpm"
+    - "postcss"
+    - "rolldown"
+    - "siginfo"
+    - "source-map-js"
+    - "stackback"
+    - "std-env"
+    - "tinybench"
+    - "tinyexec"
+    - "tinyglobby"
+    - "tinyrainbow"
+    - "typescript"
+    - "undici-types"
+    - "vite"
+    - "vitest"
+    - "why-is-node-running"
+repos:
+  - name: tmpl_prefix
+    check:
+      prepare: ["pnpm", "xtask", "prepare-scaffold"]
+      cmd: ["pnpm", "xtask", "ci"]
+      cwd: "."
+      format_cmds:
+        - ["biome", "ci", "."]

@@ -1,0 +1,19 @@
+{
+  "name": "tmpl-prefix-telemetry",
+  "version": "0.1.0",
+  "description": "Structured JSON key-value Logger with child logger field binding.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "tmpl-prefix-core": "workspace:*"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "verification": "packaged-baseline-only",
+  "packaged_baseline_commit": "pinned",
+  "upstream_revision": null,
+  "note": "Origin package hermes_audit (from the author's audit toolkit) is not published separately. Each sha256 value hashes the vendored file in audit/vendor/ as shipped, including its header comment, so a reader can verify the shipped bytes against this manifest; no upstream checkout or URL is claimed. executable_inventory.py has explicitly local patches for short assignment secrets and opaque URL query/fragment values; LOCAL PATCH linear-redaction-regex-v1 follows the linear secret-assignment prefix and auth-header split from upstream commits f4cd65c and 6cc2d03 and keeps the one-character value minimum; it is not an upstream re-vendor. static_code.py and template_drift.py have local imports of the shared defuzz credential exclusion policy; they are packaged components, not standalone upstream byte copies. LOCAL PATCH approved-yaml-parser-v1 removes the executable inventory heuristic YAML fallback and delegates to the shared pinned audit parser; no upstream sync was performed. LOCAL PATCH uncaptured-manifest-v1 rejects metadata-only plugin records rather than inventing a parsed empty manifest. LOCAL PATCH golden-template-registry-v1 derives GOLDEN_TEMPLATE_IDS from template directory names without import-time manifest reads, loads registry metadata and template ecosystems in template_drift.py and static_code.py at run time after two-phase declaration preflight, aggregates root and nested NuGet packages.lock.json and CMake (CMakeLists.txt and *.cmake) files with UTF-8 BOM tolerance, and enforces strict Go go.sum (including slashless domain modules), command-position CMake FetchContent_Declare/find_package, and NuGet lockfile parsing so all seven golden templates participate. LOCAL PATCH web-golden-registry-v1 (static_code.py and template_drift.py) adds the seventh bundled template web-golden (TypeScript, pnpm, Vite) to the fallback template-to-ecosystem map as ts-node and to the documented scope lists; no rule or parser changed and it is not an upstream re-vendor. LOCAL PATCH linear-source-scan-v1 (static_code.py only) replaces the TS dynamic import(/require( pattern, the TS static import/export pattern, the Rust allow/expect suppression and use patterns, the Python noqa rule-list patterns and the TS catch pattern with linear scans or regex shapes of the same language, and counts lines and braces incrementally; spans, groups and findings are unchanged (differential test against the packaged baseline), nothing is truncated, and upstream has no linear form of these patterns, so it is not an upstream re-vendor. LOCAL PATCH pnpm-config-document-v1 (static_code.py only) reads every YAML document of a pnpm lockfile, including the first (environment) document, and counts its configDependencies and packageManagerDependencies (block or one-line map, in importers or at top level) and its packages/snapshots entries in the approved_deps check; trailing comments are ignored, a malformed one-line map is a parse error (could not verify), and the scan stays one linear pass; it is not an upstream re-vendor. LOCAL PATCH dev-scope-import-mapping-v1 (static_code.py only) re-reads TS/JS imports the scanner marked dynamic or conditional/dev scope by their specifier: built-in and relative modules count as local wherever they appear, a dynamic import of one plain string literal is mapped by its specifier, and in development-scope files (the scanner's test classification, <name>.config.<ext> files, and top-level tools/ and scripts/) a package import, including a declared devDependency, goes through the lockfile mapping; computed or URL dynamic imports, aliases and workspace packages stay unmappable, a devDependency imported from production source stays unmappable, a package missing from the lockfile stays import_missing_from_lock, the scanners and the Python, Rust, Go, C++ and .NET paths are unchanged, and it is not an upstream re-vendor. LOCAL PATCH open-handle-credential-check-v1 (static_code.py and template_drift.py) opens each walked file through the shared checked opener of the audit, which checks the opened file (its identity, its folder's identity and its real location) against the declared credentials before any byte is read; a refused file is closed unread and reported as a credential_policy_exclusion issue (could not verify), the same as a declared path; nothing else changed and it is not an upstream re-vendor.",
+  "files": {
+    "cross_checks.py": {
+      "source": "hermes_audit/cross_checks.py",
+      "sha256": "65899e786d2f52205cb3aec501d52bf80c70517c939b021bb3852726f88e2152"
+    },
+    "executable_inventory.py": {
+      "source": "hermes_audit/executable_inventory.py",
+      "sha256": "6e7cb027a307104693512bf90ac6f701107943560e225d72c1684a3ed4308680",
+      "local_patch": "credential-redaction-v2; approved-yaml-parser-v1; uncaptured-manifest-v1; linear-redaction-regex-v1"
+    },
+    "memory.py": {
+      "source": "hermes_audit/memory.py",
+      "sha256": "7f53b2e3495bfc75b025a694cd09ae4f4297fea708da8613b65575d28c5661e9"
+    },
+    "profile_context.py": {
+      "source": "hermes_audit/profile_context.py",
+      "sha256": "bcb3a194582e13e0b09774cada9fb2c30900b581b4bb3c0ba75d272658cc4fe0"
+    },
+    "static_code.py": {
+      "source": "hermes_audit/static_code.py",
+      "sha256": "df9efaa131179a0f48c71cf22251b101f75913a09b0e821a5e5866d30c92ba9a",
+      "local_patch": "shared-credential-read-policy-v2; golden-template-registry-v1; linear-source-scan-v1; web-golden-registry-v1; pnpm-config-document-v1; dev-scope-import-mapping-v1; open-handle-credential-check-v1"
+    },
+    "template_drift.py": {
+      "source": "hermes_audit/template_drift.py",
+      "sha256": "e375dd6b98aa336f57c8eb86441fe7a0e6f9b4816c099ab09a9739d4b27290e2",
+      "local_patch": "shared-credential-read-policy-v2; golden-template-registry-v1; web-golden-registry-v1; open-handle-credential-check-v1"
+    }
+  }
+}

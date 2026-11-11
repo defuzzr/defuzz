@@ -1,0 +1,9 @@
+{
+  "name": "my-service-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

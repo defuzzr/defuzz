@@ -1,0 +1,13 @@
+Error: ERR_PNPM_PACKAGE_MANAGER_ADD_RESOLVE_LATEST
+
+  × adding a new package
+  ├─▶ Failed to resolve the latest version of left-pad: Failed to fetch
+  │   metadata from https://registry.npmjs.org/left-pad: error sending
+  │   request: client error (Connect): dns error: failed to lookup address
+  │   information: Temporary failure in name resolution
+  ├─▶ error sending request
+  ├─▶ client error (Connect)
+  ├─▶ dns error
+  ╰─▶ failed to lookup address information: Temporary failure in name
+      resolution
+

@@ -1,0 +1,36 @@
+"""Runtime lifecycle component __COMP_NAME__."""
+
+from __future__ import annotations
+
+from tmpl_prefix_core import Component, Context, Health
+
+
+class __COMP_CLASS__(Component):
+    """Managed runtime component for __COMP_NAME__."""
+
+    def __init__(self) -> None:
+        """Initialize the __COMP_NAME__ component."""
+        self._started = False
+
+    @property
+    def name(self) -> str:
+        """Return the unique component identifier."""
+        return "__COMP_NAME__"
+
+    async def start(self, ctx: Context) -> None:
+        """Start the __COMP_NAME__ component."""
+        ctx.logger.info("component started", component=self.name)
+        self._started = True
+
+    async def stop(self) -> None:
+        """Stop the __COMP_NAME__ component."""
+        self._started = False
+
+    async def health(self) -> Health:
+        """Report component health status."""
+        if not self._started:
+            return Health(status="unhealthy", reason="__COMP_NAME__ not started")
+        return Health(status="healthy")
+
+
+TmplPrefix__COMP_CLASS__ = __COMP_CLASS__

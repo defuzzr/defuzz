@@ -1,0 +1,14 @@
+<script>
+  // Runs before the page is drawn, so a stored theme never flashes the other one.
+  // It must agree with src/lib/theme.ts; tests/unit/theme.test.ts checks that.
+  (() => {
+    try {
+      const stored = localStorage.getItem("theme");
+      if (stored === "light" || stored === "dark") {
+        document.documentElement.dataset.theme = stored;
+      }
+    } catch {
+      // Storage is blocked: keep following the system setting.
+    }
+  })();
+</script>

@@ -1,0 +1,26 @@
+{
+  "name": "tmpl-prefix-cli",
+  "version": "0.1.0",
+  "description": "Command-line interface deployable application for accounts and health checks.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "tmpl-prefix": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "tmpl-prefix-accounts": "workspace:*",
+    "tmpl-prefix-config": "workspace:*",
+    "tmpl-prefix-core": "workspace:*",
+    "tmpl-prefix-storage-memory": "workspace:*",
+    "tmpl-prefix-telemetry": "workspace:*"
+  }
+}

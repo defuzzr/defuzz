@@ -1,0 +1,57 @@
+[workspace]
+resolver = "3"
+members = ["foundation", "domain", "adapters", "apps/cli", "xtask"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "LicenseRef-not-chosen" # choose a licence: see README.md
+publish = false
+
+[workspace.dependencies]
+tmpl-prefix-foundation = { path = "foundation" }
+tmpl-prefix-domain = { path = "domain" }
+tmpl-prefix-adapters = { path = "adapters" }
+serde = { version = "1.0", features = ["derive"] }
+toml = { version = "0.8", default-features = false, features = ["parse"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+# Restriction picks
+unwrap_used = "warn"
+expect_used = "warn"
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+exit = "warn"
+
+# Pedantic allow-list
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+needless_pass_by_value = "allow"
+return_self_not_must_use = "allow"
+items_after_statements = "allow"
+struct_excessive_bools = "allow"
+fn_params_excessive_bools = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+wildcard_imports = "allow"
+redundant_closure_for_method_calls = "allow"
+implicit_hasher = "allow"
+if_not_else = "allow"

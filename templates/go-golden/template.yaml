@@ -1,0 +1,32 @@
+id: go-golden
+name: Go Golden Workspace
+summary: Layered Go workspace template with foundation, domain, adapters, apps/cli, and xtask CI.
+kind: service
+layout: mono
+languages: [go]
+tags: [go, workspace, layered, cli, service]
+needs: [go, golangci-lint, gofmt]
+version_probes:
+  go: ["go", "version"]
+  gofmt:
+    probe: file
+    file: go.mod
+    regex: '^\s*go\s+(\d+(?:\.\d+)*)'
+placeholder: tmpl_prefix
+substitute_in: ["go.mod", "**/*.go", "**/*.md", "**/*.yml"]
+locked:
+  - go.mod
+  - .golangci.yml
+  - .github/workflows/*
+  - xtask/**
+approved_deps:
+  go: []
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["go", "run", "./xtask", "ci"]
+      cwd: "."
+      format_cmds:
+        - cmd: ["gofmt", "-e", "-l"]
+          suffixes: [".go"]
+          require_empty_stdout: true

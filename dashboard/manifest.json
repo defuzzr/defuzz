@@ -1,0 +1,9 @@
+{
+  "name": "defuzz",
+  "label": "Project Defuzz",
+  "description": "Lint and tool-setup backend for defuzz.",
+  "icon": "Shield",
+  "version": "0.1.0",
+  "tab": {"hidden": true},
+  "api": "plugin_api.py"
+}

@@ -1,0 +1,2 @@
+/repo/.github/workflows/ci.yml:11:3: [error] wrong indentation: expected 4 but found 2 (indentation)
+./config.yaml:4:1: [warning] missing document start "---" (document-start)

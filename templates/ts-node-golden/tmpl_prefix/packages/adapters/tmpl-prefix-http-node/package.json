@@ -1,0 +1,19 @@
+{
+  "name": "tmpl-prefix-http-node",
+  "version": "0.1.0",
+  "description": "Zero-dependency node:http implementation of the HttpServer port.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "tmpl-prefix-core": "workspace:*"
+  }
+}

@@ -1,0 +1,68 @@
+[
+  {
+    "code": "F401",
+    "message": "`os` imported but unused",
+    "filename": "/repo/src/app.py",
+    "location": {
+      "row": 3,
+      "column": 8
+    },
+    "end_location": {
+      "row": 3,
+      "column": 10
+    }
+  },
+  {
+    "code": "E501",
+    "message": "Line too long (120 > 88)",
+    "filename": "src/utils.py",
+    "location": {
+      "row": 14,
+      "column": 89
+    },
+    "end_location": {
+      "row": 14,
+      "column": 120
+    }
+  },
+  {
+    "code": "B006",
+    "severity": "error",
+    "message": "Do not use mutable data structures for argument defaults",
+    "filename": "src/defs.py",
+    "location": {
+      "row": 7,
+      "column": 12
+    },
+    "end_location": {
+      "row": 7,
+      "column": 14
+    }
+  },
+  {
+    "code": "invalid-syntax",
+    "message": "Expected `:`, found newline",
+    "filename": "src/broken.py",
+    "location": {
+      "row": 9,
+      "column": 10
+    },
+    "end_location": {
+      "row": 9,
+      "column": 11
+    }
+  },
+  {
+    "code": null,
+    "message": "SyntaxError: Simple statements must be separated by newlines or semicolons",
+    "filename": "src/legacy_syntax.py",
+    "location": {
+      "row": 2,
+      "column": 5
+    },
+    "end_location": {
+      "row": 2,
+      "column": 6
+    }
+  }
+]

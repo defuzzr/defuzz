@@ -1,0 +1,101 @@
+{
+  "declared_dirs": [
+    {
+      "dir": "foundation",
+      "summary": "Layer 0 Rust foundation crate",
+      "why": "Keep shared error and result types free of upward crate deps",
+      "source": "explicit"
+    },
+    {
+      "dir": "domain",
+      "summary": "Layer 1 pure Rust domain crate",
+      "why": "Isolate domain types and logic from external I/O crates",
+      "source": "explicit"
+    },
+    {
+      "dir": "adapters",
+      "summary": "Layer 2 Rust adapter crate",
+      "why": "Implement integration boundaries on top of foundation and domain",
+      "source": "explicit"
+    },
+    {
+      "dir": "apps",
+      "summary": "Layer 3 Rust binary crates",
+      "why": "Compose workspace crates and runtime configuration under apps/",
+      "source": "explicit"
+    },
+    {
+      "dir": "xtask",
+      "summary": "Cargo xtask workspace automation crate",
+      "why": "Enforce rustfmt, clippy, workspace tests, MSRV, and layer rules",
+      "source": "explicit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Architecture and component boundary documentation",
+      "why": "Keep project Markdown notes and design docs out of the root",
+      "source": "explicit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Shell and PowerShell helper scripts",
+      "why": "Keep small automation scripts out of the root and out of the code folders",
+      "source": "explicit"
+    }
+  ],
+  "placement_rules": [
+    {
+      "kind": "docs",
+      "match_ext": [
+        ".md",
+        ".rst",
+        ".adoc",
+        ".mmd",
+        ".puml",
+        ".drawio"
+      ],
+      "root_only": true,
+      "dest_dir": "docs",
+      "lfs": false,
+      "reason": "Notes, guides and diagram sources live in docs/ in this workspace",
+      "source": "explicit"
+    },
+    {
+      "kind": "scripts",
+      "match_ext": [
+        ".sh",
+        ".bash",
+        ".ps1"
+      ],
+      "root_only": true,
+      "dest_dir": "scripts",
+      "lfs": false,
+      "reason": "Shell and PowerShell scripts live in scripts/ in this workspace",
+      "source": "explicit"
+    }
+  ],
+  "protected_root_files": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "build.rs",
+    "rust-toolchain",
+    "rust-toolchain.toml",
+    "clippy.toml",
+    "rustfmt.toml",
+    "deny.toml",
+    "Cross.toml",
+    "release.toml",
+    "cliff.toml",
+    "typos.toml",
+    "_typos.toml",
+    "taplo.toml",
+    "dist-workspace.toml",
+    "target",
+    "AGENT.md",
+    "WARP.md",
+    "QWEN.md",
+    "CRUSH.md",
+    "DCO.md",
+    "ACKNOWLEDGMENTS.md"
+  ]
+}

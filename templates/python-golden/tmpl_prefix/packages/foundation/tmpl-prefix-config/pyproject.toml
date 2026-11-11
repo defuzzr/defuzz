@@ -1,0 +1,22 @@
+[project]
+name = "tmpl-prefix-config"
+version = "0.1.0"
+description = "Typed, validated layered configuration via pydantic-settings."
+requires-python = ">=3.13"
+dependencies = [
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.7,<3",
+  "tmpl-prefix-core",
+  # @xtask:dependencies
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+tmpl-prefix-core = { workspace = true }
+# @xtask:sources
+
+[build-system]
+requires = ["uv_build>=0.6,<1"]
+build-backend = "uv_build"

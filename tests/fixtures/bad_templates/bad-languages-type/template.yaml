@@ -1,0 +1,10 @@
+id: bad-languages-type
+name: Bad Languages Type Template
+summary: Languages is a string instead of a list of lowercase strings.
+kind: tool
+layout: single
+languages: python
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py"]
+repos:
+  - name: tmpl_prefix

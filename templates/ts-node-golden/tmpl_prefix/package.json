@@ -1,0 +1,23 @@
+{
+  "name": "tmpl-prefix-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "build": "tsc -b",
+    "t": "node --test \"packages/**/dist/**/*.test.js\"",
+    "lint": "biome ci .",
+    "xtask": "node tools/xtask/main.ts",
+    "server": "node packages/apps/tmpl-prefix-server/dist/main.js",
+    "cli": "node packages/apps/tmpl-prefix-cli/dist/main.js"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3"
+  }
+}

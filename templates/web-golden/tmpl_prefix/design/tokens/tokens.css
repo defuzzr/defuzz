@@ -1,0 +1,120 @@
+/*
+ * Design tokens: the one source of truth for colour, type, space and motion.
+ * src/styles/ uses these names and never redefines them.
+ * Colours are hex so scripts/check-contrast.ts can check every pair it lists.
+ * The dark values appear twice (system setting and explicit choice); a unit test
+ * keeps the two copies equal.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Colour, light theme (default) */
+  --color-bg: #ffffff;
+  --color-surface: #f3f5f7;
+  --color-text: #1b1f24;
+  --color-text-muted: #4a5360;
+  --color-link: #0a55c2;
+  --color-link-hover: #073f91;
+  --color-link-visited: #6a2fa8;
+  --color-accent: #0a55c2;
+  --color-accent-hover: #073f91;
+  --color-accent-text: #ffffff;
+  --color-border: #6b7480;
+  --color-focus: #0a55c2;
+
+  /* Fonts: system fonts only, nothing is downloaded */
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-weight-bold: 700;
+  --line-height-body: 1.6;
+  --line-height-heading: 1.2;
+
+  /* Type scale: fluid between 360px and 1280px wide */
+  --text-sm: clamp(0.875rem, 0.85rem + 0.1vw, 0.9375rem);
+  --text-base: clamp(1rem, 0.96rem + 0.2vw, 1.125rem);
+  --text-lg: clamp(1.125rem, 1.05rem + 0.35vw, 1.3125rem);
+  --text-xl: clamp(1.375rem, 1.23rem + 0.65vw, 1.75rem);
+  --text-2xl: clamp(1.75rem, 1.45rem + 1.35vw, 2.5rem);
+
+  /* Space scale */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-s: clamp(1rem, 0.92rem + 0.35vw, 1.25rem);
+  --space-m: clamp(1.5rem, 1.38rem + 0.5vw, 1.875rem);
+  --space-l: clamp(2rem, 1.75rem + 1.1vw, 2.75rem);
+
+  /* Shape and layout */
+  --radius-s: 0.25rem;
+  --radius-m: 0.5rem;
+  --border-width: 1px;
+  --measure: 65ch;
+  --figure-width: 30rem;
+  --page-width: 72rem;
+  /* Smallest height of a button, so it is easy to tap */
+  --control-min-height: 2.75rem;
+
+  /* Links: underline position and thickness */
+  --underline-offset: 0.15em;
+  --underline-hover: 2px;
+  --underline-current: 3px;
+
+  /* Code is set a little smaller than the text around it */
+  --text-code: 0.9em;
+
+  /* Focus ring */
+  --focus-width: 3px;
+  --focus-offset: 2px;
+  /* Space between the ring and a neighbouring control */
+  --focus-clearance: 2px;
+  /* Gap between controls that sit next to each other: wider than the ring reaches, so
+     a focused control's ring never touches its neighbour (tests/unit/stylesheet.test.ts) */
+  --control-gap: calc(var(--focus-offset) + var(--focus-width) + var(--focus-clearance));
+
+  /* Motion */
+  --duration-fast: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #121417;
+    --color-surface: #1d2126;
+    --color-text: #e8eaed;
+    --color-text-muted: #a9b1bb;
+    --color-link: #8ab4f8;
+    --color-link-hover: #b6d0fb;
+    --color-link-visited: #c9a7f5;
+    --color-accent: #8ab4f8;
+    --color-accent-hover: #b6d0fb;
+    --color-accent-text: #121417;
+    --color-border: #8a939e;
+    --color-focus: #8ab4f8;
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #121417;
+  --color-surface: #1d2126;
+  --color-text: #e8eaed;
+  --color-text-muted: #a9b1bb;
+  --color-link: #8ab4f8;
+  --color-link-hover: #b6d0fb;
+  --color-link-visited: #c9a7f5;
+  --color-accent: #8ab4f8;
+  --color-accent-hover: #b6d0fb;
+  --color-accent-text: #121417;
+  --color-border: #8a939e;
+  --color-focus: #8ab4f8;
+}

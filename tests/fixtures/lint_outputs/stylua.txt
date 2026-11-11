@@ -1,0 +1,6 @@
+Diff in src/init.lua:
+2   |-local x=1
+2   |+local x = 1
+Diff in ./scripts/combat.luau:
+10  |-return   true
+10  |+return true

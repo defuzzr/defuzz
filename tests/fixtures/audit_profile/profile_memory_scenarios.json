@@ -1,0 +1,40 @@
+{
+  "fixture_version": "1.0.0",
+  "description": "Isolated fixture scenarios for Project Defuzz audit profile context and memory checks (§2, §5, §6, §11, §12, §13.4, §13.5).",
+  "as_of": 1750000000,
+  "stale_age_days": 90,
+  "registered_projects": [
+    {
+      "canonical_path": "/home/user/Projects/acme/billing-service",
+      "name": "Billing Service",
+      "slug": "billing-service",
+      "hermes_project_id": "proj_acme_billing",
+      "owning_profiles": ["default"]
+    },
+    {
+      "canonical_path": "/home/user/Projects/globex/billing-service",
+      "name": "Billing Service",
+      "slug": "billing-service",
+      "hermes_project_id": "proj_globex_billing",
+      "owning_profiles": ["default"]
+    },
+    {
+      "canonical_path": "/home/user/Projects/rust-golden",
+      "name": "Rust Golden",
+      "slug": "rust-golden",
+      "hermes_project_id": "proj_rust_golden",
+      "owning_profiles": ["coder"]
+    }
+  ],
+  "memory_entries": {
+    "exact_duplicate": "User prefers uv over pip for Python virtual environments.",
+    "ws_duplicate_a": "Run cargo xtask ci\n  before every commit.",
+    "ws_duplicate_b": "Run   cargo   xtask   ci before every commit.",
+    "mapped_exact_path": "Config for ~/Projects/acme/billing-service/config.toml binds to 127.0.0.1:8080.",
+    "ambiguous_name": "In billing-service, the retry backoff is 250ms.",
+    "cross_project_directive": "Always use nightly cargo features in rust-golden.",
+    "stale_missing_path": "Legacy notes live at /home/user/Projects/deleted-legacy-app/README.md.",
+    "unverified_mount_path": "Backup archive is at /mnt/offline_nas/backups/archive.tar.zst.",
+    "general_preference": "User prefers concise bullet points and dark mode."
+  }
+}

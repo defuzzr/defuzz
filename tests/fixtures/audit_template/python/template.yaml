@@ -1,0 +1,23 @@
+id: python-golden
+name: Python Golden Workspace
+summary: Mini Python golden fixture for template drift and static code audit tests.
+kind: service
+layout: mono
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py", "**/*.toml", "**/*.md", "uv.lock"]
+locked:
+  - pyproject.toml
+  - tools/xtask/**
+approved_deps:
+  python:
+    - fastapi
+    - pydantic
+    - pydantic-settings
+    - pytest
+    - uvicorn
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["uv", "run", "xtask", "ci"]
+      cwd: "."

@@ -1,0 +1,16 @@
+TypeError: fetch failed
+    at Object.processResponse (node:internal/deps/undici/undici:14303:20)
+    at node:internal/deps/undici/undici:14695:23
+    at node:internal/deps/undici/undici:19341:7 {
+  [cause]: Error: bad port
+      at makeNetworkError (node:internal/deps/undici/undici:13053:35)
+      at mainFetch (node:internal/deps/undici/undici:14463:22)
+      at fetching (node:internal/deps/undici/undici:14450:7)
+      at fetch (node:internal/deps/undici/undici:14311:20)
+      at fetch (node:internal/deps/undici/undici:19339:10)
+      at fetch (node:internal/bootstrap/web/exposed-window-or-worker:85:12)
+      at [eval]:1:1
+      at runScriptInThisContext (node:internal/vm:219:10)
+      at node:internal/process/execution:485:12
+      at [eval]-wrapper:6:24
+}

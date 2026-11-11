@@ -1,0 +1,18 @@
+id: options-unknown-key
+name: Options Unknown Key Fixture
+summary: Template fixture with an unknown key under an option.
+kind: service
+layout: mono
+languages: [typescript]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.ts", ".env.example"]
+options:
+  http_adapter:
+    label: "HTTP adapter"
+    choices: [hono, node_http]
+    default: hono
+    env_key: TMPL_PREFIX_HTTP_ADAPTER
+    description: "Both adapters ship; this picks the default wired in config."
+    unknown_field: true
+repos:
+  - name: tmpl_prefix

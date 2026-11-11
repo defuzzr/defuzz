@@ -1,0 +1,10 @@
+id: bad-placeholder
+name: Bad Placeholder Template
+summary: Placeholder is not valid snake_case.
+kind: tool
+layout: single
+languages: [python]
+placeholder: Not-Snake-Case
+substitute_in: ["**/*.py"]
+repos:
+  - name: tmpl_prefix

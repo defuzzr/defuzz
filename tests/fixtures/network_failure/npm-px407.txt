@@ -1,0 +1,4 @@
+npm warn Unknown env config "store-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm error code E407
+npm error 407 Proxy Authentication Required - GET https://registry.npmjs.org/left-pad
+npm error A complete log of this run can be found in: /home/user/probe/w/npmcache/_logs/2026-11-11T06_36_48_237Z-debug-0.log

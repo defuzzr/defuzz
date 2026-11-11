@@ -1,0 +1,1465 @@
+{
+  "schema": "defuzz.routing_error_classes/1",
+  "description": "Beginner-phrased prompts for seven routing error classes plus must-not-regress confusables.",
+  "classes": {
+    "class_1_web_app": [
+      {
+        "prompt": "i wanna build a web app for splitting rent with roommates",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "simple webapp to track my daily water intake",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "plz set up a web application for booking study rooms",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "chore wheel web app for our flat",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "new web-app where club members swap second hand books",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "recipe box webapp with grocery checklists",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "need a lil web app for our neighbourhood plant swap",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "flashcard study web application for med students",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "potluck sign up sheets webapp for work lunches",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "carpool matcher web app for parents at school",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "boardgame night scorekeeper web app",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "pet sitter calender web application",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "gift wishlist webapp for family birthdays",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "workout log web-application i can use in a browser",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "parking spot sharing web app for our condo",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": " trivia night buzzer webapp for pubs",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "create a webap for meal prep planning",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "volunteer shift picker web app",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "expense splitter web app in go",
+        "expected_catalog": "template",
+        "expected_id": "go-golden"
+      },
+      {
+        "prompt": "webapp written in python for internal inventory",
+        "expected_catalog": "template",
+        "expected_id": "python-golden"
+      },
+      {
+        "prompt": "web application in c# for warehouse tickets",
+        "expected_catalog": "template",
+        "expected_id": "dotnet-golden"
+      },
+      {
+        "prompt": "fast web-app built with rust",
+        "expected_catalog": "template",
+        "expected_id": "rust-golden"
+      },
+      {
+        "prompt": "poll voting web app in typescript",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "intranet web application using c++",
+        "expected_catalog": "template",
+        "expected_id": "cpp-golden"
+      },
+      {
+        "prompt": "web app in ruby for shift scheduling",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "webapp in php for class rosters",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "web application in elixir for live polls",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "budgeting web app in kotlin",
+        "expected_catalog": "none",
+        "expected_id": null
+      }
+    ],
+    "class_2_vague_no_silent_default": [
+      {
+        "prompt": "a quick app",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "grocery list app",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "pomodoro timer app",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "i wanna make a mobile app for dog walks",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "desktop app for sorting reciepts",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "smth to track my workouts",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "new project plz",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "bookmark manager application",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "a small cli tool to rename mp3s",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "backend service for user notifications",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "rest api for our coffee machine",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "telegram bot that sends weather alerts",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "flashcard app for learning kanji",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "password vault desktop application",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "a little helper script for backups",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "habit streak app",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "sleep journal app for my phone",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "idk maybe a chat app for freinds",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "background worker daemon for emails",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "markdown note taking app",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "a library for parsing dates",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "file sync utility",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "ios app for splitting restaurant bills",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "android app for bus schedules",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "personal finance tracker app",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "clipboard history manager",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "calendar reminder app",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "webhook receiver for stripe events",
+        "expected_catalog": "none",
+        "expected_id": null
+      }
+    ],
+    "class_3_website_subject_words": [
+      {
+        "prompt": "make a website for my rust gaming server",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "homepage for our discord bot",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "landing page for my new cli tool",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a website about our indie godot game",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "can u build a site for my blender 3d renders",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "web app where runners track marathon splits",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "website for my python tutoring club",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "landing page about our open source sdk",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a homepage for my terraria server community",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "website for a comic book store downtown",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "make me a site about my homelab rack",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "web app where bands book rehearsal studio slots",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "landing page for our music album preorders",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "homepage for a freelance video editing agency",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "website of our robotics club hardware components",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a blog about training lora models at home",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "portfolio site for my unreal environment art",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "web app that helps people monitor baby feedings",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "website for a mobile app launch waitlist",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "homepage about go concurrency patterns",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "simple site for our tabletop rpg campaign",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "web application for a local tool library co-op",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "server status dashboard web app for our guild",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "package tracker webapp for our small shop",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "website for our youtube podcast channel",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "landing page for a desktop app beta",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "homepage for my c++ study group",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "site where collectors trade vintage game cartridges",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      }
+    ],
+    "class_4_page_targets_and_non_web_pages": [
+      {
+        "prompt": "build a homepage for my dog grooming buisness",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "need a home page with hours and directions",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "make a web page for my garage sale",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "simple webpage for our block party",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "clean landing page for my newsletter",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a page where customers can book nail appointments",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "make me a page where guests rsvp for dinner",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a page that shows our food truck locations today",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "i want a page to collect early access emails",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a page for my acoustic duo gig dates",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a quick page with our wifi qr and house rules",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "waitlist page for our new board game",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "faq page for our community garden",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "splash page for an upcoming indie album",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "links page for my art socials",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "landing pgae for my bike repair shop",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "pagerank graph solver in python",
+        "expected_catalog": "template",
+        "expected_id": "python-golden"
+      },
+      {
+        "prompt": "page-rank simulator",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "man page formatter cli in rust",
+        "expected_catalog": "template",
+        "expected_id": "rust-golden"
+      },
+      {
+        "prompt": "write a man page for my backup script",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "wiki page about linux namespaces",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "notion page about our q3 roadmap",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "virtual memory page table allocator in c++",
+        "expected_catalog": "template",
+        "expected_id": "cpp-golden"
+      },
+      {
+        "prompt": "lru page replacement benchmark in go",
+        "expected_catalog": "template",
+        "expected_id": "go-golden"
+      },
+      {
+        "prompt": "pdf page splitter utility in python",
+        "expected_catalog": "template",
+        "expected_id": "python-golden"
+      },
+      {
+        "prompt": "manga page layout and character sheet workspace",
+        "expected_catalog": "kit",
+        "expected_id": "comic-storyboard"
+      },
+      {
+        "prompt": "wikipedia page about brutalist architecture",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "confluence page on deployment runbooks",
+        "expected_catalog": "none",
+        "expected_id": null
+      }
+    ],
+    "class_5_component_library_python_vs_ui": [
+      {
+        "prompt": "design system of buttons modals and dropdowns",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "storybook ui kit for our company",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "shared frontend widget library",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "reusable cards inputs and badges for interfaces",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "ui component catalog with css themes",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "tailwind button and form input kit",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "react design system and widget library",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "svelte ui component pack",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "vue shared buttons and modals library",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "typescript storybook component library",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "accessible radix style dialog and dropdown kit in react",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "shadcn style form controls and cards in tsx",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "web components ui library with shadow dom",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "set of reusable navbar and sidebar widgets",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "folder of reusable python components and runners",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "reusable collection of python modules to share across projects",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "personal toolbox of python building blocks",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "library of reusable python functions and thin runners",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "componentize library for my reusable python scripts",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "shared python helpers and scripts repo to reuse across tools",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "componentize workspace with index and specs",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "catalog of reusable python code components",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "collection of python snippets and modules to reuse",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "reusable python script blocks with componentize specs",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "my shared toolbox of reusable python functions",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "python component repository with runner scripts and index",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "pack of reusable python modules for my side projects",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      },
+      {
+        "prompt": "reusable code component folder with thin python runners",
+        "expected_catalog": "kit",
+        "expected_id": "component-library"
+      }
+    ],
+    "class_6_prose_and_non_project": [
+      {
+        "prompt": "write a blog post about lora training tips",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "a blog post on homelab backups",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "article about blender geometry nodes",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "write an essay on indie game music production",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "short essay about rust borrow checker",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "email to my freelance client asking for feedback",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "summary of how comfyui diffusion works",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "incident report about why our server went down",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "write a tutorial about godot tilemaps",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "tweet announcing our new website",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "write a post about switching from unity to godot",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "linkedin post about our componentize workflow",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "reddit post asking about nas hard drives",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "twitter thread on python fastapi tricks",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "can you explain godot signals to a beginner",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "please compare blender and unreal for lighting",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "godot vs bevy for a 2d rpg",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "help me fix my broken css flexbox on my homepage",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "could you review my python backend code",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "can u debug my godot player movement script",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "difference between lora checkpoints and full finetuning",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "how can i optimize my homelab power draw",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "press release for our video channel launch",
+        "expected_catalog": "none",
+        "expected_id": null
+      },
+      {
+        "prompt": "my blog about sourdough baking",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "set up a blog site for book reviews",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "a personal blog",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+      },
+      {
+        "prompt": "travel photo blog for our summer trip",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      }
+    ],
+    "class_7_implied_languages_and_engines": [
+      {
+        "prompt": "pygame space invaders clone",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "python-golden"
+      },
+      {
+        "prompt": "flask webhook receiver api",
+        "expected_catalog": "template",
+        "expected_id": "python-golden"
+      },
+      {
+        "prompt": "django rest backend for inventory",
+        "expected_catalog": "template",
+        "expected_id": "python-golden"
+      },
+      {
+        "prompt": "fastapi microservice for auth tokens",
+        "expected_catalog": "template",
+        "expected_id": "python-golden"
+      },
+      {
+        "prompt": "tkinter desktop pomodoro timer",
+        "expected_catalog": "template",
+        "expected_id": "python-golden"
+      },
+      {
+        "prompt": "express rest api for todo items",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "api server built with next.js",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "vite bundler plugin library",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "deno command line markdown linter",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "bun websocket chat server",
+        "expected_catalog": "template",
+        "expected_id": "ts-node-golden"
+      },
+      {
+        "prompt": "tokio async tcp proxy server",
+        "expected_catalog": "template",
+        "expected_id": "rust-golden"
+      },
+      {
+        "prompt": "bevy top down tank game",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "rust-golden"
+      },
+      {
+        "prompt": "cargo subcommand cli utility",
+        "expected_catalog": "template",
+        "expected_id": "rust-golden"
+      },
+      {
+        "prompt": "gin json api server for orders",
+        "expected_catalog": "template",
+        "expected_id": "go-golden"
+      },
+      {
+        "prompt": "cobra cli tool for log rotation",
+        "expected_catalog": "template",
+        "expected_id": "go-golden"
+      },
+      {
+        "prompt": "asp.net backend service for invoices",
+        "expected_catalog": "template",
+        "expected_id": "dotnet-golden"
+      },
+      {
+        "prompt": "blazor desktop admin app",
+        "expected_catalog": "template",
+        "expected_id": "dotnet-golden"
+      },
+      {
+        "prompt": "unity 3d kart racing game",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "dotnet-golden"
+      },
+      {
+        "prompt": "unity vr rhythm simulator",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "dotnet-golden"
+      },
+      {
+        "prompt": "qt desktop markdown editor",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "cpp-golden"
+      },
+      {
+        "prompt": "qt6 serial port monitor gui",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "cpp-golden"
+      },
+      {
+        "prompt": "sdl2 2d dungeon platformer",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "cpp-golden"
+      },
+      {
+        "prompt": "sdl audio visualizer window app",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "cpp-golden"
+      },
+      {
+        "prompt": "unreal first person horror game",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": "cpp-golden"
+      },
+      {
+        "prompt": "vite landing page for my indie podcast",
+        "expected_catalog": "template",
+        "expected_id": "web-golden",
+        "changed_because": "site build target naming vite: vite is in web-golden's tags, so the website template (not the web-app kit) is its home"
+      },
+      {
+        "prompt": "nextjs portfolio website for photography",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "flask blog for my cooking recipes",
+        "expected_catalog": "kit",
+        "expected_id": "web-app"
+      },
+      {
+        "prompt": "love2d pixel platformer",
+        "expected_catalog": "none",
+        "expected_id": null,
+        "expected_closest": null
+      }
+    ]
+  },
+  "must_not_regress": [
+    {
+      "prompt": "python cli tool that scrapes prices from online stores",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "rust command line link checker for websites",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "go webhook listener service for github events",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "c# rest api backend for customer orders",
+      "expected_catalog": "template",
+      "expected_id": "dotnet-golden"
+    },
+    {
+      "prompt": "c++20 command line binary diff tool",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "typescript node.js microservice for billing",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "terminal dashboard for docker containers in go",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "tui log viewer in rust",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "console habit tracker cli in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "headless crawler worker in typescript",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "desktop image viewer app in c++",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "stock portfolio risk analyzer cli in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "blog rss feed parser library in rust",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "website screenshot cli utility in go",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "figma token exporter cli in typescript",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "entity component system library in c++",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "pcb resistor bom parser in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "connected components graph solver in rust",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "principal component dimensionality reduction library in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "reusable http retry middleware package in go",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "shared structured logging library in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "reusable jwt validation sdk in c#",
+      "expected_catalog": "template",
+      "expected_id": "dotnet-golden"
+    },
+    {
+      "prompt": "godot 2d metroidvania game with scenes and shaders",
+      "expected_catalog": "kit",
+      "expected_id": "godot-game"
+    },
+    {
+      "prompt": "solo indie game in godot using gdscript",
+      "expected_catalog": "kit",
+      "expected_id": "godot-game"
+    },
+    {
+      "prompt": "cozy pixel rpg in godot",
+      "expected_catalog": "kit",
+      "expected_id": "godot-game"
+    },
+    {
+      "prompt": "gdscript card battler game",
+      "expected_catalog": "kit",
+      "expected_id": "godot-game"
+    },
+    {
+      "prompt": "godot scene file parser cli in rust",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "unreal and blender 3d game assets workspace with git lfs",
+      "expected_catalog": "kit",
+      "expected_id": "game-assets"
+    },
+    {
+      "prompt": "houdini and blender source assets for unreal engine",
+      "expected_catalog": "kit",
+      "expected_id": "game-assets"
+    },
+    {
+      "prompt": "multi-tool 3d studio with blender houdini unreal godot and three.js",
+      "expected_catalog": "kit",
+      "expected_id": "studio-3d"
+    },
+    {
+      "prompt": "3d design studio workspace for blender and threejs",
+      "expected_catalog": "kit",
+      "expected_id": "studio-3d"
+    },
+    {
+      "prompt": "ai video production workspace with canon references and footage",
+      "expected_catalog": "kit",
+      "expected_id": "video-production"
+    },
+    {
+      "prompt": "short film video production with renders and deliverables",
+      "expected_catalog": "kit",
+      "expected_id": "video-production"
+    },
+    {
+      "prompt": "youtube video channel workspace with shorts and thumbnails",
+      "expected_catalog": "kit",
+      "expected_id": "video-channel"
+    },
+    {
+      "prompt": "short-form youtube channel with episode backlog and captions",
+      "expected_catalog": "kit",
+      "expected_id": "video-channel"
+    },
+    {
+      "prompt": "music production workspace with stems mixes and masters",
+      "expected_catalog": "kit",
+      "expected_id": "music-production"
+    },
+    {
+      "prompt": "album audio recording mixing and mastering project",
+      "expected_catalog": "kit",
+      "expected_id": "music-production"
+    },
+    {
+      "prompt": "comic book and storyboard workspace with character sheets",
+      "expected_catalog": "kit",
+      "expected_id": "comic-storyboard"
+    },
+    {
+      "prompt": "graphic novel script panels and animatics workspace",
+      "expected_catalog": "kit",
+      "expected_id": "comic-storyboard"
+    },
+    {
+      "prompt": "research and writing workspace with bibtex citations and outlines",
+      "expected_catalog": "kit",
+      "expected_id": "research-writing"
+    },
+    {
+      "prompt": "academic thesis workspace with reading notes section drafts and figures",
+      "expected_catalog": "kit",
+      "expected_id": "research-writing"
+    },
+    {
+      "prompt": "lora model training workspace with staged dataset and eval sets",
+      "expected_catalog": "kit",
+      "expected_id": "lora-training"
+    },
+    {
+      "prompt": "lora finetuning dataset captions and checkpoints folder",
+      "expected_catalog": "kit",
+      "expected_id": "lora-training"
+    },
+    {
+      "prompt": "comfyui ai image generation set with prompts and contact sheets",
+      "expected_catalog": "kit",
+      "expected_id": "image-set"
+    },
+    {
+      "prompt": "diffusion image set workspace with references and upscales",
+      "expected_catalog": "kit",
+      "expected_id": "image-set"
+    },
+    {
+      "prompt": "homelab infrastructure workspace with host inventory and runbooks",
+      "expected_catalog": "kit",
+      "expected_id": "homelab"
+    },
+    {
+      "prompt": "selfhosted homelab servers compose stacks and backup records",
+      "expected_catalog": "kit",
+      "expected_id": "homelab"
+    },
+    {
+      "prompt": "freelance client job workspace with brief contract and deliveries",
+      "expected_catalog": "kit",
+      "expected_id": "client-job"
+    },
+    {
+      "prompt": "client commission folder with intake review rounds and invoices",
+      "expected_catalog": "kit",
+      "expected_id": "client-job"
+    },
+    {
+      "prompt": "online store for handmade ceramics",
+      "expected_catalog": "kit",
+      "expected_id": "web-app"
+    },
+    {
+      "prompt": "photography portfolio website",
+      "expected_catalog": "template",
+      "expected_id": "web-golden",
+      "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+    },
+    {
+      "prompt": "wedding rsvp page with meal choices",
+      "expected_catalog": "template",
+      "expected_id": "web-golden",
+      "changed_because": "site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests)"
+    },
+    {
+      "prompt": "customer portal with login and billing history",
+      "expected_catalog": "kit",
+      "expected_id": "web-app"
+    },
+    {
+      "prompt": "figma design handoff workspace with css tokens",
+      "expected_catalog": "kit",
+      "expected_id": "web-app"
+    },
+    {
+      "prompt": "community forum where members post local events",
+      "expected_catalog": "kit",
+      "expected_id": "web-app"
+    },
+    {
+      "prompt": "web app for a bookstore in typescript",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "homelab monitoring dashboard web app in typescript",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "podcast RSS parser cli in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "audio stem splitter cli tool in c++",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "freelance invoice pdf generator api in c#",
+      "expected_catalog": "template",
+      "expected_id": "dotnet-golden"
+    },
+    {
+      "prompt": "bibtex citation linter cli in rust",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "youtube analytics collector service in go",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "java spring backend api",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "swift ios habit tracker",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "php blog engine",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "elixir phoenix chat server",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "haskell parser combinator library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "scala spark data job",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "zig systems allocator library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "make a 3d puzzle game",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "phaser browser tower defense game",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "monogame 2d shooter",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "gamemaker top down adventure",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "defold mobile card game",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "review tool for pull requests in go",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "code review cli tool in rust",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "email delivery service in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "report generator cli in go",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "tweet archiver cli in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "webrtc signaling service in typescript",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "websocket chat relay in rust",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "webauthn passkey library in go",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "blender addon script in python",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    }
+  ]
+}

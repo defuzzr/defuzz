@@ -1,0 +1,11 @@
+npm warn Unknown env config "store-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm error code E401
+npm error Incorrect or missing password.
+npm error If you were trying to login, change your password, create an authentication token or enable two-factor authentication then that means you likely typed your password in incorrectly.
+npm error Please try again, or recover your password at:
+npm error   https://www.npmjs.com/forgot
+npm error
+npm error If you were doing some other operation then your saved credentials are probably out of date.
+npm error To correct this please try logging in again with:
+npm error   npm login
+npm error A complete log of this run can be found in: /home/user/probe/w/npmcache/_logs/2026-11-11T06_36_46_349Z-debug-0.log

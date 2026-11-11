@@ -1,0 +1,6 @@
+ERROR taplo:format_files: the file is not properly formatted path="Cargo.toml"
+error[invalid_key]: unexpected key
+  ┌─ ./pyproject.toml:9:5
+  │
+9 │ foo = 1
+  │ ^^^

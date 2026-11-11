@@ -1,0 +1,1 @@
+go: github.com/google/uuid@v1.6.0: Get "https://proxy.golang.org/github.com/google/uuid/@v/v1.6.0.mod": dial tcp: lookup proxy.golang.org on 127.0.0.53:53: read udp 127.0.0.1:39905->127.0.0.53:53: read: connection refused

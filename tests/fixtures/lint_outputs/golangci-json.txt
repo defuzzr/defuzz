@@ -1,0 +1,26 @@
+{
+  "Issues": [
+    {
+      "FromLinter": "errcheck",
+      "Text": "Error return value of `resp.Body.Close` is not checked",
+      "Severity": "error",
+      "Pos": {
+        "Filename": "pkg/client/http.go",
+        "Offset": 512,
+        "Line": 42,
+        "Column": 18
+      }
+    },
+    {
+      "FromLinter": "gosimple",
+      "Text": "S1000: should use a simple channel send/receive instead of select with a single case",
+      "Severity": "warning",
+      "Pos": {
+        "Filename": "./cmd/worker.go",
+        "Offset": 128,
+        "Line": 15,
+        "Column": 2
+      }
+    }
+  ]
+}

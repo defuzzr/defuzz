@@ -1,0 +1,2 @@
+go: downloading github.com/google/uuid v1.6.0
+main.go:2:8: github.com/google/uuid@v1.6.0: Get "https://proxy.golang.org/github.com/google/uuid/@v/v1.6.0.zip": dial tcp: lookup proxy.golang.org on 127.0.0.53:53: read udp 127.0.0.1:49661->127.0.0.53:53: read: connection refused

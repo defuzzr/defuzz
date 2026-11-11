@@ -1,0 +1,26 @@
+# Template floor lock. Each `version` equals `minimum` here and `source = "auto"`, so
+# `hermes defuzz new` re-probes every tool and records the versions found on the user's
+# machine; `minimum` (the oldest version this template's build files need) is kept.
+[lock]
+schema = 1
+enforce = "warn"
+age_nudge_months = 12
+network = false
+
+[go]
+version = "1.22"
+minimum = "1.22"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 1.22: go.mod states go 1.22 (per-iteration loop variables; the go line is enforced since Go 1.21)."
+probe = "command"
+argv = ["go", "version"]
+source = "auto"
+
+[golangci-lint]
+version = "2.0.0"
+minimum = "2.0.0"
+chosen = "2026-11-10"
+reason = "Seeded from this machine at project creation. Floor 2.0.0: .golangci.yml uses the version 2 configuration format."
+probe = "command"
+argv = ["golangci-lint", "--version"]
+source = "auto"

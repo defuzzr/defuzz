@@ -1,0 +1,190 @@
+{
+  "agents_block": "<!-- kit:video-production v2 begin (managed block: edit outside it) -->\n## Video production\n\n`project` is a video production workspace. Build reusable assets first (sets, characters, details), then direct shots from them.\n\n### Layout\n\n- `assets/canon/`: Locked reference images plus `CANON.md`. Source of truth for how things look.\n- `assets/references/`: Outside reference material: mood, style, real-world photos.\n- `assets/characters/`: Character sheets: identity, proportions, wardrobe.\n- `assets/generated/`: New candidates straight from a generator. Not approved.\n- `assets/approved/`: Candidates the owner approved. Move files here only on approval.\n- `storyboards/`: Storyboard panels and sequence files.\n- `prompts/`: Prompts, saved with the references each one used.\n- `footage/raw/`: Original camera or source footage. Read-only.\n- `footage/proxies/`: Small working copies of raw footage. Rebuildable.\n- `audio/`: Music, voice and sound sources.\n- `renders/`: Render and generation output in progress. Disposable.\n- `review/`: Review sheets and side-by-side comparisons awaiting a decision.\n- `deliverables/`: Finished packages, one folder each (`<Title>-rNN`). Never edited after delivery.\n- `manifests/`: Lists of what each deliverable contains and which revision.\n- `archive/`: Retired versions. Never use as a source or reference.\n- `docs/`: Notes and decisions.\n- `tools/`: Project scripts.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Read `assets/canon/CANON.md` at the start of every task.\n- Never read, reference, or source anything from `archive/`.\n- New generator output goes in `assets/generated/` or `renders/`. Move a file to `assets/approved/` only when the owner approves it. A file named `final` or the newest file is not approval.\n- Before generating or editing, state the asset's role: environment plate, character reference, detail or prop reference, shot reference, or finished shot. Do not silently turn one role into another.\n- Always pass the required reference images to the generator. Do not generate a canon subject from a text prompt alone.\n- Save each candidate with its exact prompt and the list of references used, in `prompts/`.\n- One review item at a time: make only the requested change, show it, and wait for direction.\n- A deliverable is a new folder `deliverables/<Title>-rNN`. Never edit a delivered folder; make the next revision number.\n- `footage/raw/` is read-only. Work on copies in `footage/proxies/`.\n- For packaging or review requests, assemble existing files. Do not generate or fix artwork unless asked.\n<!-- kit:video-production end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "assets/canon",
+      "summary": "Locked reference images plus `CANON.md`. Source of truth for how things look.",
+      "why": "every generation is checked against canon"
+    },
+    {
+      "dir": "assets/references",
+      "summary": "Outside reference material: mood, style, real-world photos.",
+      "why": "inspiration is kept apart from canon"
+    },
+    {
+      "dir": "assets/characters",
+      "summary": "Character sheets: identity, proportions, wardrobe.",
+      "why": "characters are built once and reused per shot"
+    },
+    {
+      "dir": "assets/generated",
+      "summary": "New candidates straight from a generator. Not approved.",
+      "why": "unreviewed output never mixes with approved work"
+    },
+    {
+      "dir": "assets/approved",
+      "summary": "Candidates the owner approved. Move files here only on approval.",
+      "why": "approval is explicit"
+    },
+    {
+      "dir": "storyboards",
+      "summary": "Storyboard panels and sequence files.",
+      "why": "framing and story intent"
+    },
+    {
+      "dir": "prompts",
+      "summary": "Prompts, saved with the references each one used.",
+      "why": "results can be reproduced"
+    },
+    {
+      "dir": "footage/raw",
+      "summary": "Original camera or source footage. Read-only.",
+      "why": "originals are never altered"
+    },
+    {
+      "dir": "footage/proxies",
+      "summary": "Small working copies of raw footage. Rebuildable.",
+      "why": "edits stay fast"
+    },
+    {
+      "dir": "audio",
+      "summary": "Music, voice and sound sources.",
+      "why": "sound is tracked with the picture"
+    },
+    {
+      "dir": "renders",
+      "summary": "Render and generation output in progress. Disposable.",
+      "why": "work in progress is rebuildable"
+    },
+    {
+      "dir": "review",
+      "summary": "Review sheets and side-by-side comparisons awaiting a decision.",
+      "why": "one place for pending decisions"
+    },
+    {
+      "dir": "deliverables",
+      "summary": "Finished packages, one folder each (`<Title>-rNN`). Never edited after delivery.",
+      "why": "delivered work stays reproducible"
+    },
+    {
+      "dir": "manifests",
+      "summary": "Lists of what each deliverable contains and which revision.",
+      "why": "page and shot numbers resolve to exact files"
+    },
+    {
+      "dir": "archive",
+      "summary": "Retired versions. Never use as a source or reference.",
+      "why": "rejected work must not leak back in"
+    },
+    {
+      "dir": "docs",
+      "summary": "Notes and decisions.",
+      "why": "context survives between sessions"
+    },
+    {
+      "dir": "tools",
+      "summary": "Project scripts.",
+      "why": "pipeline code is not mixed with media"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "video-production",
+    "name": "Video production",
+    "summary": "AI-assisted video production workspace: locked canon references, generated candidates, approved assets, storyboards, footage, audio, renders and numbered deliverables; not a YouTube channel or a comic.",
+    "tags": [
+      "video",
+      "ai",
+      "storyboard",
+      "footage",
+      "production",
+      "generative",
+      "lfs"
+    ],
+    "version": 2
+  },
+  "ok": true,
+  "placement_rules": [
+    {
+      "dest_dir": "assets/generated",
+      "kind": "images",
+      "lfs": true,
+      "match_ext": [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
+      ],
+      "reason": "unreviewed generator output, approved by moving it out"
+    },
+    {
+      "dest_dir": "renders",
+      "kind": "video",
+      "lfs": true,
+      "match_ext": [
+        ".mp4",
+        ".mov",
+        ".webm",
+        ".mkv"
+      ],
+      "reason": "declared by the video-production kit"
+    },
+    {
+      "dest_dir": "audio",
+      "kind": "audio",
+      "lfs": true,
+      "match_ext": [
+        ".wav",
+        ".mp3",
+        ".flac",
+        ".ogg"
+      ],
+      "reason": "declared by the video-production kit"
+    }
+  ],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "archive/",
+    "archive/.gitkeep",
+    "assets/",
+    "assets/approved/",
+    "assets/approved/.gitkeep",
+    "assets/canon/",
+    "assets/canon/CANON.md",
+    "assets/characters/",
+    "assets/characters/.gitkeep",
+    "assets/generated/",
+    "assets/generated/.gitkeep",
+    "assets/references/",
+    "assets/references/.gitkeep",
+    "audio/",
+    "audio/.gitkeep",
+    "deliverables/",
+    "deliverables/.gitkeep",
+    "docs/",
+    "docs/.gitkeep",
+    "footage/",
+    "footage/proxies/",
+    "footage/proxies/.gitkeep",
+    "footage/raw/",
+    "footage/raw/.gitkeep",
+    "manifests/",
+    "manifests/.gitkeep",
+    "prompts/",
+    "prompts/.gitkeep",
+    "renders/",
+    "renders/.gitkeep",
+    "review/",
+    "review/.gitkeep",
+    "storyboards/",
+    "storyboards/.gitkeep",
+    "tools/",
+    "tools/.gitkeep"
+  ]
+}

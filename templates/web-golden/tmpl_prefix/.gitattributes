@@ -1,0 +1,12 @@
+# Text files use LF line endings everywhere.
+* text=auto eol=lf
+
+# Handed-over design files and design exports are stored with Git LFS.
+design/sources/** filter=lfs diff=lfs merge=lfs -text
+design/exports/** filter=lfs diff=lfs merge=lfs -text
+
+# Folder notes and placeholders stay ordinary text files, at any depth.
+design/sources/**/README.md !filter !diff !merge text
+design/exports/**/README.md !filter !diff !merge text
+design/sources/**/.gitkeep !filter !diff !merge text
+design/exports/**/.gitkeep !filter !diff !merge text

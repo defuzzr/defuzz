@@ -1,0 +1,49 @@
+---
+name: Release
+
+"on":
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    name: Build & Upload Dist Artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.15.0
+
+      - name: Setup Node.js 24 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Verify and build workspace
+        run: pnpm xtask ci
+
+      - name: Upload built dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: >-
+            ${{ format('{0}-dist-{1}',
+            'tmpl-prefix',
+            github.ref_name) }}
+          path: packages/*/*/dist
+
+# Example publish step for a publishable SDK package:
+# - name: Publish SDK package
+#   run: >-
+#     pnpm --filter
+#     tmpl-prefix-core
+#     publish --access public --no-git-checks
+#   env:
+#     NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

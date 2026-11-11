@@ -1,0 +1,9 @@
+npm warn Unknown env config "store-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm error code E404
+npm error 404 Not Found - GET http://127.0.0.1:18080/s404/left-pad
+npm error 404
+npm error 404  The requested resource 'left-pad@*' could not be found or you do not have permission to access it.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: /home/user/probe/w/npmcache/_logs/2026-11-11T06_36_48_763Z-debug-0.log

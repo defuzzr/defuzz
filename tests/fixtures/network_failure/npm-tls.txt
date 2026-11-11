@@ -1,0 +1,5 @@
+npm warn Unknown env config "store-dir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm error code DEPTH_ZERO_SELF_SIGNED_CERT
+npm error errno DEPTH_ZERO_SELF_SIGNED_CERT
+npm error request to https://127.0.0.1:18082/html/left-pad failed, reason: self-signed certificate; if the root CA is installed locally, try running Node.js with --use-system-ca
+npm error A complete log of this run can be found in: /home/user/probe/w/npmcache/_logs/2026-11-11T06_36_54_297Z-debug-0.log

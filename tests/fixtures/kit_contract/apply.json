@@ -1,0 +1,292 @@
+{
+  "declared_dirs": [
+    {
+      "dir": "assets/canon",
+      "summary": "Locked reference images plus `CANON.md`. Source of truth for how things look.",
+      "why": "every generation is checked against canon"
+    },
+    {
+      "dir": "assets/references",
+      "summary": "Outside reference material: mood, style, real-world photos.",
+      "why": "inspiration is kept apart from canon"
+    },
+    {
+      "dir": "assets/characters",
+      "summary": "Character sheets: identity, proportions, wardrobe.",
+      "why": "characters are built once and reused per shot"
+    },
+    {
+      "dir": "assets/generated",
+      "summary": "New candidates straight from a generator. Not approved.",
+      "why": "unreviewed output never mixes with approved work"
+    },
+    {
+      "dir": "assets/approved",
+      "summary": "Candidates the owner approved. Move files here only on approval.",
+      "why": "approval is explicit"
+    },
+    {
+      "dir": "storyboards",
+      "summary": "Storyboard panels and sequence files.",
+      "why": "framing and story intent"
+    },
+    {
+      "dir": "prompts",
+      "summary": "Prompts, saved with the references each one used.",
+      "why": "results can be reproduced"
+    },
+    {
+      "dir": "footage/raw",
+      "summary": "Original camera or source footage. Read-only.",
+      "why": "originals are never altered"
+    },
+    {
+      "dir": "footage/proxies",
+      "summary": "Small working copies of raw footage. Rebuildable.",
+      "why": "edits stay fast"
+    },
+    {
+      "dir": "audio",
+      "summary": "Music, voice and sound sources.",
+      "why": "sound is tracked with the picture"
+    },
+    {
+      "dir": "renders",
+      "summary": "Render and generation output in progress. Disposable.",
+      "why": "work in progress is rebuildable"
+    },
+    {
+      "dir": "review",
+      "summary": "Review sheets and side-by-side comparisons awaiting a decision.",
+      "why": "one place for pending decisions"
+    },
+    {
+      "dir": "deliverables",
+      "summary": "Finished packages, one folder each (`<Title>-rNN`). Never edited after delivery.",
+      "why": "delivered work stays reproducible"
+    },
+    {
+      "dir": "manifests",
+      "summary": "Lists of what each deliverable contains and which revision.",
+      "why": "page and shot numbers resolve to exact files"
+    },
+    {
+      "dir": "archive",
+      "summary": "Retired versions. Never use as a source or reference.",
+      "why": "rejected work must not leak back in"
+    },
+    {
+      "dir": "docs",
+      "summary": "Notes and decisions.",
+      "why": "context survives between sessions"
+    },
+    {
+      "dir": "tools",
+      "summary": "Project scripts.",
+      "why": "pipeline code is not mixed with media"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "items": [
+    {
+      "path": "assets",
+      "state": "created"
+    },
+    {
+      "path": "assets/canon",
+      "state": "created"
+    },
+    {
+      "path": "assets/references",
+      "state": "created"
+    },
+    {
+      "path": "assets/characters",
+      "state": "created"
+    },
+    {
+      "path": "assets/generated",
+      "state": "created"
+    },
+    {
+      "path": "assets/approved",
+      "state": "created"
+    },
+    {
+      "path": "storyboards",
+      "state": "created"
+    },
+    {
+      "path": "prompts",
+      "state": "created"
+    },
+    {
+      "path": "footage",
+      "state": "created"
+    },
+    {
+      "path": "footage/raw",
+      "state": "created"
+    },
+    {
+      "path": "footage/proxies",
+      "state": "created"
+    },
+    {
+      "path": "audio",
+      "state": "created"
+    },
+    {
+      "path": "renders",
+      "state": "created"
+    },
+    {
+      "path": "review",
+      "state": "created"
+    },
+    {
+      "path": "deliverables",
+      "state": "created"
+    },
+    {
+      "path": "manifests",
+      "state": "created"
+    },
+    {
+      "path": "archive",
+      "state": "created"
+    },
+    {
+      "path": "docs",
+      "state": "created"
+    },
+    {
+      "path": "tools",
+      "state": "created"
+    },
+    {
+      "path": "assets/references/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "assets/characters/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "assets/generated/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "assets/approved/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "storyboards/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "prompts/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "footage/raw/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "footage/proxies/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "audio/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "renders/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "review/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "deliverables/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "manifests/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "archive/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "docs/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "tools/.gitkeep",
+      "state": "created"
+    },
+    {
+      "path": "assets/canon/CANON.md",
+      "state": "created"
+    },
+    {
+      "path": "AGENTS.md",
+      "state": "created"
+    },
+    {
+      "path": ".gitignore",
+      "state": "created"
+    },
+    {
+      "path": ".gitattributes",
+      "state": "created"
+    }
+  ],
+  "kit": "video-production",
+  "ok": true,
+  "placement_rules": [
+    {
+      "dest_dir": "assets/generated",
+      "kind": "images",
+      "lfs": true,
+      "match_ext": [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
+      ],
+      "reason": "unreviewed generator output, approved by moving it out"
+    },
+    {
+      "dest_dir": "renders",
+      "kind": "video",
+      "lfs": true,
+      "match_ext": [
+        ".mp4",
+        ".mov",
+        ".webm",
+        ".mkv"
+      ],
+      "reason": "declared by the video-production kit"
+    },
+    {
+      "dest_dir": "audio",
+      "kind": "audio",
+      "lfs": true,
+      "match_ext": [
+        ".wav",
+        ".mp3",
+        ".flac",
+        ".ogg"
+      ],
+      "reason": "declared by the video-production kit"
+    }
+  ],
+  "root": "/ROOT",
+  "schema": "componentize.kit/1",
+  "status": "pass"
+}

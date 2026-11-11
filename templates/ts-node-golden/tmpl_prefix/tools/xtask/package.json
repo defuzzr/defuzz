@@ -1,0 +1,7 @@
+{
+  "name": "xtask",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zero-dependency workspace platform automation runner.",
+  "type": "module"
+}

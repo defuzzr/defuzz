@@ -1,0 +1,134 @@
+{
+  "groups": [
+    {"id": "code", "title": "Code projects: tests and code checks included"},
+    {"id": "workspace", "title": "Workspaces: organised folders for creative and client work, no code checks"}
+  ],
+  "entries": {
+    "template:web-golden": {
+      "title": "Website",
+      "line": "Static pages only: no login or database (for an app, pick Web app). TypeScript, Vite",
+      "group": "code",
+      "order": 10
+    },
+    "template:python-golden": {
+      "title": "Python service or tool",
+      "line": "A web server and a command-line tool you can run, not a code library. Python, FastAPI",
+      "group": "code",
+      "order": 20
+    },
+    "template:ts-node-golden": {
+      "title": "TypeScript service or tool",
+      "line": "A web server and a command-line tool that run on Node.js, with no web pages. TypeScript",
+      "group": "code",
+      "order": 30
+    },
+    "template:go-golden": {
+      "title": "Go command-line program",
+      "line": "A program you run in a terminal, set up with tests and code checks. Go",
+      "group": "code",
+      "order": 40
+    },
+    "template:rust-golden": {
+      "title": "Rust command-line program",
+      "line": "A program you run in a terminal, set up with tests and code checks. Rust",
+      "group": "code",
+      "order": 50
+    },
+    "template:dotnet-golden": {
+      "title": "C# command-line program",
+      "line": "A program you run in a terminal, set up with tests and code checks. C#, .NET",
+      "group": "code",
+      "order": 60
+    },
+    "template:cpp-golden": {
+      "title": "C++ command-line program",
+      "line": "A program you run in a terminal, set up with tests and code checks. C++, CMake",
+      "group": "code",
+      "order": 70
+    },
+    "kit:image-set": {
+      "title": "AI image set",
+      "line": "Prompts, references and pictures from first tries to approved finals; not model training. ComfyUI",
+      "group": "workspace",
+      "order": 10
+    },
+    "kit:video-production": {
+      "title": "Film or video made with AI",
+      "line": "Reference looks, generated shots, footage, sound and finished cuts. Not a channel.",
+      "group": "workspace",
+      "order": 20
+    },
+    "kit:video-channel": {
+      "title": "YouTube or short video channel",
+      "line": "One folder per episode or short, plus brand, shared music and ideas. Not a single film.",
+      "group": "workspace",
+      "order": 30
+    },
+    "kit:music-production": {
+      "title": "Music or audio production",
+      "line": "One folder per song for lyrics, takes, stems, mixes and masters, plus shared samples.",
+      "group": "workspace",
+      "order": 40
+    },
+    "kit:comic-storyboard": {
+      "title": "Comic or storyboard",
+      "line": "Script, character sheets and one folder per page, from rough sketch to lettering.",
+      "group": "workspace",
+      "order": 50
+    },
+    "kit:studio-3d": {
+      "title": "3D art for many tools",
+      "line": "Models and scenes sent to Blender, Unreal, Godot or web; for one Unreal game, pick Unreal game.",
+      "group": "workspace",
+      "order": 60
+    },
+    "kit:game-assets": {
+      "title": "Unreal game with its art",
+      "line": "One Unreal game plus its Blender and Houdini source art; for art only, pick 3D art.",
+      "group": "workspace",
+      "order": 70
+    },
+    "kit:godot-game": {
+      "title": "Game made with Godot",
+      "line": "A solo game: scenes, scripts, game-ready art, with source art kept apart. Godot",
+      "group": "workspace",
+      "order": 80
+    },
+    "kit:lora-training": {
+      "title": "Train a custom AI model",
+      "line": "Training pictures or text, captions, runs and fixed tests; not for making images. LoRA",
+      "group": "workspace",
+      "order": 90
+    },
+    "kit:client-job": {
+      "title": "Client or freelance job",
+      "line": "Folders for the brief, contract, working files, review rounds, deliveries and invoices.",
+      "group": "workspace",
+      "order": 110
+    },
+    "kit:research-writing": {
+      "title": "Research paper or long writing",
+      "line": "Folders for sources, reading notes, outlines, section drafts, figures and citations.",
+      "group": "workspace",
+      "order": 120
+    },
+    "kit:web-app": {
+      "title": "Web app with design files",
+      "line": "App code and tests beside the designer's files; for plain pages, pick Website.",
+      "group": "workspace",
+      "order": 130
+    },
+    "kit:component-library": {
+      "title": "Library of reusable Python code",
+      "line": "Small tested pieces other scripts reuse; for a server or tool, pick Python service. Python",
+      "group": "workspace",
+      "order": 140
+    },
+    "kit:homelab": {
+      "title": "Home servers and network",
+      "line": "Notes and settings per machine, network rules, how-to steps and backup records.",
+      "group": "workspace",
+      "order": 150
+    }
+  }
+}

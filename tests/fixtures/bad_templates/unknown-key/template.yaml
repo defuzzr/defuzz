@@ -1,0 +1,11 @@
+id: unknown-key
+name: Unknown Key Template
+summary: Has an extra unknown key.
+kind: tool
+layout: single
+languages: [python]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py"]
+extra_field: surprise
+repos:
+  - name: tmpl_prefix

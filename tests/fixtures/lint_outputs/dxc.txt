@@ -1,0 +1,2 @@
+shaders/lit.hlsl:31:14: error: undeclared identifier 'albedoTex'
+./shaders/lit.hlsl:12:5: warning: implicit truncation of vector type [-Wconversion]

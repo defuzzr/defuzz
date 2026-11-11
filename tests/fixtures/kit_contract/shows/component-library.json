@@ -1,0 +1,56 @@
+{
+  "agents_block": "<!-- kit:component-library v3 begin (managed block: edit outside it) -->\n## Reusable Python code library\n\nThis folder is a library of reusable components. Write each piece of logic once, as an importable component, and reuse it. Never rebuild something that already exists.\n`.componentize/` holds receipt state written by the tool. It is gitignored. Never hand-edit it.\nRun `hermes componentize library` to check this layout. Componentize work starts only when the user says \"componentize <name>\".\n\n### Layout\n\n- `components/`: Reusable `snake_case.py` modules. Index: `components/COMPONENTS.md`.\n- `components/tests/`: Component tests.\n- `scripts/`: Thin runners (CLI entrypoints) that call components.\n- `specs/`: Componentize spec files, one per job.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n**Scope:** applies to new Python files and files you are substantially rewriting. Do not refactor, rename, or restructure existing files unless asked. If an existing file violates these rules, mention it and move on.\n\n#### 1. Reuse before you write\n- Before writing any check, audit, or utility, read `components/COMPONENTS.md`.\n- If a component covers the need, import it. If one nearly covers it, extend it with a parameter instead of writing a new one.\n- When you add or change a component, update its line in `COMPONENTS.md` in the same commit: function name, inputs, what it returns.\n\n#### 2. Where code lives\n- Anything likely to be needed twice goes in the shared package: one `snake_case.py` module per component in `components/`.\n- One-off tools may be a single standalone `snake_case.py` file. Never create boilerplate files (`exceptions.py`, `interfaces.py`, `constants.py`).\n- Keep functions short. Past ~300 lines, organise into private `_helper` functions in the same module, not into sibling modules (that would break section 5).\n- Never use hyphens in new `.py` filenames.\n- `components/` is the source of truth. A project that must ship standalone carries a vendored copy with the header `# vendored from components/<module>.py, do not edit`. Never edit a vendored copy; change the source and re-copy.\n\n#### 3. Components: plain data in, JSON-ready data out\n- Components are pure, importable functions. No `print()`, `input()`, `sys.exit()`, or `argparse` inside them. `logging` to stderr is allowed.\n- Return JSON-serializable data. Convert `Path` to `str`.\n- Every result includes `ok: bool`, `status: \"pass\" | \"fail\" | \"error\"`, `error: str | None`, and `findings: list[{id, severity, detail, fix}]` with `severity` in `\"error\" | \"warn\" | \"info\"`. `fail` means it ran and found a problem; `error` means it could not run.\n- Unknown is not a verdict: when a reading cannot be obtained, record it as `None`/`\"unknown\"` and emit at most an `info` finding.\n- Catch only expected operational errors (`OSError`, `subprocess.TimeoutExpired`, `json.JSONDecodeError`, `UnicodeDecodeError`, `ValueError` from parsing). Never use bare `except` or `except Exception`.\n\n#### 4. Explicit context\n- Components never read `~`, `Path.home()`, `Path.cwd()`, or environment variables, including in default argument values. Target paths and the environment mapping are required parameters.\n- Every `subprocess.run` call uses a list of arguments (no `shell=True`), explicit `cwd`, `capture_output=True`, `text=True`, `errors=\"replace\"`, `check=False`, and an explicit `timeout`.\n\n#### 5. Standard library only\n- Component modules import only the Python standard library and nothing from sibling modules. Each module must work when copied alone into another project.\n\n#### 6. Thin runners\n- A runner only parses input, resolves default paths and environment, calls components, formats output (human text or `--json`), and returns.\n- CLI runners define `main(argv: list[str] | None = None) -> int` at module level, with only `raise SystemExit(main())` under `if __name__ == \"__main__\":`.\n- Exit codes: `0` all checks pass, `1` at least one `fail`, `2` usage error or any `error`.\n<!-- kit:component-library end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "components",
+      "summary": "Reusable `snake_case.py` modules. Index: `components/COMPONENTS.md`.",
+      "why": "single source of truth for reusable logic"
+    },
+    {
+      "dir": "components/tests",
+      "summary": "Component tests.",
+      "why": "every component is tested before reuse"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Thin runners (CLI entrypoints) that call components.",
+      "why": "runners stay separate from logic"
+    },
+    {
+      "dir": "specs",
+      "summary": "Componentize spec files, one per job.",
+      "why": "receipts are reproducible from the spec"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "component-library",
+    "name": "Reusable Python code library",
+    "summary": "Reusable Python code library: snake_case.py modules with a COMPONENTS.md index and tests, thin runner scripts and componentize specs; not a UI or design-system component library.",
+    "tags": [
+      "python",
+      "code",
+      "modules",
+      "components",
+      "reuse",
+      "componentize"
+    ],
+    "version": 3
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitignore",
+    "AGENTS.md",
+    "components/",
+    "components/COMPONENTS.md",
+    "components/__init__.py",
+    "components/tests/",
+    "scripts/",
+    "specs/"
+  ]
+}

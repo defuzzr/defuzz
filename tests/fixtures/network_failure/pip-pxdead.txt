@@ -1,0 +1,3 @@
+WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0x79aade173230>: Failed to establish a new connection: [Errno 111] Connection refused'))': /simple/requests/
+ERROR: Could not find a version that satisfies the requirement requests (from versions: none)
+ERROR: No matching distribution found for requests

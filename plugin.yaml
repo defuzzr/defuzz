@@ -1,0 +1,61 @@
+name: defuzz
+version: "0.1.0"
+manifest_version: 2
+api_version: 1
+description: "Project Defuzz: a read-only, model-free audit of how a Hermes home has bloated and what agents may do unattended, plus project setup (templates, kits, adopted copies) with a plain-markdown AGENTS.md, automatic placement of new write_file paths, and human-invoked whole-project lint."
+author: "defuzzr"
+license: MIT
+requires_hermes: ">=0.23.0"
+# Python 3.13 or newer. Hermes has no manifest field for a Python version, so
+# register() refuses older Pythons with one line and registers nothing.
+tags:
+  - workspace
+  - scaffold
+  - organization
+  - git
+  - placement
+# Linux only: macOS and Windows are not supported. register() refuses other systems.
+# (Hermes enforces `platforms` only from the catalog entry at install; mirrored here.)
+platforms:
+  - linux
+# Compatible ranges. Floor = the version the tests ran against; upper bound = next
+# release line that may change behaviour (0.x minors and LLVM majors change output).
+# PyYAML is needed by the audit and templates; the rest are the lint/format wheels
+# used only by `defuzz lint` and `defuzz lint setup`.
+python_dependencies:
+  - "PyYAML>=6.0.3,<7"
+  - "ruff>=0.15.22,<0.16"
+  - "yamllint>=1.38.0,<2"
+  - "taplo>=0.9.3,<0.10; platform_machine != 'aarch64' and platform_machine != 'ARM64'"
+  - "rumdl>=0.3.2,<0.4"
+  - "shfmt-py>=4.2.0,<5"
+  - "shellcheck-py>=0.11.0.1,<0.12; platform_machine != 'aarch64' and platform_machine != 'ARM64'"
+  - "hadolint-py>=2.15.1.3,<3"
+  - "clang-format>=23.1.5,<24"
+  - "clang-tidy>=23.1.4,<24"
+  - "gdtoolkit>=4.5.0,<5"
+provides_tools:
+  - defuzz_audit
+  - defuzz_project
+  - defuzz_place
+# Complete registration set (tests/test_plugin_readiness.py verifies equality).
+# Placement only: no automatic lint, drift checks, or edit gates.
+provides_hooks:
+  - pre_tool_call
+  - transform_tool_result
+config_schema:
+  projects_root:
+    type: string
+    default: ""
+    label: "Projects folder"
+    description: "Where new projects are created. Leave empty to be asked the first time you create a project (the default suggestion is a folder named Tools in your home folder)."
+  auto_place_writes:
+    type: bool
+    default: true
+    label: "Auto-place new write_file paths"
+    description: "Route new write_file calls in adopted projects into declared folders or _inbox/."
+  agents_md_max_lines:
+    type: int
+    default: 40
+    label: "AGENTS.md recommended length"
+    description: "Target length for generated AGENTS.md (minimum 11 lines; lower values are clamped to MIN_ROOT_LINES=11). Longer lists move to .adopt/AGENTS.details.md automatically. Never fails."

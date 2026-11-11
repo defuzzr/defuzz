@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { run__PASCAL_NAME__App } from "./index.js";
+
+describe("__PACKAGE_NAME__", () => {
+  it("runs application entrypoint cleanly", async () => {
+    const code = await run__PASCAL_NAME__App();
+    assert.equal(code, 0);
+  });
+});

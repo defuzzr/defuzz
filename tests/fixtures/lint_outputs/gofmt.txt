@@ -1,0 +1,3 @@
+cmd/server/main.go
+./pkg/util/util.go
+pkg/broken/bad.go:19:2: expected '}', found 'EOF'

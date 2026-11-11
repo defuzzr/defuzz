@@ -1,0 +1,20 @@
+[
+  {
+    "RuleName": "PSAvoidUsingCmdletAliases",
+    "Severity": "Warning",
+    "ScriptName": "build.ps1",
+    "ScriptPath": "/repo/scripts/build.ps1",
+    "Line": 8,
+    "Column": 5,
+    "Message": "'% ' is an alias of 'ForEach-Object'. Alias can introduce possible problems."
+  },
+  {
+    "RuleName": "PSUseDeclaredVarsMoreThanAssignments",
+    "Severity": 2,
+    "ScriptName": "clean.ps1",
+    "ScriptPath": "./scripts/clean.ps1",
+    "Line": 22,
+    "Column": 1,
+    "Message": "The variable 'unusedVar' is assigned but never used."
+  }
+]

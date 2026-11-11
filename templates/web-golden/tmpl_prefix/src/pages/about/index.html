@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- include: head.html -->
+    <title>
+      About - tmpl_prefix
+    </title>
+    <meta name="description" content="How this site is built: pages, shared parts, design tokens and checks." />
+  </head>
+  <body>
+    <!-- include: header.html current=/about/ -->
+    <main id="main" tabindex="-1">
+      <h1>About this site</h1>
+      <p class="lead">
+        This page explains how the site is put together, so you can change it with
+        confidence.
+      </p>
+
+      <h2>Pages</h2>
+      <p>
+        Every HTML file in <code>src/pages/</code> is one page. The file
+        <code>src/pages/about/index.html</code> is served at the address <code>/about/</code>.
+      </p>
+
+      <h2>Shared parts</h2>
+      <p>
+        The header and footer live once in <code>src/components/</code>. A page includes
+        them with a comment such as <code>&lt;!-- include: footer.html --&gt;</code>, which
+        is replaced by the file when the site is served or built. The header marks the link
+        to the page you are on: <code>&lt;!-- include: header.html current=/about/ --&gt;</code>.
+      </p>
+
+      <h2>Design tokens</h2>
+      <p>
+        Colours, fonts, type sizes and spacing are named values in
+        <code>design/tokens/tokens.css</code>. The stylesheet in <code>src/styles/</code>
+        takes all of these from those names, so one change there updates the whole site.
+      </p>
+
+      <h2>Checks</h2>
+      <p>
+        The command <code>pnpm xtask ci</code> checks formatting, types and the unit tests.
+        The tests list every colour pair the stylesheet declares, check its contrast, and
+        fail when a rule uses colour in a way they cannot read. It then builds the site and
+        checks the built files, including that no link points to a missing page.
+      </p>
+      <p class="note">Go back to the <a href="/">home page</a>.</p>
+    </main>
+    <!-- include: footer.html -->
+  </body>
+</html>

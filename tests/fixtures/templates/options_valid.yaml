@@ -1,0 +1,17 @@
+id: options-valid
+name: Options Valid Fixture
+summary: Template fixture with a valid options block.
+kind: service
+layout: mono
+languages: [typescript]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.ts", ".env.example"]
+options:
+  http_adapter:
+    label: "HTTP adapter"
+    choices: [hono, node_http]
+    default: hono
+    env_key: TMPL_PREFIX_HTTP_ADAPTER
+    description: "Both adapters ship; this picks the default wired in config."
+repos:
+  - name: tmpl_prefix

@@ -1,0 +1,95 @@
+{
+  "declared_dirs": [
+    {
+      "dir": "foundation",
+      "summary": "Layer 0 Go primitives and error values",
+      "why": "Keep base Go package free of higher-layer imports",
+      "source": "explicit"
+    },
+    {
+      "dir": "domain",
+      "summary": "Layer 1 pure Go domain package and colocated tests",
+      "why": "Keep business rules and *_test.go files together in one package",
+      "source": "explicit"
+    },
+    {
+      "dir": "adapters",
+      "summary": "Layer 2 Go integration adapters and colocated tests",
+      "why": "Isolate external I/O implementations from domain packages",
+      "source": "explicit"
+    },
+    {
+      "dir": "apps",
+      "summary": "Layer 3 Go CLI composition roots",
+      "why": "Keep package main entrypoints under apps/",
+      "source": "explicit"
+    },
+    {
+      "dir": "xtask",
+      "summary": "Standalone Go workspace automation runner",
+      "why": "Run gofmt, go vet, golangci-lint, go test, and layer checks",
+      "source": "explicit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Architecture and component boundary documentation",
+      "why": "Keep project Markdown notes and design docs out of the root",
+      "source": "explicit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Shell and PowerShell helper scripts",
+      "why": "Keep small automation scripts out of the root and out of the code folders",
+      "source": "explicit"
+    }
+  ],
+  "placement_rules": [
+    {
+      "kind": "docs",
+      "match_ext": [
+        ".md",
+        ".rst",
+        ".adoc",
+        ".mmd",
+        ".puml",
+        ".drawio"
+      ],
+      "root_only": true,
+      "dest_dir": "docs",
+      "lfs": false,
+      "reason": "Notes, guides and diagram sources live in docs/ in this workspace",
+      "source": "explicit"
+    },
+    {
+      "kind": "scripts",
+      "match_ext": [
+        ".sh",
+        ".bash",
+        ".ps1"
+      ],
+      "root_only": true,
+      "dest_dir": "scripts",
+      "lfs": false,
+      "reason": "Shell and PowerShell scripts live in scripts/ in this workspace",
+      "source": "explicit"
+    }
+  ],
+  "protected_root_files": [
+    "go.mod",
+    "go.sum",
+    "go.work",
+    "go.work.sum",
+    ".golangci.yml",
+    ".golangci.yaml",
+    "Makefile",
+    "GNUmakefile",
+    "Taskfile.yml",
+    "Taskfile.yaml",
+    "AGENT.md",
+    "WARP.md",
+    "QWEN.md",
+    "CRUSH.md",
+    "DCO.md",
+    "ACKNOWLEDGMENTS.md"
+  ]
+}

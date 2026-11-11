@@ -1,0 +1,340 @@
+@import "../../design/tokens/tokens.css";
+
+/* Base */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--line-height-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3 {
+  line-height: var(--line-height-heading);
+  margin: var(--space-l) 0 var(--space-xs);
+}
+
+h1 {
+  font-size: var(--text-2xl);
+  overflow-wrap: anywhere;
+  margin-top: 0;
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+p,
+ul,
+ol {
+  margin: 0 0 var(--space-s);
+  max-width: var(--measure);
+}
+
+li + li {
+  margin-top: var(--space-3xs);
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  padding: 0 var(--space-3xs);
+  border-radius: var(--radius-s);
+  background: var(--color-surface);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+/* Links */
+
+a {
+  color: var(--color-link);
+  text-underline-offset: var(--underline-offset);
+  transition: color var(--duration-fast) ease;
+}
+
+a:visited {
+  color: var(--color-link-visited);
+}
+
+a:hover {
+  color: var(--color-link-hover);
+  text-decoration-thickness: var(--underline-hover);
+}
+
+/* Focus: one visible ring for every focusable element */
+
+:focus-visible {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+
+main:focus {
+  outline: none;
+}
+
+/* Skip link: hidden (but still reachable with the keyboard) until it has focus.
+   Then it is shown at the very top of the page, in the normal flow, so it pushes the
+   header down instead of covering it. Its margin leaves room for its focus ring. */
+
+.skip-link {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  align-self: flex-start;
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-s);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.skip-link:visited,
+.skip-link:hover {
+  color: var(--color-accent-text);
+}
+
+.skip-link:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  margin: var(--control-gap);
+}
+
+/* Header */
+
+.site-header,
+.site-footer {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.site-header-inner,
+.site-footer-inner,
+main {
+  width: 100%;
+  max-width: var(--page-width);
+  margin-inline: auto;
+  padding-inline: var(--space-s);
+}
+
+.site-header-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs) var(--space-m);
+  padding-block: var(--space-xs);
+}
+
+.site-name {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  text-decoration: none;
+  margin-inline-end: auto;
+  /* A long project name without spaces wraps instead of widening the page. */
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.site-name,
+.site-name:visited,
+.nav-list a,
+.nav-list a:visited {
+  color: var(--color-link);
+}
+
+.site-name:hover,
+.nav-list a:hover {
+  color: var(--color-link-hover);
+}
+
+.nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--control-gap) var(--space-s);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav-list li + li {
+  margin-top: 0;
+}
+
+.nav-list a {
+  display: inline-block;
+  padding-block: var(--space-3xs);
+}
+
+.nav-list a[aria-current="page"] {
+  font-weight: var(--font-weight-bold);
+  text-decoration-thickness: var(--underline-current);
+}
+
+.nav-list a:not([aria-current="page"]) {
+  text-decoration: none;
+}
+
+/* Theme switch (shown by src/components/theme-switch.ts) */
+
+.theme-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--control-gap);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.theme-switch[hidden] {
+  display: none;
+}
+
+/* A floated legend is laid out like normal text, inline with the buttons. */
+.theme-switch-label {
+  float: inline-start;
+  padding: 0;
+  margin-inline-end: var(--space-2xs);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.theme-switch button {
+  font: inherit;
+  font-size: var(--text-sm);
+  min-height: var(--control-min-height);
+  padding: var(--space-3xs) var(--space-xs);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-m);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) ease,
+    border-color var(--duration-fast) ease;
+}
+
+.theme-switch button:hover {
+  border-color: var(--color-text);
+}
+
+.theme-switch button[aria-pressed="true"] {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.theme-switch button[aria-pressed="true"]:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: var(--color-accent-text);
+}
+
+/* Main content */
+
+main {
+  flex: 1;
+  padding-block: var(--space-l);
+}
+
+.lead {
+  font-size: var(--text-lg);
+  color: var(--color-text-muted);
+}
+
+.note {
+  color: var(--color-text-muted);
+}
+
+.figure {
+  margin: var(--space-m) 0;
+  max-width: var(--figure-width);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+
+.figure figcaption {
+  padding: var(--space-2xs) var(--space-xs);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+/* Footer */
+
+.site-footer-inner {
+  padding-block: var(--space-m);
+}
+
+.site-footer p {
+  margin-bottom: var(--space-3xs);
+}
+
+.footer-note {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Forced colours (for example Windows contrast themes) replace the token colours.
+   Mark the pressed theme button with the system highlight so it is not shown by
+   font weight alone. */
+
+@media (forced-colors: active) {
+  .theme-switch button[aria-pressed="true"],
+  .theme-switch button[aria-pressed="true"]:hover {
+    forced-color-adjust: none;
+    background: Highlight;
+    border-color: Highlight;
+    color: HighlightText;
+  }
+
+  .theme-switch button:focus-visible {
+    outline-color: CanvasText;
+  }
+}
+
+/* Motion: transitions use the duration tokens, which are 0ms when the system asks
+   for reduced motion (see tokens.css). There are no animations. */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

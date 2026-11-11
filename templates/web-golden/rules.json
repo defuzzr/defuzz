@@ -1,0 +1,170 @@
+{
+  "declared_dirs": [
+    {
+      "dir": "design",
+      "summary": "Design inputs: sources, tokens, specs and exports.",
+      "why": "Keeps design material in one tree, apart from code.",
+      "source": "explicit"
+    },
+    {
+      "dir": "design/sources",
+      "summary": "Handed-over design files, no code.",
+      "why": "Keeps original design files apart from code; tracked with Git LFS by .gitattributes.",
+      "source": "explicit"
+    },
+    {
+      "dir": "design/tokens",
+      "summary": "Design tokens: the one source of truth for colour, type, space.",
+      "why": "One place to change the look; src/styles imports these and never redefines them.",
+      "source": "explicit"
+    },
+    {
+      "dir": "design/specs",
+      "summary": "Written specs and notes.",
+      "why": "Design intent lives next to the tokens, not in code comments.",
+      "source": "explicit"
+    },
+    {
+      "dir": "design/exports",
+      "summary": "Images exported from design tools.",
+      "why": "Separates tool exports from images the pages import; tracked with Git LFS.",
+      "source": "explicit"
+    },
+    {
+      "dir": "public",
+      "summary": "Files served as-is, such as favicon.svg and robots.txt; folder README.md and .gitkeep files are not published.",
+      "why": "Vite copies this folder unchanged into the build (publicDir).",
+      "source": "explicit"
+    },
+    {
+      "dir": "public/fonts",
+      "summary": "Self-hosted fonts only (may be empty; keep a .gitkeep).",
+      "why": "Fonts must be local because no remote URL may load at runtime.",
+      "source": "explicit"
+    },
+    {
+      "dir": "src",
+      "summary": "Site source: pages, components, styles, assets and helpers.",
+      "why": "The Vite build reads the site only from here.",
+      "source": "explicit"
+    },
+    {
+      "dir": "src/pages",
+      "summary": "The HTML pages.",
+      "why": "This is the Vite root; each HTML file here becomes a page.",
+      "source": "explicit"
+    },
+    {
+      "dir": "src/components",
+      "summary": "Reusable page parts: HTML partials, the script entry site.ts, and component TypeScript.",
+      "why": "Pages pull shared partials in with <!-- include: name.html --> at build time.",
+      "source": "explicit"
+    },
+    {
+      "dir": "src/styles",
+      "summary": "Stylesheets (import the tokens; never redefine them).",
+      "why": "One place for CSS; it must not redefine tokens.",
+      "source": "explicit"
+    },
+    {
+      "dir": "src/assets",
+      "summary": "Images the pages import.",
+      "why": "Imported images are hashed and checked by the build.",
+      "source": "explicit"
+    },
+    {
+      "dir": "src/lib",
+      "summary": "Small shared TypeScript helpers, including the contrast pair list and the CSS rule reader the tests use.",
+      "why": "Plain logic that unit tests can cover without a browser.",
+      "source": "explicit"
+    },
+    {
+      "dir": "tests",
+      "summary": "Tests: unit tests and optional browser tests.",
+      "why": "Keeps tests out of src; each runner reads its own sub-folder.",
+      "source": "explicit"
+    },
+    {
+      "dir": "tests/unit",
+      "summary": "Unit tests named *.test.ts or *.spec.ts.",
+      "why": "vite.config.ts test.include discovers tests only here.",
+      "source": "explicit"
+    },
+    {
+      "dir": "tests/e2e",
+      "summary": "Optional browser tests named *.e2e.ts.",
+      "why": "playwright.config.ts testMatch; run by pnpm xtask e2e, not by pnpm xtask ci.",
+      "source": "explicit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Helper scripts, such as check-contrast.ts.",
+      "why": "Keeps one-off tools out of src and out of the check runner; pnpm contrast runs check-contrast.ts.",
+      "source": "explicit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Project docs (not README), such as the accessibility and check guides.",
+      "why": "Gives loose Markdown one home instead of the project root.",
+      "source": "explicit"
+    },
+    {
+      "dir": "tools",
+      "summary": "Project tooling; holds the check runner in tools/xtask.",
+      "why": "Keeps the check runner apart from site code.",
+      "source": "explicit"
+    },
+    {
+      "dir": "tools/xtask",
+      "summary": "The check runner: main.ts, dist-check.ts, site-plugins.ts.",
+      "why": "pnpm xtask runs tools/xtask/main.ts; it is locked.",
+      "source": "explicit"
+    }
+  ],
+  "placement_rules": [
+    {
+      "kind": "docs",
+      "match_ext": [
+        ".md"
+      ],
+      "root_only": true,
+      "dest_dir": "docs",
+      "lfs": false,
+      "reason": "Loose Markdown notes go in docs/; README, LICENSE, CHANGELOG and other governance files stay",
+      "source": "explicit"
+    },
+    {
+      "kind": "test",
+      "match_ext": [
+        ".ts"
+      ],
+      "match_glob": [
+        "*.test.ts",
+        "*.spec.ts"
+      ],
+      "root_only": true,
+      "dest_dir": "tests/unit",
+      "lfs": false,
+      "reason": "Vitest finds tests only in tests/unit/ (test.include in vite.config.ts); *.e2e.ts never moves",
+      "source": "explicit"
+    }
+  ],
+  "protected_root_files": [
+    "package.json",
+    "pnpm-lock.yaml",
+    "biome.json",
+    "tsconfig.json",
+    "vite.config.ts",
+    "playwright.config.ts",
+    ".nvmrc",
+    ".npmrc",
+    ".editorconfig",
+    ".gitattributes",
+    ".gitignore",
+    ".xtask-cache",
+    "dist",
+    "test-results",
+    "playwright-report",
+    "coverage"
+  ]
+}

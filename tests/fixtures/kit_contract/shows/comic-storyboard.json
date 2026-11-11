@@ -1,0 +1,207 @@
+{
+  "agents_block": "<!-- kit:comic-storyboard v1 begin (managed block: edit outside it) -->\n## Comic and storyboard\n\n`project` is a comic and storyboard workspace.\nStart a page by copying `pages/_template/` to `pages/pNNN/`, and a character by copying `characters/_template/`.\n\n### Layout\n\n- `script/`: Story text: outline.md and per-page scripts in script/pages/.\n- `bible/`: World, tone, palette and style rules.\n- `characters/`: One folder per character; copy _template/ (sheet/, read-only refs/).\n- `refs/`: Read-only style, location and prop references.\n- `templates/`: Page size, bleed, safe area and panel grids.\n- `fonts/`: Lettering fonts with their licence files.\n- `thumbnails/`: Small page layouts for pacing and composition.\n- `pages/`: Per-page folders (copy _template/: roughs, inks, colours, letters, assembly).\n- `gen/`: Ignored by Git, disposable raw AI generations in dated subfolders.\n- `animatic/`: Storyboards only: timed panels with scratch audio.\n- `review/`: Disposable marked-up pages and notes per review round.\n- `export/`: Finished output by target: web/, print/ and book/.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Page folders in `pages/` are named `p` plus three digits (copy `pages/_template/`); panel files are `p001_pn01_<stage>.ext`.\n- Work moves one way through each `pages/pNNN/` folder: `roughs/` → `inks/` → `colours/` → `letters/` → `assembly/`. Never edit an earlier stage's file from a later stage.\n- Raw generations go in `gen/YYYY-MM-DD/`; copy the chosen one into `pages/pNNN/roughs/`.\n- Dialogue comes from `script/pages/`; if art and script disagree, the script wins.\n- A character's look comes from `characters/<name>/sheet/` (copied from `characters/_template/`); do not invent outfit or feature changes.\n- Lettering stays on editable layers; never flatten text into art.\n- Only fonts in `fonts/` may be used.\n- Changing the script, a character sheet or the page count needs approval.\n- Files in `export/` are rebuilt from `pages/pNNN/assembly/`, never edited by hand.\n- Run `git lfs install` once before the first commit.\n<!-- kit:comic-storyboard end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "script",
+      "summary": "Story text: outline.md and per-page scripts in script/pages/.",
+      "why": "dialogue and action stay separate from artwork"
+    },
+    {
+      "dir": "script/pages",
+      "summary": "One .md per page: panels, action, dialogue.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "bible",
+      "summary": "World, tone, palette and style rules.",
+      "why": "world and visual style stay consistent across pages"
+    },
+    {
+      "dir": "characters",
+      "summary": "One folder per character; copy _template/ (sheet/, read-only refs/).",
+      "why": "each character's design and references stay in one place"
+    },
+    {
+      "dir": "characters/_template",
+      "summary": "Copy this to start a character.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "characters/_template/sheet",
+      "summary": "Turnarounds, expressions, outfits.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "characters/_template/refs",
+      "summary": "Read-only supplied reference for this character.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "refs",
+      "summary": "Read-only style, location and prop references.",
+      "why": "supplied reference material is never modified"
+    },
+    {
+      "dir": "templates",
+      "summary": "Page size, bleed, safe area and panel grids.",
+      "why": "pages share uniform dimensions and safe areas"
+    },
+    {
+      "dir": "fonts",
+      "summary": "Lettering fonts with their licence files.",
+      "why": "only licensed project fonts are used for lettering"
+    },
+    {
+      "dir": "thumbnails",
+      "summary": "Small page layouts for pacing and composition.",
+      "why": "pacing and composition are planned before full page art"
+    },
+    {
+      "dir": "pages",
+      "summary": "Per-page folders (copy _template/: roughs, inks, colours, letters, assembly).",
+      "why": "each page's pipeline stages stay isolated"
+    },
+    {
+      "dir": "pages/_template",
+      "summary": "Copy this to start a page (p001, p002 ...).",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "pages/_template/roughs",
+      "summary": "Panel pencils or first-pass generations.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "pages/_template/inks",
+      "summary": "Clean line art per panel.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "pages/_template/colours",
+      "summary": "Flats and rendered colour per panel.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "pages/_template/letters",
+      "summary": "Balloons, captions and SFX as editable layers.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "pages/_template/assembly",
+      "summary": "Composed page working file.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "gen",
+      "summary": "Ignored by Git, disposable raw AI generations in dated subfolders.",
+      "why": "raw generations do not bloat Git or mix with chosen art"
+    },
+    {
+      "dir": "animatic",
+      "summary": "Storyboards only: timed panels with scratch audio.",
+      "why": "timing and audio checks stay separate from static pages"
+    },
+    {
+      "dir": "review",
+      "summary": "Disposable marked-up pages and notes per review round.",
+      "why": "review markups never overwrite working page files"
+    },
+    {
+      "dir": "export",
+      "summary": "Finished output by target: web/, print/ and book/.",
+      "why": "built deliverables stay separate from editable assembly files"
+    },
+    {
+      "dir": "export/web",
+      "summary": "RGB pages and vertical strips for screens.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "export/print",
+      "summary": "High-res pages with bleed.",
+      "why": "declared by the comic-storyboard kit"
+    },
+    {
+      "dir": "export/book",
+      "summary": "Assembled PDF, CBZ or EPUB.",
+      "why": "declared by the comic-storyboard kit"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "comic-storyboard",
+    "name": "Comic and storyboard",
+    "summary": "Comic and storyboard workspace with script, character sheets, per-page stage folders, animatics, review rounds and Git LFS rules.",
+    "tags": [
+      "comic",
+      "storyboard",
+      "manga",
+      "panels",
+      "illustration",
+      "comics",
+      "storyboards",
+      "graphic",
+      "novel",
+      "animatic",
+      "character"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "animatic/",
+    "animatic/.gitkeep",
+    "bible/",
+    "bible/.gitkeep",
+    "characters/",
+    "characters/_template/",
+    "characters/_template/refs/",
+    "characters/_template/refs/.gitkeep",
+    "characters/_template/sheet/",
+    "characters/_template/sheet/.gitkeep",
+    "export/",
+    "export/book/",
+    "export/book/.gitkeep",
+    "export/print/",
+    "export/print/.gitkeep",
+    "export/web/",
+    "export/web/.gitkeep",
+    "fonts/",
+    "fonts/.gitkeep",
+    "gen/",
+    "gen/.gitkeep",
+    "pages/",
+    "pages/_template/",
+    "pages/_template/assembly/",
+    "pages/_template/assembly/.gitkeep",
+    "pages/_template/colours/",
+    "pages/_template/colours/.gitkeep",
+    "pages/_template/inks/",
+    "pages/_template/inks/.gitkeep",
+    "pages/_template/letters/",
+    "pages/_template/letters/.gitkeep",
+    "pages/_template/roughs/",
+    "pages/_template/roughs/.gitkeep",
+    "refs/",
+    "refs/.gitkeep",
+    "review/",
+    "review/.gitkeep",
+    "script/",
+    "script/outline.md",
+    "script/pages/",
+    "script/pages/.gitkeep",
+    "templates/",
+    "templates/.gitkeep",
+    "thumbnails/",
+    "thumbnails/.gitkeep"
+  ]
+}

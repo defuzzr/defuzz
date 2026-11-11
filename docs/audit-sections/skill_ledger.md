@@ -1,0 +1,94 @@
+# Skill change ledger and backup store (`report.skill_ledger`)
+
+## What it measures
+
+`audit.skill_ledger` (`audit_skill_ledger(profile_path, *, curator_enabled=None, clock=None)`; the caller passes only `profile_path`) reads Hermes's per-mutation skill ledger (`skills/.curator_ledger.jsonl`), stats the content-addressed blob store (`.curator_backups/blobs/`) and the snapshot tarballs (`skills/.curator_backups/<utc-id>/skills.tar.gz`), and reads `skills/.usage.json`, `skills/.bundled_manifest` and `config.yaml` (only `curator.enabled`). It reports:
+
+1. **Changes by recorded actor label (`changes_by_actor`, `changes_by_month`, `curator_or_agent_changes`, `curator_or_agent_share`, `date_range`).** Each ledger row is counted under the `actor` string Hermes wrote: `curator`, `agent`, `user`, or `other` for any other value. Months (`changes_by_month[]`: integer `year` and `month`, UTC) and the date range (`date_range.earliest_epoch_s`, `latest_epoch_s`: integer Unix seconds; `span_days`) come from ledger timestamps only, never from the clock. Each month row has `total`, `curator`, `agent`, `user`, `other`.
+
+   What each label means, from the only writer (`tools/skill_ledger.py:298-311` `append_entry`: an explicit `actor` in `{curator, agent, user}` (line 38), else `derive_actor()` (lines 68-78)):
+
+   | Label | Written when |
+   |---|---|
+   | `curator` | Curator archive transitions (`agent/curator.py:195-206`); any `skill_manage` call inside a background review fork: the curator's LLM pass (`agent/curator.py:1129`), the self-improvement review, and also a `/refine` a person asked for (`tools/skill_provenance.py:29-44`). |
+   | `agent` | Every other `skill_manage` call (`tools/skill_manager_tool.py:750-760,812-833`): chat turns, **including edits a person asked for**, cron and subagent runs; **approved staged writes** replayed by `/skills approve` or the TUI review (`tools/skill_manager_tool.py:717-723`, `hermes_cli/write_approval_commands.py:141-142`, `tools/skills_review.py:225`); `hermes curator rollback <entry>` (`hermes_cli/curator.py:542`, no override). |
+   | `user` | Only `hermes curator archive` / `restore` (`hermes_cli/curator.py:330-355`) and `hermes curator purge` (`hermes_cli/curator.py:508-509`). |
+   | `other` | A value Hermes never writes. |
+
+   **Not recorded at all:** edits to skill files made outside Hermes (by hand or by other tools), hub install/update and bundled-skill sync (no ledger call in `tools/skills_hub*.py` or `tools/skills_sync.py:396-457`), anything written while `skills.ledger` is false (`tools/skill_ledger.py:113-115`), and old rows dropped by the size trim (`tools/skill_ledger.py:343-415`). So `user` is not "changes a person made", and `agent` is not "changes nobody asked for".
+
+2. **Per-skill history (`skills`).** One row per ledger skill, sorted by ledger name; the name itself is never reported. `path`: the absolute real path of the skill's folder (`<profile>/skills/<name>` or `<profile>/skills/<category>/<name>`) when it exists now, else `null`; `skills_without_folder_count` counts the `null` rows. The folder is found by the ledger's recorded location (the part after a `/skills/` segment of the latest recorded `SKILL.md` path; Hermes records absolute paths, `tools/skill_ledger.py:172`) or, when the ledger records no `SKILL.md` path, by the only folder of that name holding a regular `SKILL.md`. It is `null` when the folder is gone (deleted or renamed skill), the recorded location is not on disk, several folders match, it is deeper than `skills/<category>/<name>`, the matching entry is a symlink or credential-named (refused), the skills walk was incomplete (time budget, entry cap, unreadable tree), or the ledger name is not one plain path component (for example a string shaped like an absolute path). Then `changes`; `distinct_versions` (distinct `SKILL.md` sha256 values, or all recorded file hashes when `SKILL.md` never appears); `first_size_bytes`, `latest_size_bytes`, `growth_ratio`, `growth_coverage`; `peak_changes_24h` (most rows within any 86,400 s window of ledger timestamps); `noop_changes`; `deleted`, `changes_before_delete` (latest action is `delete`/`archive`/`purge`, `tools/skill_ledger.py:37`); `near_identical_size_pairs` (consecutive recorded `SKILL.md` sizes differing by < 2%, a size-only heuristic).
+   - Growth: the ledger stores `{path, sha256}` only, no sizes (`tools/skill_ledger.py:158-173`), so sizes are `lstat` sizes of the blobs. First and latest are the first and last `SKILL.md` hashes in **ledger (append) order** (`tools/skill_ledger.py:315-317`), not timestamp order: the before-state of the skill's first row that names `SKILL.md`, then each after-state. If either blob is missing, `growth_coverage` is `could_not_verify`, `growth_ratio` is `null` and the skill is counted in `skills_growth_could_not_verify` (reason `growth_blob_missing`); it is never reported as growth 1.0 or measured from a later base. `not_applicable` when no `SKILL.md` hash is recorded.
+   - No-op: a row whose recorded after-state equals its before-state. Hermes drops unchanged paths from both sides (`tools/skill_ledger.py:285-296`), so a successful write that changed nothing is recorded with both sides empty (counted for `patch`, `edit`, `write_file`, `remove_file`). `pre-rollback` rows record before == after by design (`tools/skill_ledger.py:306-308`) and are not no-ops. A `SKILL.md` with a new hash but the same byte size is a real content change and is not a no-op.
+
+3. **Top-10 lists (`top_skills_by_changes`, `top_skills_by_growth`).** Each is `{paths, unlocated_count}`: `paths` lists the located folders (same values as `skills[].path`) among the ten highest-ranked skills, in rank order; `unlocated_count` counts the rest of the ten. Deterministic tie-breaks (ledger-name order; for growth, larger latest size first). Only `growth_coverage: verified` skills rank for growth.
+
+4. **Backup store (`backup_store`).** `blob_count`, `blob_bytes` (regular 64-hex files in `.curator_backups/blobs/`, `tools/skill_ledger.py:88-89`); `orphan_blob_count`, `orphan_blob_bytes` (blobs no ledger row references); `all_blobs_orphaned_no_ledger`; `missing_blob_hashes` (referenced, not on disk); `references_complete` (every ledger line was read and parsed: required before any blob is called unreferenced, as Hermes itself skips blob GC on a malformed line, `tools/skill_ledger.py:470-481`); `tarball_count`, `tarball_bytes` (`agent/curator_backup.py:55-68`). Snapshot tarballs are retained rollback points (newest `curator.backup.keep`, default 2: `agent/curator_backup.py:30,118-120,200-211`); their weight is reported, never called orphaned.
+
+5. **Bookkeeping (`bookkeeping_orphans`).** Counts only (these names have no folder by definition, so none is reported). `orphan_count` / `usage_orphan_count`: records with `"state": "active"` (default when absent) in `skills/.usage.json` (`tools/skill_usage.py:35,51-52`) and no folder of that name under `skills/` (or `shared/skills/`). Usage records are keyed by frontmatter name (`hermes_cli/curator.py:479-481`), so a folder named differently also counts. `manifest_entries_not_on_disk_count`: `.bundled_manifest` names with no folder; this is how Hermes remembers a user-deleted bundled skill so sync does not re-add it (`tools/skills_sync.py:6,431-433`), so it is counted only, never a finding.
+
+6. **Curator setting (`curator_enabled`, `curator_enabled_source`).** Hermes `agent/curator.py` `is_enabled()`: `bool(curator.enabled)`, default true. Read from `<profile>/config.yaml` with the bounded reader `write_settings` uses; no credential file is opened. `curator_enabled_source` is `config` (a YAML boolean or null in the file), `default` (no config, no `curator` section or no `enabled` key: true), `caller` (an explicit keyword value), or `could_not_verify` (`curator_enabled: null`: a value YAML loaders read differently such as `n`, a non-mapping `curator`, an unreadable or invalid config, or an active managed overlay; also when the profile itself is missing or not a directory). The value is echoed only; it never changes coverage or findings.
+
+7. **Section scalars.** `status`, `coverage`, `reason` (first reason or null), `reasons`, `truncated_by`, `ledger_present`, `total_changes`, `skills_in_ledger`, `noop_changes`, `skills_deleted_count`, `skills_growth_could_not_verify`, `skills_without_folder_count`; `limits` (`max_ledger_bytes`, `max_ledger_lines`, `max_blob_entries`, `max_seconds`, `ledger_bytes_read`, `ledger_lines_read`, `blob_entries_examined`, `cuts`); `thresholds` (`actor_summary_share`, `actor_summary_min_changes`, `patch_storm_changes_24h`, `skill_growth_factor`, `skill_growth_min_bytes`, `version_churn`, `orphan_backup_bytes`, `near_identical_size_ratio`).
+
+Sizes are file sizes (`lstat`), not unique disk blocks; on filesystems with shared blocks totals are an upper bound. Symlinks are refused: a symlinked blob, snapshot, tarball, skill folder or file is never followed, opened or measured, and each one under the profile's own ledger, blob, snapshot, bookkeeping and `skills/` locations is counted as a cut (`limits.cuts`; reason `symlink_refused`, or `blobs_unreadable` / `snapshots_unreadable` / `skills_tree_unreadable` / `usage_unreadable` / `manifest_unreadable` when the symlink is that folder or file itself), which makes coverage `could_not_verify`. Symlinks under the optional `shared/skills/` are skipped without a cut. A refused entry is never reported as a skill folder.
+
+**Envelope.** `{ok, status, error, coverage, classification, findings, skill_ledger, run_metrics}` from `make_component_envelope`. `run_metrics` holds `elapsed_ms` only; it is the one run-dependent value and is kept out of the section, so two runs on an unchanged home give the same raw section and findings. `adapt_component_result` keeps both `skill_ledger` and `run_metrics`. The wiring sheet for the report sealing sets is `audit/wiring/skill_ledger.json`.
+
+## Rules and thresholds
+
+| Rule ID | Class | Fires when | Note |
+|---|---|---|---|
+| `skill_ledger.changes_by_recorded_actor` | `info` | `>= 20` changes (`ACTOR_SUMMARY_MIN_CHANGES`) and `curator_or_agent_share > 0.80` (`ACTOR_SUMMARY_SHARE_THRESHOLD`) | `info` because `agent` includes edits a person asked for. |
+| `skill_ledger.patch_storm` | `review_suggested` | any skill with `>= 10` rows in a 24 h window (`PATCH_STORM_THRESHOLD`) | Many recorded changes to one skill in one day. |
+| `skill_ledger.skill_growth` | `review_suggested` | verified `growth_ratio >= 2.0` and latest `>= 8,000` B | Only verified growth counts. |
+| `skill_ledger.version_churn` | `info` | `>= 20` distinct versions | Counts distinct recorded versions. |
+| `skill_ledger.noop_changes` | `info` | `> 0` recorded no-ops | Only recorded no-ops count; a same-size change is not a no-op. |
+| `skill_ledger.orphan_backups` | `review_suggested` | unreferenced blob bytes `> 20 MiB` and (`references_complete` or no ledger at all) | Applies with no ledger at all, or when every reference was read. |
+| `skill_ledger.bookkeeping_orphans` | `info` | `>= 1` active usage record without a folder | A usage record whose skill folder no longer exists. |
+| `skill_ledger.could_not_verify` | `info` | no ledger, any cut, or any cap | For example `ledger_absent`. |
+
+Consequence sentences (exact and fixed: one per rule, no numbers filled in; the numbers are in the finding evidence). Finding evidence holds only numbers, booleans and the labels `reason` / `truncated_by`; no skill name or path is in findings.
+
+- `skill_ledger.changes_by_recorded_actor`: "Recorded skill changes are counted by the actor label the ledger stores: curator (curator runs and background review forks), agent (tool calls in a conversation, which may include edits a person asked for or approved) and user (hermes curator archive, restore and purge commands); the ledger does not record who requested or reviewed a change, and edits made to skill files outside Hermes are not recorded at all."
+  - evidence: total_changes, curator_or_agent_changes, curator_or_agent_share, curator_changes, agent_changes, user_changes, other_changes; affected identity and source path: `skills/.curator_ledger.jsonl` (or `skills` without a ledger).
+- `skill_ledger.patch_storm`: "At least one skill has 10 or more ledger changes within a 24-hour window of ledger timestamps; the ledger records the changes, not why they were made or who asked for them."
+  - evidence: affected_skill_count, max_changes_24h, threshold_changes_24h; affected identity and source path: same.
+- `skill_ledger.skill_growth`: "One or more skills grew to at least twice their initial recorded size and at least 8,000 bytes; blob sizes measure growth on disk but do not distinguish distilled reference depth from incident accumulation."
+  - evidence: affected_skill_count, max_growth_ratio, max_latest_size_bytes, growth_factor_threshold, min_latest_bytes_threshold; affected identity and source path: same.
+- `skill_ledger.version_churn`: "One or more skills accumulated at least 20 distinct SKILL.md content versions in the ledger; this counts recorded hashes, not the size or nature of each change."
+  - evidence: affected_skill_count, max_distinct_versions, version_churn_threshold; affected identity and source path: same.
+- `skill_ledger.noop_changes`: "The ledger contains change records whose recorded after-state is identical to the before-state (same file hashes, or no file recorded on either side); this shows the record, not why the change was made."
+  - evidence: noop_changes, affected_skill_count; affected identity and source path: same.
+- `skill_ledger.orphan_backups`: "More than 20 MiB of backup blobs under .curator_backups/blobs are not referenced by any entry in the skill change ledger, or cannot be matched because there is no ledger; this measures disk use, not whether the files are still wanted."
+  - evidence: orphan_blob_count, orphan_blob_bytes, tarball_count, tarball_bytes, all_blobs_orphaned_no_ledger, threshold_bytes; affected identity and source path: `.curator_backups/blobs`.
+- `skill_ledger.bookkeeping_orphans`: "Skills are recorded as active in skills/.usage.json with no skill folder of that name on disk; usage records are keyed by frontmatter name, so a skill whose folder is named differently is also counted."
+  - evidence: orphan_count, usage_orphan_count, manifest_entries_not_on_disk_count; affected identity and source path: `skills/.usage.json`.
+- `skill_ledger.could_not_verify`: "The skill change ledger or bookkeeping metadata is absent, unreadable, malformed, or truncated by collection bounds; an absent ledger is not evidence that no skill changes occurred."
+  - evidence: cuts, ledger_present, reason, truncated_by (only when not null); affected identity and source path: `skills`; `.` when the profile is missing or not a directory.
+
+## What it cannot tell
+
+- Who asked for a change or whether anyone reviewed it; edits made outside Hermes are invisible to the ledger.
+- Why a skill changed or grew: blob contents are never opened (pair with `report.skill_hygiene`).
+- Whether unreferenced blobs are still wanted; with no ledger, blobs cannot be matched at all.
+- Rows older than a size trim, or written while the ledger was disabled.
+
+## Do-not-flag list
+
+- Fewer than 20 changes, or a curator+agent share `<= 80%` (and the actor summary is `info` anyway).
+- Snapshot tarballs of any count or size; `curator_enabled` false with backups present (the ledger and its blobs are written for every actor, not only the curator; the setting is echoed only).
+- Unreferenced blobs `<= 20 MiB`, or any count when the ledger was only partly read.
+- Same-size `SKILL.md` changes; `pre-rollback` rows.
+- `.bundled_manifest` entries without a folder (user-deleted bundled skills); archived/stale usage records.
+- macOS AppleDouble `._*` stubs.
+- `shared/skills/` is an optional local convention, not a Hermes location: when absent it contributes nothing.
+
+## Read policy and bounds
+
+- **Stat only** (`os.scandir`, with entries inspected by `os.lstat` or `entry.stat(follow_symlinks=False)`): blobs (never opened, `MAX_BLOB_ENTRIES = 100,000` shared with the other walks), snapshot tarballs (never opened), skill folders (presence of a regular `SKILL.md`).
+- **Read, bounded** (`safe_read_regular_file_plain`, `O_NOFOLLOW`): the ledger (`MAX_LEDGER_BYTES = 64 MiB`, `MAX_LEDGER_LINES = 500,000`; over the byte cap no rows are counted, blobs and tarballs still are), `.usage.json` and `.bundled_manifest` (`MAX_BOOKKEEPING_BYTES = 4 MiB` each).
+- **Never opened:** anything matching `audit.policy.credential_path`; anything behind a symlink (counted in `limits.cuts`, reason `symlink_refused`); blobs and tarballs.
+- **Time:** cooperative `MAX_SECONDS = 20.0` via the injectable `clock`; on expiry partial numbers are kept, `truncated_by: "time_budget"`. The clock only bounds work: the raw output is the same for any clock that does not expire.
+- **Output:** counts, sizes, ratios, ledger timestamps as integers, labels, fixed relative paths (`skills`, `skills/.curator_ledger.jsonl`, ...), and absolute paths of existing skill folders. No skill names, no `profile_path`, no entry ids, session ids, ledger file paths or hashes. The only non-vocabulary strings are the kept skill folders (`skills[].path`, `top_skills_by_changes.paths`, `top_skills_by_growth.paths`); the report serializer keeps them because they are declared path fields, and only when the path resolves to an existing folder (stored as the resolved path). A folder removed before sealing, or a path or label that overlaps a credential value read in the same run, becomes a token keyed per run, even when it equals an ordinary word. Raw measurements are the same for an unchanged home within budgets. The sealed output is unchanged only while every kept path still resolves and no value overlaps a credential value read in the same run; otherwise it holds tokens keyed per run, which differ between runs.
+- **Enumerated values:** `status` `completed`/`not_measured`; `coverage` `verified`/`could_not_verify`; `curator_enabled_source` `config`/`default`/`caller`/`could_not_verify`; `growth_coverage` `verified`/`could_not_verify`/`not_applicable`; `truncated_by` `max_ledger_bytes`/`max_ledger_lines`/`max_blob_entries`/`time_budget`/null; reasons `profile_missing`, `profile_unreadable`, `ledger_absent`, `ledger_unreadable`, `malformed_ledger_line`, `symlink_refused`, `blobs_unreadable`, `snapshots_unreadable`, `skills_tree_unreadable`, `usage_unreadable`, `usage_malformed`, `manifest_unreadable`, `manifest_malformed`, `growth_blob_missing`, plus the four `truncated_by` values; the `could_not_verify` finding's `reason` falls back to `could_not_verify` when no other reason is set. Classes `info`/`review_suggested` (legacy finding `severity` `info`/`warn`, set by `make_finding`).

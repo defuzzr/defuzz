@@ -1,0 +1,9 @@
+# Default owners for everything in the workspace
+* @tmpl-prefix-maintainers
+
+# Architectural guardrails & platform automation
+/tsconfig.base.json @tmpl-prefix-maintainers
+/tsconfig.json @tmpl-prefix-maintainers
+/biome.json @tmpl-prefix-maintainers
+/pnpm-workspace.yaml @tmpl-prefix-maintainers
+/tools/xtask/ @tmpl-prefix-maintainers

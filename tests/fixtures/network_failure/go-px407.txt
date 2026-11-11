@@ -1,0 +1,1 @@
+go: github.com/google/uuid@v1.6.0: Get "https://proxy.golang.org/github.com/google/uuid/@v/v1.6.0.mod": Proxy Authentication Required

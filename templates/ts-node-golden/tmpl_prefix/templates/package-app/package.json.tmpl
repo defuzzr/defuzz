@@ -1,0 +1,20 @@
+{
+  "name": "__PACKAGE_NAME__",
+  "version": "0.1.0",
+  "description": "__DESCRIPTION__",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "__PACKAGE_NAME__": "./dist/main.js"
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "dependencies": {
+    "tmpl-prefix-core": "workspace:*"
+  }
+}

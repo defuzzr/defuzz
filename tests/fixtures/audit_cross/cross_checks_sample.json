@@ -1,0 +1,206 @@
+{
+  "coherent_manifest": {
+    "coherent_complete": true,
+    "coverage": "verified",
+    "manifest_digest": "fixture_manifest_digest_001",
+    "missing_or_unfinished_units": []
+  },
+  "repos": [
+    {
+      "path": "/workspace/monorepo",
+      "git_kind": "git_dir",
+      "registered": true,
+      "coverage": "verified"
+    },
+    {
+      "path": "/workspace/monorepo/.worktrees/wt-clean",
+      "git_kind": "worktree_pointer",
+      "gitdir_target": "/workspace/monorepo/.git/worktrees/wt-clean",
+      "gitdir_exists": true,
+      "registered": false,
+      "coverage": "verified"
+    },
+    {
+      "path": "/workspace/monorepo/apps/subrepo",
+      "git_kind": "git_dir",
+      "registered": false,
+      "coverage": "verified"
+    },
+    {
+      "path": "/workspace/sibling_lib",
+      "git_kind": "git_dir",
+      "registered": true,
+      "coverage": "verified"
+    }
+  ],
+  "parent_context_chains": [
+    {
+      "project_root": "/workspace/monorepo/packages/pkg_a",
+      "has_own_git": false,
+      "effective_git_root": "/workspace/monorepo",
+      "winning_kind": "agents_md",
+      "coverage": "verified",
+      "files": [
+        {
+          "kind": "agents_md",
+          "path": "/workspace/monorepo/AGENTS.md",
+          "injected": true,
+          "char_count": 300
+        }
+      ]
+    },
+    {
+      "project_root": "/workspace/monorepo/apps/subrepo",
+      "has_own_git": true,
+      "effective_git_root": "/workspace/monorepo/apps/subrepo",
+      "winning_kind": "agents_md",
+      "coverage": "verified",
+      "files": [
+        {
+          "kind": "agents_md",
+          "path": "/workspace/monorepo/apps/subrepo/AGENTS.md",
+          "injected": true,
+          "char_count": 150
+        }
+      ],
+      "parent_context_files": [
+        {
+          "kind": "agents_md",
+          "path": "/workspace/monorepo/AGENTS.md",
+          "injected": false
+        }
+      ]
+    }
+  ],
+  "cross_links": [
+    {
+      "project_root": "/workspace/monorepo",
+      "link_path": "/workspace/monorepo/packages/pkg_a/vendor_link",
+      "target": "../../../sibling_lib/src",
+      "coverage": "verified"
+    }
+  ],
+  "editable_installs": [
+    {
+      "project_root": "/workspace/monorepo",
+      "file_path": "/workspace/monorepo/.venv/lib/python3.12/site-packages/_sibling.pth",
+      "content": "/workspace/sibling_lib/src\n",
+      "coverage": "verified"
+    }
+  ],
+  "memory_mappings": [
+    {
+      "entry_id": "default:MEMORY.md:0",
+      "profile": "default",
+      "file_path": "/hermes/memories/MEMORY.md",
+      "text": "Shared deploy instructions for /workspace/monorepo and /workspace/sibling_lib",
+      "paths": ["/workspace/monorepo", "/workspace/sibling_lib"],
+      "project_ids": ["/workspace/monorepo", "/workspace/sibling_lib"]
+    }
+  ],
+  "profile_units": [
+    {
+      "name": "default",
+      "path": "/hermes",
+      "is_default": true,
+      "is_active": true,
+      "coverage": "verified",
+      "stable": true,
+      "last_use_evidence": {
+        "last_use_timestamp": 1700001000.0,
+        "coverage": "verified"
+      },
+      "fingerprint_manifest": {
+        "configuration_match_digest": "cfg_hash_1",
+        "whole_profile_digest": "whole_hash_1",
+        "whole_profile_exact_eligible": true,
+        "unreadable_paths": [],
+        "special_files": {},
+        "excluded_audit_paths": []
+      },
+      "skills": {
+        "skills": [
+          {
+            "name": "shared-skill",
+            "skill_md_path": "/hermes/skills/shared-skill/SKILL.md",
+            "skill_md_sha256": "aaa111",
+            "skill_md_ws_sha256": "ws111",
+            "supporting_files_sha256": {"references/doc.md": "doc111"},
+            "frontmatter": {"platforms": ["linux"]},
+            "tier": 1,
+            "source_kind": "profile_local"
+          }
+        ]
+      },
+      "memory": {
+        "files": {
+          "memory": {
+            "path": "/hermes/memories/MEMORY.md",
+            "is_symlink": false,
+            "coverage": "verified",
+            "entries": [
+              {
+                "index": 0,
+                "text": "Exact duplicate note across profiles",
+                "sha256_exact": "mem_exact_111",
+                "sha256_normalized_ws": "mem_ws_111"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "clone_old",
+      "path": "/hermes/profiles/clone_old",
+      "is_default": false,
+      "is_active": false,
+      "coverage": "verified",
+      "stable": true,
+      "last_use_evidence": {
+        "last_use_timestamp": 1690000000.0,
+        "coverage": "verified"
+      },
+      "fingerprint_manifest": {
+        "configuration_match_digest": "cfg_hash_1",
+        "whole_profile_digest": "whole_hash_1",
+        "whole_profile_exact_eligible": true,
+        "unreadable_paths": [],
+        "special_files": {},
+        "excluded_audit_paths": []
+      },
+      "skills": {
+        "skills": [
+          {
+            "name": "shared-skill",
+            "skill_md_path": "/hermes/profiles/clone_old/skills/shared-skill/SKILL.md",
+            "skill_md_sha256": "aaa111",
+            "skill_md_ws_sha256": "ws111",
+            "supporting_files_sha256": {"references/doc.md": "doc111"},
+            "frontmatter": {"platforms": ["linux"]},
+            "tier": 1,
+            "source_kind": "profile_local"
+          }
+        ]
+      },
+      "memory": {
+        "files": {
+          "memory": {
+            "path": "/hermes/profiles/clone_old/memories/MEMORY.md",
+            "is_symlink": false,
+            "coverage": "verified",
+            "entries": [
+              {
+                "index": 0,
+                "text": "Exact duplicate note across profiles",
+                "sha256_exact": "mem_exact_111",
+                "sha256_normalized_ws": "mem_ws_111"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "active_profile": "default"
+}

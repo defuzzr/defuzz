@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <PackageId>tmpl-prefix-adapters</PackageId>
+        <RootNamespace>TmplPrefix.Adapters</RootNamespace>
+        <AssemblyName>TmplPrefix.Adapters</AssemblyName>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../foundation/TmplPrefix.Foundation.csproj" />
+        <ProjectReference Include="../domain/TmplPrefix.Domain.csproj" />
+    </ItemGroup>
+</Project>

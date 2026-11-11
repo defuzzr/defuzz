@@ -1,0 +1,5 @@
+Using CPython 3.11.16 interpreter at: /home/user/.local/bin/python3.11
+error: Request failed after 1 retry in 7.9s
+  cause: Failed to fetch: http://127.0.0.1:18080/slow/simple/requests/
+  cause: error sending request for url (http://127.0.0.1:18080/slow/simple/requests/)
+  cause: operation timed out

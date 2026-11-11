@@ -1,0 +1,15 @@
+id: fake-py-service
+name: Fake Python Service
+summary: Poly-repo Python API and TypeScript web client for testing.
+kind: service
+layout: poly
+languages: [python, typescript]
+tags: [api]
+needs: [python, node]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.py", "**/*.md", "**/*.json"]
+repos:
+  - name: tmpl_prefix_api
+  - name: tmpl_prefix_web
+    check:
+      cmd: ["node", "--version"]

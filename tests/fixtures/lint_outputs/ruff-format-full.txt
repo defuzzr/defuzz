@@ -1,0 +1,134 @@
+unformatted: File would be reformatted
+   --> packages/domain/t5-python-supplement-accounts/tests/test_accounts.py:124:19
+    |
+123 |
+    -     ctx = Context(environment="test", service_name="t5-python-supplement-test", logger=_NoopLogger())
+124 +     ctx = Context(
+125 +         environment="test", service_name="t5-python-supplement-test", logger=_NoopLogger()
+126 +     )
+127 |     await comp.start(ctx)
+    |
+
+unformatted: File would be reformatted
+   --> packages/foundation/t5-python-supplement-core/tests/test_core.py:113:19
+    |
+112 |
+    -     ctx = Context(environment="test", service_name="t5-python-supplement-test", logger=_RecordingLogger())
+113 +     ctx = Context(
+114 +         environment="test", service_name="t5-python-supplement-test", logger=_RecordingLogger()
+115 +     )
+116 |     await registry.start(ctx)
+--------------------------------------------------------------------------------
+143 |
+    -     ctx = Context(environment="test", service_name="t5-python-supplement-test", logger=_RecordingLogger())
+144 +     ctx = Context(
+145 +         environment="test", service_name="t5-python-supplement-test", logger=_RecordingLogger()
+146 +     )
+147 |     with pytest.raises(AppError, match="third failed to start"):
+--------------------------------------------------------------------------------
+166 |
+    -     ctx = Context(environment="test", service_name="t5-python-supplement-test", logger=_RecordingLogger())
+167 +     ctx = Context(
+168 +         environment="test", service_name="t5-python-supplement-test", logger=_RecordingLogger()
+169 +     )
+170 |     with pytest.raises(asyncio.CancelledError):
+    |
+
+unformatted: File would be reformatted
+   --> tools/xtask/src/xtask/ci.py:104:30
+    |
+103 |
+    -         py_bin = venv_dir / (
+    -             "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    -         )
+104 +         py_bin = venv_dir / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+105 |         srv_bin = venv_dir / (
+    -             f"Scripts/{server_pkg}.exe"
+    -             if sys.platform == "win32"
+    -             else f"bin/{server_pkg}"
+106 +             f"Scripts/{server_pkg}.exe" if sys.platform == "win32" else f"bin/{server_pkg}"
+107 |         )
+--------------------------------------------------------------------------------
+218 |         sys.stderr.write(
+    -             f"Python {version} is not installed. Install it with:\n"
+    -             f"  uv python install {version}\n",
+219 +             f"Python {version} is not installed. Install it with:\n  uv python install {version}\n",
+220 |         )
+    |
+
+unformatted: File would be reformatted
+   --> tools/xtask/src/xtask/generators.py:58:28
+    |
+57  |             tokens = [
+    -                 tok.strip()
+    -                 for tok in existing_mods.replace("|", ":").split(":")
+    -                 if tok.strip()
+58  +                 tok.strip() for tok in existing_mods.replace("|", ":").split(":") if tok.strip()
+59  |             ]
+60  |             if mod_name not in tokens:
+61  |                 new_mods = (
+    -                     f"{existing_mods}{separator}{mod_name}"
+    -                     if existing_mods.strip()
+    -                     else mod_name
+62  +                     f"{existing_mods}{separator}{mod_name}" if existing_mods.strip() else mod_name
+63  |                 )
+--------------------------------------------------------------------------------
+305 |     packages = discover_packages(root, prefix=prefix)
+    -     target_dist = (
+    -         package if package.startswith(f"{forms.kebab}-") else f"{forms.kebab}-{package}"
+    -     )
+306 +     target_dist = package if package.startswith(f"{forms.kebab}-") else f"{forms.kebab}-{package}"
+307 |     pkg_info = next((p for p in packages if p.dist_name == target_dist), None)
+--------------------------------------------------------------------------------
+363 |         app_dist = (
+    -             wire_app
+    -             if wire_app.startswith(f"{forms.kebab}-")
+    -             else f"{forms.kebab}-{wire_app}"
+364 +             wire_app if wire_app.startswith(f"{forms.kebab}-") else f"{forms.kebab}-{wire_app}"
+365 |         )
+--------------------------------------------------------------------------------
+390 |     packages = discover_packages(root, prefix=prefix)
+    -     target_dist = (
+    -         package if package.startswith(f"{forms.kebab}-") else f"{forms.kebab}-{package}"
+    -     )
+391 +     target_dist = package if package.startswith(f"{forms.kebab}-") else f"{forms.kebab}-{package}"
+392 |     pkg_info = next((p for p in packages if p.dist_name == target_dist), None)
+    |
+
+unformatted: File would be reformatted
+   --> tools/xtask/src/xtask/renamer.py:92:8
+   |
+91 |         return "snake"
+   -     if (
+   -         name.endswith((".toml", ".toml.tmpl", ".md", ".yml", ".yaml"))
+   -         or name in (".env.example", "uv.lock", "CODEOWNERS", ".gitignore", ".worktreeinclude")
+92 +     if name.endswith((".toml", ".toml.tmpl", ".md", ".yml", ".yaml")) or name in (
+93 +         ".env.example",
+94 +         "uv.lock",
+95 +         "CODEOWNERS",
+96 +         ".gitignore",
+97 +         ".worktreeinclude",
+98 |     ):
+   |
+
+unformatted: File would be reformatted
+   --> tools/xtask/src/xtask/workspace.py:54:15
+    |
+53  |     if not SNAKE_PREFIX_RE.fullmatch(snake_prefix):
+    -         msg = (
+    -             f"Invalid prefix '{snake_prefix}': must match "
+    -             "[a-z][a-z0-9]*(_[a-z0-9]+)*"
+    -         )
+54  +         msg = f"Invalid prefix '{snake_prefix}': must match [a-z][a-z0-9]*(_[a-z0-9]+)*"
+55  |         raise ValueError(msg)
+--------------------------------------------------------------------------------
+149 |                         for src_key, src_val in src_tbl.items():
+    -                             if (
+    -                                 isinstance(src_val, dict)
+    -                                 and src_val.get("workspace") is True
+    -                             ):
+150 +                             if isinstance(src_val, dict) and src_val.get("workspace") is True:
+151 |                                 sources.append(str(src_key))
+    |
+
+6 files would be reformatted, 44 files already formatted

@@ -1,0 +1,16 @@
+---
+packages:
+  - "packages/*/*"
+  - "tools/*"
+
+catalog:
+  hono: "4.13.10"
+  "@hono/node-server": "2.1.5"
+  zod: "3.25.76"
+  fastify: "5.12.7"
+  pino: "10.4.0"
+  commander: "15.0.0"
+  postgres: "3.4.7"
+  drizzle-orm: "0.45.4"
+  vitest: "4.1.12"
+  tsx: "4.23.15"

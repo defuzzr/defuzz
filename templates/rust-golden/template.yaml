@@ -1,0 +1,44 @@
+id: rust-golden
+name: Rust Golden Workspace
+summary: Layered Rust workspace template with foundation, domain, adapters, cli, and xtask CI.
+kind: app
+layout: mono
+languages: [rust]
+tags: [rust, workspace, layered, cli]
+needs: [cargo]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.rs", "**/*.toml", "**/*.md", "**/*.yml", "**/Cargo.lock"]
+locked:
+  - Cargo.toml
+  - clippy.toml
+  - rustfmt.toml
+  - rust-toolchain.toml
+  - .github/workflows/*
+  - xtask/**
+approved_deps:
+  rust:
+    - equivalent
+    - hashbrown
+    - indexmap
+    - memchr
+    - proc-macro2
+    - quote
+    - serde
+    - serde_core
+    - serde_derive
+    - serde_spanned
+    - syn
+    - toml
+    - toml_datetime
+    - toml_edit
+    - unicode-ident
+    - winnow
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["cargo", "xtask", "ci"]
+      cwd: "."
+      extra_cmds:
+        - ["cargo", "check", "--workspace", "--locked"]
+      format_cmds:
+        - ["cargo", "fmt", "--all", "--check"]

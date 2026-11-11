@@ -1,0 +1,24 @@
+{
+  "name": "tmpl-prefix-http-hono",
+  "version": "0.1.0",
+  "description": "Hono + @hono/node-server implementation of the HttpServer port.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "hono": "catalog:",
+    "tmpl-prefix-core": "workspace:*"
+  },
+  "devDependencies": {
+    "tmpl-prefix-http-node": "workspace:*"
+  }
+}

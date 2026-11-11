@@ -1,0 +1,152 @@
+{
+  "agents_block": "<!-- kit:image-set v1 begin (managed block: edit outside it) -->\n## Image generation set\n\n`project` is an image-set workspace for generating, selecting, upscaling, editing, and delivering still image series.\n\n### Layout\n\n- `refs/`: Reference images supplied by the user. Read-only, never modify.\n- `prompts/`: One .md per series: positive, negative, seed, settings.\n- `workflows/`: ComfyUI workflow .json files, versioned by filename; retired ones in archive/.\n- `models/`: Notes only: name, source URL, hash, trigger words.\n- `outputs/`: Everything generated: raw, selects, upscales, edits (inpaint/retouch), finals.\n- `contact-sheets/`: Comparison grids for reviewing batches. Disposable, safe to regenerate.\n- `logs/`: Run logs and queue dumps. Ignored by Git and disposable.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- New generations go in `outputs/raw/YYYY-MM-DD/` and nowhere else.\n- Never write, rename or delete anything in `refs/`.\n- Copy from `outputs/raw/` to `outputs/selects/`; do not move, and do not rename.\n- An upscale in `outputs/upscales/` keeps the select's filename plus `_2x` or `_4x`.\n- Every select gets a line in `prompts/<series>.md`: prompt, seed, model, workflow file.\n- A changed workflow in `workflows/` is saved as a new file (`name_v02.json`); never overwrite one.\n- Never put model weights in this repo; record them in `models/*.md` (`models/checkpoints.md`, `models/loras.md`, `models/embeddings.md`).\n- Files enter `outputs/finals/` only after the user approves them.\n- Deleting anything outside `outputs/raw/`, `contact-sheets/` or `logs/` needs approval.\n- Run `git lfs install` once before the first commit.\n<!-- kit:image-set end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "refs",
+      "summary": "Reference images supplied by the user. Read-only, never modify.",
+      "why": "user references stay untouched across runs"
+    },
+    {
+      "dir": "refs/style",
+      "summary": "Look, palette and lighting references. Read-only, never modify.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "refs/subject",
+      "summary": "Character, object and pose references. Read-only, never modify.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "refs/control",
+      "summary": "Depth, pose, canny and mask inputs. Read-only, never modify.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "prompts",
+      "summary": "One .md per series: positive, negative, seed, settings.",
+      "why": "every select can be reproduced from its recorded settings"
+    },
+    {
+      "dir": "prompts/wildcards",
+      "summary": "Reusable token lists, one term per line.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "workflows",
+      "summary": "ComfyUI workflow .json files, versioned by filename; retired ones in archive/.",
+      "why": "workflow changes never overwrite earlier versions"
+    },
+    {
+      "dir": "workflows/archive",
+      "summary": "Retired workflows kept to reproduce old outputs.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "models",
+      "summary": "Notes only: name, source URL, hash, trigger words.",
+      "why": "model weights stay out of Git while provenance stays tracked"
+    },
+    {
+      "dir": "outputs",
+      "summary": "Everything generated: raw, selects, upscales, edits (inpaint/retouch), finals.",
+      "why": "raw generations, selects, edits and approved finals stay separate"
+    },
+    {
+      "dir": "outputs/raw",
+      "summary": "Every generation, in YYYY-MM-DD subfolders. Ignored by Git and disposable.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "outputs/selects",
+      "summary": "Picks copied from raw, original filenames kept.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "outputs/upscales",
+      "summary": "Upscaled or detailed versions of selects.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "outputs/edits",
+      "summary": "Inpaint, retouch and composite working files.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "outputs/finals",
+      "summary": "Approved deliverables with final names.",
+      "why": "declared by the image-set kit"
+    },
+    {
+      "dir": "contact-sheets",
+      "summary": "Comparison grids for reviewing batches. Disposable, safe to regenerate.",
+      "why": "batch review sheets stay separate from individual outputs"
+    },
+    {
+      "dir": "logs",
+      "summary": "Run logs and queue dumps. Ignored by Git and disposable.",
+      "why": "diagnostic output does not clutter the repository"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "image-set",
+    "name": "Image generation set",
+    "summary": "AI still-image generation workspace: read-only references, prompts, ComfyUI workflows, model notes, staged outputs from raw to approved finals, and contact sheets; not LoRA training or a render queue.",
+    "tags": [
+      "image",
+      "images",
+      "stills",
+      "comfyui",
+      "diffusion",
+      "generative",
+      "prompts",
+      "upscale",
+      "inpaint"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "contact-sheets/",
+    "contact-sheets/.gitkeep",
+    "logs/",
+    "logs/.gitkeep",
+    "models/",
+    "models/checkpoints.md",
+    "models/embeddings.md",
+    "models/loras.md",
+    "outputs/",
+    "outputs/edits/",
+    "outputs/edits/.gitkeep",
+    "outputs/finals/",
+    "outputs/finals/.gitkeep",
+    "outputs/raw/",
+    "outputs/raw/.gitkeep",
+    "outputs/selects/",
+    "outputs/selects/.gitkeep",
+    "outputs/upscales/",
+    "outputs/upscales/.gitkeep",
+    "prompts/",
+    "prompts/wildcards/",
+    "prompts/wildcards/.gitkeep",
+    "refs/",
+    "refs/control/",
+    "refs/control/.gitkeep",
+    "refs/style/",
+    "refs/style/.gitkeep",
+    "refs/subject/",
+    "refs/subject/.gitkeep",
+    "workflows/",
+    "workflows/archive/",
+    "workflows/archive/.gitkeep"
+  ]
+}

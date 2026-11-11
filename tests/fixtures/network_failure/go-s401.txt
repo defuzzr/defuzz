@@ -1,0 +1,2 @@
+go: github.com/google/uuid@v1.6.0: reading http://127.0.0.1:18080/s401/github.com/google/uuid/@v/v1.6.0.mod: 401 Unauthorized
+	server response: 401 error from registry

@@ -1,0 +1,16 @@
+{
+	"version": 1,
+	"dependencies": {
+		"net10.0": {
+			"tmpl-prefix-domain": {
+				"type": "Project",
+				"dependencies": {
+					"tmpl-prefix-foundation": "[1.0.0, )"
+				}
+			},
+			"tmpl-prefix-foundation": {
+				"type": "Project"
+			}
+		}
+	}
+}

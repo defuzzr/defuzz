@@ -1,0 +1,8 @@
+import { Registry } from "tmpl-prefix-core";
+
+export async function run__PASCAL_NAME__App(): Promise<number> {
+  const registry = new Registry();
+  // @xtask:register-components
+  const report = await registry.report();
+  return report.components.length >= 0 ? 0 : 1;
+}

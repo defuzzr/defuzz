@@ -1,0 +1,16 @@
+id: fake-rust-game
+name: Fake Rust Game
+summary: Minimal Bevy game workspace for testing.
+kind: game
+layout: mono
+languages: [rust]
+engine: bevy
+tags: [game, ecs]
+needs: [cargo]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.rs", "**/*.toml", "**/*.md"]
+repos:
+  - name: tmpl_prefix
+    check:
+      cmd: ["cargo", "check"]
+      cwd: "."

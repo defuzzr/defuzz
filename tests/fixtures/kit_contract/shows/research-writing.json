@@ -1,0 +1,170 @@
+{
+  "agents_block": "<!-- kit:research-writing v1 begin (managed block: edit outside it) -->\n## Research and writing\n\n`project` is a research and writing workspace.\n\n### Layout\n\n- `sources/`: Everything cited or consulted (`index.md`, `pdfs/`, `web/`, `data/`).\n- `notes/`: Your own words about the sources (`reading/`, `synthesis/`, `scratch/`).\n- `outline/`: Structure and argument, versioned by filename.\n- `drafts/`: Working text, one file per section.\n- `analysis/`: Notebooks and scripts that compute results.\n- `figures/`: Charts and diagrams (`src/` scripts and editable files, `out/` exports).\n- `tables/`: Table data as .csv and rendered tables.\n- `citations/`: `references.bib` and the citation style file.\n- `reviews/`: Feedback and responses, one folder per round.\n- `build/`: Compiled PDF or HTML and aux files. Ignored by Git and disposable.\n- `published/`: Final versions as released, dated, frozen.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Every source gets a citation key, a line in `sources/index.md` and an entry in `citations/references.bib`.\n- Never edit downloaded or received files in `sources/pdfs/`, `sources/web/` or `sources/data/`; the only file in `sources/` you may change is `sources/index.md` (add one line per new source and keep its entries up to date).\n- Every factual claim in `drafts/` carries a citation key; no key, no claim.\n- Never cite a source that is not saved in `sources/`.\n- A direct quote is copied exactly and includes a page or section number.\n- Scripts that draw figures live in `figures/src/`; scripts that compute results live in `analysis/`. Figures in `figures/out/` are produced only by something in `figures/src/`; never hand-edit an export.\n- Drafts in `drafts/` are edited in place; never edit an outline in place, save every change as the next file (`outline/outline_v02.md`, `outline/outline_v03.md`).\n- Changing `brief.md`, the central argument or the section structure needs approval.\n- `published/` is written once per release and never edited afterwards.\n- Run `git lfs install` once before the first commit.\n<!-- kit:research-writing end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "sources",
+      "summary": "Everything cited or consulted (`index.md`, `pdfs/`, `web/`, `data/`).",
+      "why": "cited material is preserved intact so every claim can be verified"
+    },
+    {
+      "dir": "sources/pdfs",
+      "summary": "Papers and reports as downloaded. Read-only, never modify.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "sources/web",
+      "summary": "Saved pages with URL and access date. Read-only, never modify.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "sources/data",
+      "summary": "Datasets as received. Read-only, never modify.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "notes",
+      "summary": "Your own words about the sources (`reading/`, `synthesis/`, `scratch/`).",
+      "why": "reading notes and synthesis stay separate from raw sources and drafts"
+    },
+    {
+      "dir": "notes/reading",
+      "summary": "One note per source, named by citation key.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "notes/synthesis",
+      "summary": "Themes, comparisons and claims with source keys.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "notes/scratch",
+      "summary": "Loose thoughts. Disposable, safe to clear.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "outline",
+      "summary": "Structure and argument, versioned by filename.",
+      "why": "structural revisions never overwrite earlier outlines"
+    },
+    {
+      "dir": "drafts",
+      "summary": "Working text, one file per section.",
+      "why": "prose in progress stays separate from notes and published releases"
+    },
+    {
+      "dir": "analysis",
+      "summary": "Notebooks and scripts that compute results.",
+      "why": "calculations stay reproducible from code"
+    },
+    {
+      "dir": "figures",
+      "summary": "Charts and diagrams (`src/` scripts and editable files, `out/` exports).",
+      "why": "figure sources and exported graphics stay separate"
+    },
+    {
+      "dir": "figures/src",
+      "summary": "Scripts and editable files that make the figures.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "figures/out",
+      "summary": "Exported figures referenced by the drafts.",
+      "why": "declared by the research-writing kit"
+    },
+    {
+      "dir": "tables",
+      "summary": "Table data as .csv and rendered tables.",
+      "why": "tabular outputs and their source data live in one place"
+    },
+    {
+      "dir": "citations",
+      "summary": "`references.bib` and the citation style file.",
+      "why": "bibliography entries and citation formatting stay centralized"
+    },
+    {
+      "dir": "reviews",
+      "summary": "Feedback and responses, one folder per round.",
+      "why": "reviewer comments and responses stay organized by round"
+    },
+    {
+      "dir": "build",
+      "summary": "Compiled PDF or HTML and aux files. Ignored by Git and disposable.",
+      "why": "compiled output is disposable and never committed"
+    },
+    {
+      "dir": "published",
+      "summary": "Final versions as released, dated, frozen.",
+      "why": "released versions remain immutable"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "research-writing",
+    "name": "Research and writing",
+    "summary": "Research and writing workspace: read-only sources, reading and synthesis notes, versioned outlines, section drafts, figures, citations and frozen releases.",
+    "tags": [
+      "research",
+      "writing",
+      "paper",
+      "report",
+      "citations",
+      "bibtex",
+      "thesis",
+      "literature",
+      "essay",
+      "academic",
+      "outline",
+      "dissertation"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "analysis/",
+    "analysis/.gitkeep",
+    "brief.md",
+    "build/",
+    "build/.gitkeep",
+    "citations/",
+    "citations/references.bib",
+    "drafts/",
+    "drafts/.gitkeep",
+    "figures/",
+    "figures/out/",
+    "figures/out/.gitkeep",
+    "figures/src/",
+    "figures/src/.gitkeep",
+    "notes/",
+    "notes/reading/",
+    "notes/reading/.gitkeep",
+    "notes/scratch/",
+    "notes/scratch/.gitkeep",
+    "notes/synthesis/",
+    "notes/synthesis/.gitkeep",
+    "outline/",
+    "outline/outline_v01.md",
+    "published/",
+    "published/.gitkeep",
+    "reviews/",
+    "reviews/.gitkeep",
+    "sources/",
+    "sources/data/",
+    "sources/data/.gitkeep",
+    "sources/index.md",
+    "sources/pdfs/",
+    "sources/pdfs/.gitkeep",
+    "sources/web/",
+    "sources/web/.gitkeep",
+    "tables/",
+    "tables/.gitkeep"
+  ]
+}

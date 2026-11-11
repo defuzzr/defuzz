@@ -1,0 +1,7 @@
+error: Failed to install cpython-3.10.15-linux-x86_64-gnu
+  cause: Request failed after 1 retry in 1.1s
+  cause: Failed to download `https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.10.15%2B20241016-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz`
+  cause: error sending request for url (https://github.com/astral-sh/python-build-standalone/releases/download/20241016/cpython-3.10.15%2B20241016-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz)
+  cause: client error (Connect)
+  cause: dns error
+  cause: failed to lookup address information: Temporary failure in name resolution

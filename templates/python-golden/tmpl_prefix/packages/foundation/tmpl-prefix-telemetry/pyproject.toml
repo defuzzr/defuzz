@@ -1,0 +1,20 @@
+[project]
+name = "tmpl-prefix-telemetry"
+version = "0.1.0"
+description = "Structured JSON logger built on standard-library logging."
+requires-python = ">=3.13"
+dependencies = [
+  "tmpl-prefix-core",
+  # @xtask:dependencies
+]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+tmpl-prefix-core = { workspace = true }
+# @xtask:sources
+
+[build-system]
+requires = ["uv_build>=0.6,<1"]
+build-backend = "uv_build"

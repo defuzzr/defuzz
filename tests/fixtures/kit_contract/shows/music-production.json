@@ -1,0 +1,216 @@
+{
+  "agents_block": "<!-- kit:music-production v1 begin (managed block: edit outside it) -->\n## Music and audio production\n\nMusic and audio production workspace.\nStart a song by copying `songs/_template/` to `songs/<slug>/`. Start a release by copying `releases/_template/` to `releases/<release>/`, only after approval.\n\n### Layout\n\n- `refs/`: Reference tracks and notes on what to borrow. Read-only.\n- `library/`: Material shared across songs: samples, presets and templates.\n- `songs/`: One folder per song, named by slug; copy _template/ to start a song.\n- `artwork/`: Cover art sources and working exports; final covers in releases/<release>/art/.\n- `releases/`: One folder per single, EP or album; copy _template/ to start a release.\n- `cache/`: DAW cache, freeze and analysis files. Ignored by Git and disposable.\n- Anything that fits no folder above: ask where it goes; do not invent a new top-level folder.\n\n### Rules\n\n- Each folder's purpose is in `FOLDERS.md`; read it before adding a file.\n- Raw generations go in `songs/<slug>/gens/`; copy keepers to `songs/<slug>/selects/` and log the prompt in `songs/<slug>/prompts/`.\n- Never edit or delete files in `songs/<slug>/recordings/` or `library/samples/`.\n- Files in `songs/<slug>/mixes/` and `songs/<slug>/masters/` are never overwritten; increment the version (`_v01`, `_v02`).\n- All stems for one song start at bar 1, share one length, one sample rate and one bit depth.\n- A master is made only from an approved mix; record which mix in `songs/<slug>/song.yaml`.\n- Working audio is WAV 24-bit, except raw generations in `songs/<slug>/gens/`, which stay in the format the generator produced; other lossy formats are made only for `releases/`.\n- Final lyrics live in `songs/<slug>/lyrics/lyrics.md`; that file is copied unchanged into `releases/<release>/metadata/`.\n- Creating a `releases/<release>/` folder or uploading to a distributor needs approval.\n- Every sample or loop used must have a licence in `library/samples/`.\n- Run `git lfs install` once before the first commit.\n<!-- kit:music-production end -->\n",
+  "declared_dirs": [
+    {
+      "dir": "refs",
+      "summary": "Reference tracks and notes on what to borrow. Read-only.",
+      "why": "inspiration stays separate from original song files"
+    },
+    {
+      "dir": "library",
+      "summary": "Material shared across songs: samples, presets and templates.",
+      "why": "shared samples, presets and templates live in one place"
+    },
+    {
+      "dir": "library/samples",
+      "summary": "Licensed one-shots and loops with licences. Read-only.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "library/presets",
+      "summary": "Synth, plugin and channel-strip presets.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "library/templates",
+      "summary": "DAW session templates.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs",
+      "summary": "One folder per song, named by slug; copy _template/ to start a song.",
+      "why": "each song isolates its takes, session, stems, mixes and masters"
+    },
+    {
+      "dir": "songs/_template",
+      "summary": "Copy this folder to songs/<slug>/ to start a song.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/lyrics",
+      "summary": "Drafts and the final lyrics.md.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/prompts",
+      "summary": "Style prompt, tags and settings per generation.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/gens",
+      "summary": "Raw AI generations, every take. Ignored by Git and disposable.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/selects",
+      "summary": "Chosen takes, renamed, with source prompt noted.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/recordings",
+      "summary": "Raw vocal and instrument takes. Read-only.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/session",
+      "summary": "DAW project and its bundled audio.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/midi",
+      "summary": "Exported .mid parts.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/stems",
+      "summary": "Per-part bounces, same start point and same length.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/mixes",
+      "summary": "Versioned mix bounces: slug_mix_v03.wav.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/masters",
+      "summary": "Mastered files per target format.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "songs/_template/bounces",
+      "summary": "Quick reference exports. Ignored by Git and disposable.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "artwork",
+      "summary": "Cover art sources and working exports; final covers in releases/<release>/art/.",
+      "why": "visual sources stay separate from audio production"
+    },
+    {
+      "dir": "releases",
+      "summary": "One folder per single, EP or album; copy _template/ to start a release.",
+      "why": "approved distribution packages stay separate from working songs"
+    },
+    {
+      "dir": "releases/_template",
+      "summary": "Copy this folder to releases/<release>/ to start a release.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "releases/_template/audio",
+      "summary": "Final masters in track order with release filenames.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "releases/_template/art",
+      "summary": "3000x3000 cover and platform variants.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "releases/_template/metadata",
+      "summary": "Credits, ISRC, UPC, splits, lyrics and descriptions.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "releases/_template/promo",
+      "summary": "Clips, canvases and press text.",
+      "why": "declared by the music-production kit"
+    },
+    {
+      "dir": "cache",
+      "summary": "DAW cache, freeze and analysis files. Ignored by Git and disposable.",
+      "why": "temporary DAW files are rebuildable and stay out of Git"
+    }
+  ],
+  "error": null,
+  "findings": [],
+  "kit": {
+    "availability": "available",
+    "id": "music-production",
+    "name": "Music and audio production",
+    "summary": "Music and audio production workspace with a shared library, per-song folders for generations, recordings, stems, mixes and masters, and releases.",
+    "tags": [
+      "music",
+      "production",
+      "audio",
+      "song",
+      "songs",
+      "track",
+      "album",
+      "ep",
+      "daw",
+      "mixing",
+      "mastering",
+      "stems"
+    ],
+    "version": 1
+  },
+  "ok": true,
+  "placement_rules": [],
+  "schema": "componentize.kit/1",
+  "status": "pass",
+  "tree": [
+    ".gitattributes",
+    ".gitignore",
+    "AGENTS.md",
+    "FOLDERS.md",
+    "artwork/",
+    "artwork/.gitkeep",
+    "cache/",
+    "cache/.gitkeep",
+    "library/",
+    "library/presets/",
+    "library/presets/.gitkeep",
+    "library/samples/",
+    "library/samples/.gitkeep",
+    "library/templates/",
+    "library/templates/.gitkeep",
+    "refs/",
+    "refs/.gitkeep",
+    "releases/",
+    "releases/_template/",
+    "releases/_template/art/",
+    "releases/_template/art/.gitkeep",
+    "releases/_template/audio/",
+    "releases/_template/audio/.gitkeep",
+    "releases/_template/metadata/",
+    "releases/_template/metadata/.gitkeep",
+    "releases/_template/promo/",
+    "releases/_template/promo/.gitkeep",
+    "songs/",
+    "songs/_template/",
+    "songs/_template/bounces/",
+    "songs/_template/bounces/.gitkeep",
+    "songs/_template/gens/",
+    "songs/_template/gens/.gitkeep",
+    "songs/_template/lyrics/",
+    "songs/_template/lyrics/lyrics.md",
+    "songs/_template/masters/",
+    "songs/_template/masters/.gitkeep",
+    "songs/_template/midi/",
+    "songs/_template/midi/.gitkeep",
+    "songs/_template/mixes/",
+    "songs/_template/mixes/.gitkeep",
+    "songs/_template/prompts/",
+    "songs/_template/prompts/.gitkeep",
+    "songs/_template/recordings/",
+    "songs/_template/recordings/.gitkeep",
+    "songs/_template/selects/",
+    "songs/_template/selects/.gitkeep",
+    "songs/_template/session/",
+    "songs/_template/session/.gitkeep",
+    "songs/_template/song.yaml",
+    "songs/_template/stems/",
+    "songs/_template/stems/.gitkeep"
+  ]
+}

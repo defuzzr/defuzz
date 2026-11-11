@@ -1,0 +1,94 @@
+{
+  "declared_dirs": [
+    {
+      "dir": "foundation",
+      "summary": "Layer 0 shared C# primitives and exceptions",
+      "why": "Keep base types free of domain, adapter, and app dependencies",
+      "source": "explicit"
+    },
+    {
+      "dir": "domain",
+      "summary": "Layer 1 pure C# domain library",
+      "why": "Isolate business logic from I/O adapters and entrypoints",
+      "source": "explicit"
+    },
+    {
+      "dir": "adapters",
+      "summary": "Layer 2 C# integration adapters",
+      "why": "Implement external boundaries behind separate .csproj targets",
+      "source": "explicit"
+    },
+    {
+      "dir": "apps",
+      "summary": "Layer 3 C# CLI composition root",
+      "why": "Wire workspace projects and configuration at the entrypoint",
+      "source": "explicit"
+    },
+    {
+      "dir": "xtask",
+      "summary": "Standalone .NET workspace automation runner",
+      "why": "Enforce offline restore, formatting, build, self-test, and layers",
+      "source": "explicit"
+    },
+    {
+      "dir": "docs",
+      "summary": "Architecture and component boundary documentation",
+      "why": "Keep project Markdown notes and design docs out of the root",
+      "source": "explicit"
+    },
+    {
+      "dir": "scripts",
+      "summary": "Shell and PowerShell helper scripts",
+      "why": "Keep small automation scripts out of the root and out of the code folders",
+      "source": "explicit"
+    }
+  ],
+  "placement_rules": [
+    {
+      "kind": "docs",
+      "match_ext": [
+        ".md",
+        ".rst",
+        ".adoc",
+        ".mmd",
+        ".puml",
+        ".drawio"
+      ],
+      "root_only": true,
+      "dest_dir": "docs",
+      "lfs": false,
+      "reason": "Notes, guides and diagram sources live in docs/ in this workspace",
+      "source": "explicit"
+    },
+    {
+      "kind": "scripts",
+      "match_ext": [
+        ".sh",
+        ".bash",
+        ".ps1"
+      ],
+      "root_only": true,
+      "dest_dir": "scripts",
+      "lfs": false,
+      "reason": "Shell and PowerShell scripts live in scripts/ in this workspace",
+      "source": "explicit"
+    }
+  ],
+  "protected_root_files": [
+    "global.json",
+    "NuGet.Config",
+    "nuget.config",
+    "Directory.Build.props",
+    "Directory.Build.targets",
+    "Directory.Packages.props",
+    "*.sln",
+    "*.slnx",
+    ".config",
+    "AGENT.md",
+    "WARP.md",
+    "QWEN.md",
+    "CRUSH.md",
+    "DCO.md",
+    "ACKNOWLEDGMENTS.md"
+  ]
+}

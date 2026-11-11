@@ -1,0 +1,91 @@
+# Runs a bounded set of the plugin's tests on every push and pull request, on Linux
+# only (the one supported system).
+# The plugin imports the Hermes Agent SDK, so a Hermes Agent source checkout at a
+# pinned commit sits next to this one and goes on PYTHONPATH (README "Running the tests").
+# Tests that need the template toolchains or the lint tools skip by themselves.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.13", "3.14"]
+    steps:
+      # The folder name must be a valid Python identifier (README "Running the tests").
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: defuzz
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: NousResearch/hermes-agent
+          ref: 3b421578588243f920886e6fe79a6faa87ea026e # v0.23.1
+          path: hermes-agent
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install test dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check
+          PyYAML==6.0.3 fastapi==0.133.1 httpx==0.28.1 pytest==9.1.1
+          ruamel-yaml==0.18.16 starlette==1.9.0
+      # The tool probes run with a bare environment and a test home, where the runner's
+      # rustup `cargo` wrapper finds no toolchain; put the toolchain's own folder first.
+      # The runner image ships rustup.
+      - name: Put the Rust toolchain folder on PATH
+        shell: bash
+        run: dirname "$(rustup which cargo)" >> "$GITHUB_PATH"
+      - name: Run tests
+        working-directory: defuzz
+        env:
+          PYTHONPATH: ${{ github.workspace }}/hermes-agent
+        run: >-
+          python -m pytest -q -rs -p no:cacheprovider
+          tests/test_plugin_readiness.py
+          tests/test_cli_and_plugin.py
+          tests/test_rules_and_agents_md.py
+          tests/test_apply_and_place.py
+          tests/test_questionnaire.py
+          tests/test_matcher.py
+          tests/test_new_project.py
+          tests/test_templates.py
+          tests/test_componentize_bridge.py
+          tests/test_public_release.py
+          tests/test_python_floor_syntax.py
+          tests/test_docs_contract.py
+          tests/test_ci_workflow.py
+
+  desktop:
+    name: Desktop (Node 24, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Run desktop tests
+        run: node --import ./desktop/tests/sdk-shim.mjs --test desktop/tests/*.test.mjs

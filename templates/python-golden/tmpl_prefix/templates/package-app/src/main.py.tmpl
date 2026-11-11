@@ -1,0 +1,20 @@
+"""Entrypoint for __PKG_DIST__."""
+
+from __future__ import annotations
+
+import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
+def run(argv: Sequence[str] | None = None) -> int:
+    """Execute the application command and return an exit status code."""
+    _ = argv
+    return 0
+
+
+def main() -> None:
+    """Console script entrypoint for ``__PKG_DIST__``."""
+    sys.exit(run(sys.argv[1:]))

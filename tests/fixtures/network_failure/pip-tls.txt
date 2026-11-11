@@ -1,0 +1,5 @@
+Looking in indexes: https://127.0.0.1:18082/html/simple
+WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1000)'))': /html/simple/requests/
+Could not fetch URL https://127.0.0.1:18082/html/simple/requests/: There was a problem confirming the ssl certificate: HTTPSConnectionPool(host='127.0.0.1', port=18082): Max retries exceeded with url: /html/simple/requests/ (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate (_ssl.c:1000)'))) - skipping
+ERROR: Could not find a version that satisfies the requirement requests (from versions: none)
+ERROR: No matching distribution found for requests

@@ -1,0 +1,532 @@
+{
+  "schema": "defuzz.routing_holdout/1",
+  "description": "Held-out evaluation prompts written from kit descriptions and beginner phrasing.",
+  "weak_kits": {
+    "component-library": [
+      "build a shared component library for our apps",
+      "create a reusable python component library",
+      "start a folder for reusable code components and thin runners",
+      "new componentize component workspace with specs and index",
+      "reusable python modules packaged as components with an index",
+      "collection of reusable components I can drop into projects",
+      "python reusable components repo with componentize specs",
+      "set up a shared componentize library for python helpers",
+      "index of reusable python components and runner scripts",
+      "central repository of reusable components for my projects",
+      "reusable python building-block components with thin runners",
+      "workspace for componentize specs and reusable python scripts",
+      "shared python component folder with an index",
+      "reusable component pack for internal tools",
+      "personal toolbox of reusable python functions and scripts",
+      "reusable collection of python helper modules to share across repos",
+      "componentize workspace for shared python building blocks",
+      "library of reusable python scripts with thin runners",
+      "catalog of reusable code components with componentize specs",
+      "folder of shared python functions to reuse across projects"
+    ],
+    "web-app": [
+      "make an online store to sell handmade candles",
+      "web app where neighbours can lend tools to each other",
+      "build a dashboard to view my fitness data in the browser",
+      "frontend project from a figma handoff with design tokens",
+      "web application with figma sources css tokens and e2e tests",
+      "customer portal web app with login and profile page",
+      "browser app for tracking shared household chores",
+      "online menu and ordering page for a local bakery",
+      "web frontend workspace with raw and optimised design assets",
+      "interactive dashboard page for sales metrics",
+      "community forum website where members can sign up",
+      "e-commerce storefront for vintage clothing",
+      "design-to-code web workspace with tokens and assets",
+      "habit tracker web app I can open on my phone"
+    ],
+    "godot-game": [
+      "make a 2d platformer in godot",
+      "godot roguelike dungeon crawler",
+      "top-down pixel art rpg using godot and gdscript",
+      "build a puzzle game with godot scenes",
+      "godot 4 metroidvania starter project",
+      "solo indie game in godot with custom shaders",
+      "gdscript tower defense game",
+      "cozy farming sim made in godot",
+      "space shooter game project in godot",
+      "godot visual novel with dialogue scenes and art",
+      "card battler prototype in godot",
+      "3d first person exploration game in godot",
+      "make me a breakout clone with gdscript",
+      "godot rhythm game with audio and shaders",
+      "turn-based tactics game using godot",
+      "side-scrolling action game in godot with .gdignore for raw art",
+      "bullet hell arcade game in godot",
+      "point and click adventure game in godot",
+      "isometric stealth game built with godot",
+      "physics sandbox game in gdscript",
+      "endless runner mobile game in godot",
+      "twin-stick shooter in godot",
+      "godot survival crafting game workspace",
+      "local multiplayer party game in godot"
+    ]
+  },
+  "weak_templates": {
+    "web-golden": [
+      "build a website for my coffee shop",
+      "create a landing page for my new podcast",
+      "i need a simple website with an about page and contact form",
+      "set up a personal blog where I post travel stories",
+      "portfolio website to showcase my illustration work",
+      "make me a wedding rsvp page",
+      "small business site with pricing table and booking form",
+      "marketing website and product launch page",
+      "responsive website with photo gallery and bio",
+      "event registration page with schedule and speaker bios",
+      "single page website for my indie studio"
+    ]
+  },
+  "weak_templates_note": "Moved from weak_kits.web-app when the web-golden template was added: site/page build target with no language or site stack: the web-golden template is now its home (the web-app kit keeps app and design-handoff requests).",
+  "confusable_and_negative": [
+    {
+      "prompt": "python cli tool to scrape headlines from a news website",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "rust command line scraper for online store listings",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "go cli utility that pings a list of websites",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "web page link checker cli in python",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "sitemap crawler and broken link finder script in go",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "headless browser scraper cli for real estate listings",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "any_non_kit",
+      "expected_id": null
+    },
+    {
+      "prompt": "cli tool to archive blog posts to markdown",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "any_non_kit",
+      "expected_id": null
+    },
+    {
+      "prompt": "terminal dashboard for cpu and memory stats in rust",
+      "kind": "cli_or_scraper",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "date formatting utility library in typescript",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "python math library for matrix decomposition",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "reusable retry and backoff library in go",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "rust parsing library for csv and tsv files",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "c# validation library for domain models",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "dotnet-golden"
+    },
+    {
+      "prompt": "c++ linear algebra header library",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "reusable python client sdk for payment webhooks",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "shared logging and telemetry library in python",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "reusable authentication middleware package in typescript",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "audio dsp filter library in c++",
+      "kind": "non_component_library",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "entity component system framework in rust",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "c++ entity component system for a physics engine",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "electronic component bom cost calculator cli in python",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "pcb component footprint converter tool in python",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "principal component analysis cli tool in python",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "connected components graph algorithm library in c++",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "resistor and capacitor component inventory api in go",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "server rack hardware component monitor daemon in rust",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "symmetrical components fault current calculator cli in python",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "ecs component storage benchmark tool in c++",
+      "kind": "electronics_or_ecs_component",
+      "expected_catalog": "template",
+      "expected_id": "cpp-golden"
+    },
+    {
+      "prompt": "github webhook receiver service in go",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "payment webhook signature verifier api in python",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "json rest web server api only in rust",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "headless web api backend for mobile clients in c#",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "dotnet-golden"
+    },
+    {
+      "prompt": "websocket relay server in go",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "web crawler queue worker service in python",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "webhook retry dispatcher daemon",
+      "kind": "web_non_website",
+      "expected_catalog": "any_non_kit",
+      "expected_id": null
+    },
+    {
+      "prompt": "pure json web api service with no frontend",
+      "kind": "web_non_website",
+      "expected_catalog": "any_non_kit",
+      "expected_id": null
+    },
+    {
+      "prompt": "webauthn token verification library in typescript",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "webrtc signaling server in typescript",
+      "kind": "web_non_website",
+      "expected_catalog": "template",
+      "expected_id": "ts-node-golden"
+    },
+    {
+      "prompt": "unity 2d platformer game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "unity vr puzzle game in c#",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "unreal engine 5 third person action game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "bevy 2d space shooter game in rust",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "pygame arcade snake game in python",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "love2d lua dungeon crawler game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "raylib c++ breakout clone game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "gamemaker studio top down rpg",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "monogame 2d platformer game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "defold mobile puzzle game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "godo task runner cli tool in go",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "template",
+      "expected_id": "go-golden"
+    },
+    {
+      "prompt": "godotalk chat bot cli in python",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "gdpr compliance audit cli in python",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "template",
+      "expected_id": "python-golden"
+    },
+    {
+      "prompt": "make a 3d racing game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "phaser browser arcade game",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "godotty terminal multiplexer tool in rust",
+      "kind": "other_engine_or_misspelling",
+      "expected_catalog": "template",
+      "expected_id": "rust-golden"
+    },
+    {
+      "prompt": "why does my website load slowly on mobile",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "how do i export a godot game to windows",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "explain server components vs client components",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "fix the broken button alignment on our landing page",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "review my component library folder structure",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "convert these figma icons to svg",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "something fun for the weekend",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "my new side project",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "java spring boot website",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "ruby on rails online store",
+      "kind": "negative_or_vague",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "make me a reusable ui component kit",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "set up a design system and component catalog",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "i want a library of reusable buttons forms and modals",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "shared ui components and design tokens library",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "make a widget and ui component library",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "catalog of reusable frontend components",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "starter repo for reusable interface components",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "design kit of reusable cards tables and inputs",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "ui component showcase and reusable library",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    },
+    {
+      "prompt": "build a set of reusable web components and styles",
+      "kind": "ui_not_python_component_library",
+      "expected_catalog": "none",
+      "expected_id": null
+    }
+  ]
+}

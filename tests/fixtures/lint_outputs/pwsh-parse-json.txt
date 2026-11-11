@@ -1,0 +1,13 @@
+{
+  "Extent": {
+    "File": "/repo/scripts/setup.ps1",
+    "StartLineNumber": 14,
+    "StartColumnNumber": 18,
+    "EndLineNumber": 14,
+    "EndColumnNumber": 19,
+    "Text": "}"
+  },
+  "ErrorId": "MissingEndCurlyBrace",
+  "Message": "Missing closing '}' in statement block or type definition.",
+  "IncompleteInput": true
+}

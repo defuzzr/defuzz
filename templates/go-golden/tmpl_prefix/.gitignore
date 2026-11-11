@@ -1,0 +1,20 @@
+# Build artifacts
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# Environment & local overrides
+.env
+.env.*
+!.env.example
+
+# Editor & OS junk
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+.idea/
+.vscode/

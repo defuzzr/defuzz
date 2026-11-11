@@ -1,0 +1,23 @@
+id: options-duplicate-option-id
+name: Options Duplicate Option ID Fixture
+summary: Template fixture with duplicate option ids in YAML.
+kind: service
+layout: mono
+languages: [typescript]
+placeholder: tmpl_prefix
+substitute_in: ["**/*.ts", ".env.example"]
+options:
+  http_adapter:
+    label: "HTTP adapter"
+    choices: [hono, node_http]
+    default: hono
+    env_key: TMPL_PREFIX_HTTP_ADAPTER
+    description: "First."
+  http_adapter:
+    label: "HTTP adapter duplicate"
+    choices: [hono, node_http]
+    default: node_http
+    env_key: TMPL_PREFIX_HTTP_ADAPTER
+    description: "Second."
+repos:
+  - name: tmpl_prefix

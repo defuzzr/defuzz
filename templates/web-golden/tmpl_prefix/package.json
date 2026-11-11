@@ -1,0 +1,29 @@
+{
+  "name": "tmpl_prefix",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@12.15.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "biome ci .",
+    "format": "biome check --write --linter-enabled=false .",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tools/xtask/tsconfig.json",
+    "contrast": "node scripts/check-contrast.ts",
+    "xtask": "node tools/xtask/main.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@playwright/test": "1.65.0",
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.7",
+    "vitest": "4.1.12"
+  }
+}

@@ -1,0 +1,2 @@
+/repo/src/engine.cpp:42:9: warning: use nullptr [modernize-use-nullptr]
+src/render.cpp:108:5: error: division by zero is undefined [clang-analyzer-core.DivideZero]
