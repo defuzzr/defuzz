@@ -913,7 +913,10 @@ def _compile_safe_file_regex(pattern: str) -> re.Pattern[str]:
     if len(pattern) > MAX_FILE_REGEX_CHARS:
         raise ValueError(f"file probe regex exceeds {MAX_FILE_REGEX_CHARS} characters ({len(pattern)})")
 
-    parsed = re._parser.parse(pattern)  # type: ignore[attr-defined]
+    try:
+        parsed = re._parser.parse(pattern)  # type: ignore[attr-defined]
+    except (re.error, OverflowError) as exc:  # repeat counts >= MAXREPEAT raise OverflowError
+        raise ValueError(f"file probe regex is invalid: {exc}") from exc
     repeat_ops = (
         re._parser.MAX_REPEAT,  # type: ignore[attr-defined]
         re._parser.MIN_REPEAT,  # type: ignore[attr-defined]
@@ -973,8 +976,11 @@ def _compile_safe_file_regex(pattern: str) -> re.Pattern[str]:
                         raise ValueError(f"unsafe nested quantifier in file probe regex: {pattern!r}")
                 _walk(body)
 
-    _walk(parsed)
-    return re.compile(pattern)
+    try:
+        _walk(parsed)
+        return re.compile(pattern)
+    except (re.error, OverflowError) as exc:
+        raise ValueError(f"file probe regex is invalid: {exc}") from exc
 
 
 def _classify_invalid_version(cleaned: str) -> str:

@@ -114,12 +114,15 @@ class World:
     def final(self, pid: str) -> dict:
         return self.until(pid, lambda b: b["status"] != "running")
 
-    def in_check(self, pid: str) -> dict:
+    def in_check(self, pid: str, starts: int) -> dict:
+        """Wait until the job is in its check and `starts` check processes have started in
+        total (counting earlier jobs' checks), so a new job is not satisfied by an old start."""
         body = self.until(pid, lambda b: b["status"] != "running" or b["step"] == self.jobs.STEP_CHECK)
         assert body["status"] == "running", body
         end = time.monotonic() + WAIT
-        while not self.check_starts() and time.monotonic() < end:
+        while self.check_starts() < starts and time.monotonic() < end:
             time.sleep(0.02)
+        assert self.check_starts() >= starts, (self.check_starts(), starts)
         return body
 
     def state(self, pid: str) -> str | None:
@@ -155,7 +158,7 @@ def test_start_202_polls_then_done_with_todays_body(w):
     first = w.post(pid)
     assert first.status_code == 202, first.text
     _running_shape(first.json(), pid, poll=True)
-    _running_shape(w.in_check(pid), pid, poll=False)
+    _running_shape(w.in_check(pid, 1), pid, poll=False)
     again = w.post(pid)  # a second POST while it runs: the same job, not a second one
     assert again.status_code == 202 and again.json()["proposal_id"] == pid
     w.open_gate(0)
@@ -178,7 +181,7 @@ def test_start_202_polls_then_done_with_todays_body(w):
 def test_failed_check_polls_failed_and_create_again_starts_a_new_job(w):
     pid, dest = w.propose()
     assert w.post(pid).status_code == 202
-    w.in_check(pid)
+    w.in_check(pid, 1)
     w.open_gate(1)
     failed = w.final(pid)
     assert set(failed) == {"status", "proposal_id", "http_status", "detail", "partial"}
@@ -192,7 +195,7 @@ def test_failed_check_polls_failed_and_create_again_starts_a_new_job(w):
     # Create again (the page allows it: not partial): a new job, which succeeds.
     w.gate.unlink()
     assert w.post(pid).status_code == 202
-    w.in_check(pid)
+    w.in_check(pid, 2)
     w.open_gate(0)
     assert w.final(pid)["status"] == "done" and dest.is_dir()
     assert w.check_starts() == 2
@@ -223,7 +226,7 @@ def test_cancel_during_the_check_stops_it_and_create_again_works(w):
     pid, dest = w.propose()
     staging = w.routes._PROPOSALS[pid]["proposal"].staging_dir
     assert w.post(pid).status_code == 202
-    w.in_check(pid)
+    w.in_check(pid, 1)
     resp = w.cancel(pid)
     assert resp.status_code == 200 and resp.json() == {"status": "cancelled", "proposal_id": pid}
     assert w.poll(pid).json() == {"status": "cancelled", "proposal_id": pid}
@@ -232,7 +235,7 @@ def test_cancel_during_the_check_stops_it_and_create_again_works(w):
     assert w.cancel(pid).json() == {"status": "cancelled", "proposal_id": pid}
     # Create again: a new job (a second check process), which finishes.
     assert w.post(pid).status_code == 202
-    w.in_check(pid)
+    w.in_check(pid, 2)
     assert w.check_starts() == 2
     w.open_gate(0)
     assert w.final(pid)["status"] == "done" and dest.is_dir()
@@ -252,13 +255,13 @@ def test_create_right_after_a_cancel_starts_a_new_job(w):
     w.mp.setattr(w.scaffolder, "_CHECK_POLL_S", 0.01)
     w.mp.setattr(w.jobs, "ACCEPT_CANCEL_WAIT_S", 0.1)
     assert w.post(pid).status_code == 202
-    w.in_check(pid)
+    w.in_check(pid, 1)
     assert w.cancel(pid).json() == {"status": "cancelled", "proposal_id": pid}
     assert w.jobs._JOBS[pid].finished is False  # still stopping
     w.mp.setattr(w.jobs, "ACCEPT_CANCEL_WAIT_S", 15.0)
     again = w.post(pid)
     assert again.status_code == 202, again.text
-    w.in_check(pid)
+    w.in_check(pid, 2)
     w.until(pid, lambda b: w.check_starts() == 2 or b["status"] != "running")
     assert w.check_starts() == 2
     w.open_gate(0)

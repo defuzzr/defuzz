@@ -4,6 +4,7 @@ Only explicit roots and evidenced outgoing edges are inspected. Captured content
 are transient; returned evidence contains locations and fixed vocabulary only.
 """
 import configparser
+import contextlib
 import fnmatch
 import hashlib
 import hmac
@@ -16,6 +17,7 @@ import shlex
 import stat
 import time
 import tomllib
+from typing import NamedTuple
 from urllib.parse import unquote, urlsplit
 
 from .evidence import Evidence, generated_digest, serialize_evidence
@@ -106,6 +108,16 @@ _PARENT_CONTEXT_FILES = (
 _SIBLING_MANIFEST_NAMES = frozenset({'HOOK.yaml', 'HOOK.yml', 'plugin.yaml', 'plugin.yml', 'plugin.json', 'manifest.json', 'mcp.json', '__init__.py'})
 _GIT_SECTION_PATTERN = re.compile(rb'(?mi)^\s*\[(?:core|include|includeif|remote|alias|filter|credential)(?:\s|\])')
 _DB_SUFFIXES = frozenset({'.db', '.sqlite', '.sqlite3'})
+
+
+class _VisitRequest(NamedTuple):
+    """One folder or file for the outward walk to visit (the arguments of a visit)."""
+
+    path: Path
+    depth: int = 0
+    explicit: bool = False
+    parent_fd: int | None = None
+    referenced: bool = False
 
 
 def _credential(path):
@@ -350,8 +362,11 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 detail['samples'].append(Evidence(reason, path=str(current_path)))
 
     def edge(source, target, relationship, depth, *, follow=True):
+        # Records the edge. A followed edge returns its target's visit request; the caller
+        # yields it from inside the walk (or visits it, outside one), so a chain of followed
+        # edges stays in one explicit-stack walk however deep it goes.
         if extraction(str(target)) is None:
-            return
+            return None
         target = _absolute(target)
         if relationship == 'workspace_folder':
             workspace_members.setdefault(source.parent, set()).add(target)
@@ -361,9 +376,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         existing = edge_index.get(group)
         if existing is None and not unbounded and len(result['blending']) >= MAX_EDGES:
             unknown('outgoing_edge_report_limit_exceeded', (owner(source),))
-            if follow:
-                visit(target, depth + 1, explicit=True, referenced=True)
-            return
+            return _VisitRequest(target, depth + 1, explicit=True, referenced=True) if follow else None
         if relationship not in {'execution_path', 'incoming_execution_reference'} and (_credential(source) or source in sensitive_paths):
             if target not in sensitive_paths:
                 mark_sensitive_target(target)
@@ -383,8 +396,12 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
             existing['sample_paths'] = sorted(existing['sample_paths'] + [str(source)])[:3]
         elif len(existing['sample_paths']) < 3:
             existing['sample_paths'].append(str(source))
-        if follow:
-            visit(target, depth + 1, explicit=True, referenced=True)
+        return _VisitRequest(target, depth + 1, explicit=True, referenced=True) if follow else None
+
+    def run_visit_request(request):
+        # Outside the walk: visit a followed edge's target now, as edge() used to.
+        if request is not None:
+            visit(*request)
 
     def expand_glob_reference(source, target, relationship, depth):
         pending = [(Path('/'), target.parts[1:])]
@@ -392,7 +409,8 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         while pending:
             base, parts = pending.pop()
             if not parts:
-                edge(source, base, relationship, depth)
+                if (request := edge(source, base, relationship, depth)) is not None:
+                    yield request
                 continue
             part, rest = parts[0], parts[1:]
             if not any(c in part for c in '*?['):
@@ -435,9 +453,10 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
             mark_sensitive_target(target)
             credential_references.setdefault(str(target), set()).add(config_key)
         if any(c in str(target) for c in '*?['):
-            expand_glob_reference(source, target, relationship, depth)
+            yield from expand_glob_reference(source, target, relationship, depth)
             return
-        edge(source, target, relationship, depth)
+        if (request := edge(source, target, relationship, depth)) is not None:
+            yield request
 
     load_roots = {}
 
@@ -517,7 +536,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                         if raw.startswith('workspace:') and not value.startswith(('.', '/', '~')):
                             workspace_dependencies.append((path, dependency, value))
                         else:
-                            referenced_path(path, value, 'local_dependency', depth)
+                            yield from referenced_path(path, value, 'local_dependency', depth)
         if path.name in {'package.json', 'pnpm-workspace.yaml'}:
             if path.name == 'pnpm-workspace.yaml' or 'workspaces' in config:
                 workspace_members.setdefault(path.parent, set())
@@ -525,11 +544,11 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
             if isinstance(entries, dict):
                 entries = entries.get('packages', [])
             for raw in _as_list(entries):
-                referenced_path(path, raw, 'workspace_folder', depth)
+                yield from referenced_path(path, raw, 'workspace_folder', depth)
         if path.name.startswith('tsconfig') and 'extends' in config:
             for raw in _as_list(config['extends']):
                 if isinstance(raw, str) and raw.startswith(('.', '/')):
-                    referenced_path(path, raw, 'typescript_extends', depth)
+                    yield from referenced_path(path, raw, 'typescript_extends', depth)
                 else:
                     unknown('typescript_extends_unresolved: ' + str(path))
         options = config.get('compilerOptions', {})
@@ -538,7 +557,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
             if isinstance(mappings, dict) and isinstance(base_url, str):
                 for values in mappings.values():
                     for raw in _as_list(values):
-                        referenced_path(path, raw, 'typescript_path', depth, base_dir=path.parent / base_url)
+                        yield from referenced_path(path, raw, 'typescript_path', depth, base_dir=path.parent / base_url)
 
     def inspect_config(path, data, info, depth):
         observe(path, data)
@@ -553,7 +572,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         if isinstance(skills, dict):
             for name in ('create_dir', 'external_dirs'):
                 for raw in _as_list(skills.get(name, [])):
-                    referenced_path(path, raw, 'external_skill_root', depth)
+                    yield from referenced_path(path, raw, 'external_skill_root', depth)
 
         def safe_key(name):
             return name if name in _SAFE_CONFIG_KEYS else 'key-hmac:' + hmac.new(key, str(name).encode(), hashlib.sha256).hexdigest()
@@ -574,7 +593,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     if 'mcp_servers' in key_path and name in {'command', 'args'}:
                         for raw in _as_list(item):
                             if isinstance(raw, str) and raw.startswith(('/', './', '../', '~/')):
-                                referenced_path(path, raw, 'mcp_command_path', depth)
+                                yield from referenced_path(path, raw, 'mcp_command_path', depth)
                             elif name == 'command' or isinstance(raw, str) and ('$' in raw or '/' in raw):
                                 unknown('mcp_command_path_unresolved: ' + str(path))
                     if name == 'template' and (path.name in {'azure-pipelines.yml', 'azure-pipelines.yaml'} or path in ci_templates):
@@ -582,22 +601,22 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                             target = _absolute(path.parent / item)
                             ci_templates.add(target)
                             dynamic(target, 'ci_template')
-                            referenced_path(path, item, 'ci_template', depth)
+                            yield from referenced_path(path, item, 'ci_template', depth)
                         else:
                             unknown('ci_template_unresolved: ' + str(path))
                     if name in {'extend', 'extends'} and not path.name.startswith('tsconfig'):
                         for raw in _as_list(item):
                             if isinstance(raw, str) and raw.startswith(('.', '/', '~/')):
-                                referenced_path(path, raw, 'config_inheritance', depth)
+                                yield from referenced_path(path, raw, 'config_inheritance', depth)
                             else:
                                 unknown('config_inheritance_unresolved: ' + str(path))
                     if name in _PATH_CONFIG_KEYS and not (name == 'paths' and isinstance(item, dict)):
                         for raw in _as_list(item):
-                            referenced_path(path, raw, 'configured_path', depth, config_key=name)
-                    walk(item, key_path + (name,))
+                            yield from referenced_path(path, raw, 'configured_path', depth, config_key=name)
+                    yield from walk(item, key_path + (name,))
             elif isinstance(value, list):
                 for index, item in enumerate(value):
-                    walk(item, key_path + (str(index),))
+                    yield from walk(item, key_path + (str(index),))
 
         text_decoded = data.decode('utf-8', errors='replace')
         for command in _extract_commands(config):
@@ -607,8 +626,8 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 line = data[:offset].count(b'\n') + 1 if offset >= 0 else None
                 invocation.setdefault('commands', []).append(Evidence(command, 'command', str(path), line))
         config = safe_config(config)
-        walk(config)
-        inspect_package_and_ts_config(path, config, depth)
+        yield from walk(config)
+        yield from inspect_package_and_ts_config(path, config, depth)
 
     def session_in_project(raw):
         # A session folder started through a linked spelling still belongs to its project:
@@ -663,7 +682,8 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         for reference in report.get('folder_references', []):
             target = _absolute(reference['path'])
             registered_folders.add(target)
-            edge(path, target, 'registered_project_folder', 0)
+            if (request := edge(path, target, 'registered_project_folder', 0)) is not None:
+                yield request
         for association in report.get('associations', []):
             if association['table'] in {'projects', 'project_folders'}:
                 raw = association.get('primary_path') or association.get('path')
@@ -680,7 +700,9 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 raw = association.get('workspace_path')
                 if isinstance(raw, str) and os.path.isabs(raw):
                     target = _absolute(raw)
-                    edge(path, target, 'kanban_task_workspace', 0, follow=_within_any(target, project_roots()))
+                    if (request := edge(path, target, 'kanban_task_workspace', 0,
+                                        follow=_within_any(target, project_roots()))) is not None:
+                        yield request
                 else:
                     unknown('kanban_task_workspace_unresolved: ' + str(path), (owner(path),))
         result.setdefault('database_associations', []).append({
@@ -752,7 +774,8 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                         edge(path, target, 'literal_path', depth, follow=False)
                     continue
             relationship = 'execution_path' if trigger else 'literal_path'
-            edge(path, target, relationship, depth)
+            if (request := edge(path, target, relationship, depth)) is not None:
+                yield request
             record = edge_index.get((str(path), str(target), relationship))
             if record:
                 record['evidence']['line'] = line
@@ -763,7 +786,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         is_history = path.is_relative_to(profile / 'sessions')
         suffix_low = path.suffix.lower()
         if not is_history and (file_type in {'program_code', 'execution_surface'} or suffix_low in {'.md', '.mdc', '.rst', '.txt'}):
-            inspect_literal_paths(path, data, depth)
+            yield from inspect_literal_paths(path, data, depth)
         git_role = any(c.config_kind(path) or c.hook_kind(path) for c in git_contexts)
         if file_type == 'unknown' and not git_role and not (is_history and path.suffix in {'.json', '.jsonl'}):
             unknown('unknown_file_type: ' + str(path))
@@ -785,7 +808,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 config = configparser.ConfigParser(interpolation=None, strict=False)
                 config.read_string(data.decode('utf-8'))
                 if raw := config.get('core', 'hookspath', fallback=None):
-                    referenced_path(path, raw, 'git_hooks_path', depth, base_dir=path.parent.parent)
+                    yield from referenced_path(path, raw, 'git_hooks_path', depth, base_dir=path.parent.parent)
             except (ValueError, UnicodeError, configparser.Error):
                 unknown('git_config_parse_failed: ' + str(path), ('dynamic_execution', 'cross_project_isolation'))
         if path.name.endswith(('-wal', '-journal')):
@@ -797,19 +820,19 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 if '=>' in line:
                     raw = line.split('=>', 1)[1].split('//', 1)[0].strip().strip('"')
                     if raw.startswith(('./', '../', '/')):
-                        referenced_path(path, raw, 'go_replace', depth)
+                        yield from referenced_path(path, raw, 'go_replace', depth)
                     else:
                         unknown('go_replace_unresolved: ' + str(path))
             unknown('go_module_semantics_unclassified: ' + str(path))
         elif path.suffix == '.code-workspace':
             try:
                 for document in parse_data(path, data, unbounded=unbounded):
-                    inspect_config(path, json.dumps(document).encode(), info, depth)
+                    yield from inspect_config(path, json.dumps(document).encode(), info, depth)
             except (ValueError, UnicodeError, RecursionError):
                 unknown('workspace_parse_failed: ' + str(path))
         elif path.suffix == '.toml':
             try:
-                inspect_config(path, json.dumps(tomllib.loads(data.decode('utf-8'))).encode(), info, depth)
+                yield from inspect_config(path, json.dumps(tomllib.loads(data.decode('utf-8'))).encode(), info, depth)
             except (ValueError, UnicodeError, TypeError, RecursionError):
                 unknown('toml_parse_failed: ' + str(path))
         elif is_history and path.suffix in ('.json', '.jsonl'):
@@ -827,17 +850,17 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     documents = parse_data(path, data, unbounded=unbounded)
                     if kind in {'jsonc_config', 'jsonc_data'} or path.name == 'pnpm-workspace.yaml':
                         for document in documents:
-                            inspect_config(path, json.dumps(document).encode(), info, depth)
+                            yield from inspect_config(path, json.dumps(document).encode(), info, depth)
                 except (ValueError, UnicodeError, RecursionError):
                     unknown('structured_data_parse_failed: ' + str(path))
                 return
             if (file_type == 'unknown' and path.name not in _KNOWN_STRUCTURED_NAMES
                     and not (path.name.startswith('tsconfig.') or '.github' in path.parts and 'workflows' in path.parts)):
                 unknown('unclassified_structured_file: ' + str(path))
-            inspect_config(path, data, info, depth)
+            yield from inspect_config(path, data, info, depth)
         elif path.suffix == '.egg-link':
             try:
-                referenced_path(path, data.decode('utf-8').splitlines()[0], 'editable_install', depth)
+                yield from referenced_path(path, data.decode('utf-8').splitlines()[0], 'editable_install', depth)
             except (UnicodeError, IndexError):
                 unknown('editable_install_parse_failed: ' + str(path))
         elif path.name == 'direct_url.json':
@@ -846,7 +869,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 if record.get('dir_info', {}).get('editable'):
                     url = urlsplit(record['url'])
                     if url.scheme == 'file' and not url.netloc and not url.query and not url.fragment:
-                        referenced_path(path, unquote(url.path), 'editable_install', depth)
+                        yield from referenced_path(path, unquote(url.path), 'editable_install', depth)
                     else:
                         unknown('editable_install_url_unresolved: ' + str(path))
             except (ValueError, KeyError, TypeError, AttributeError):
@@ -857,7 +880,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     if line.startswith(('import ', 'import\t')):
                         dynamic(path, 'pth_execution_unresolved', number)
                     elif line.strip() and not line.startswith('#'):
-                        referenced_path(path, line, 'editable_install', depth)
+                        yield from referenced_path(path, line, 'editable_install', depth)
             except UnicodeError:
                 unknown('pth_parse_failed: ' + str(path))
 
@@ -932,12 +955,54 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         unknown('credential_store_not_opened: ' + str(path), ('credentials',))
 
     def visit(path, depth=0, explicit=False, parent_fd=None, referenced=False):
+        # _visit is a generator that yields a _VisitRequest for each nested visit instead
+        # of calling visit, so the walk keeps its order but a deep folder chain does not
+        # grow the call stack (unbounded mode has no depth cap). A nested visit's exception
+        # is thrown into its parent at the yield, as a call would. Followed edges are
+        # yielded the same way (see edge), so they nest no driver either.
         nonlocal current_path
-        previous, current_path = current_path, path
+        frames, request, error = [], _VisitRequest(path, depth, explicit, parent_fd, referenced), None
         try:
-            return _visit(path, depth, explicit, parent_fd, referenced)
-        finally:
-            current_path = previous
+            while True:
+                if request is not None:
+                    frames.append((_visit(*request), current_path))
+                    current_path = request.path
+                request, error, finished = resume(frames[-1][0], error)
+                if not finished:
+                    continue
+                current_path = frames.pop()[1]
+                if not frames:
+                    if error is not None:
+                        raise error
+                    return
+        except BaseException:
+            # Only an exception landing in this driver rather than in a visit (an asynchronous
+            # one such as KeyboardInterrupt) leaves visits suspended. The walk returns only
+            # once every visit has finished, so there is nothing to close on the way out.
+            close_suspended(frames)
+            raise
+
+    def close_suspended(frames):
+        # Close every suspended visit, innermost first, now, so their descriptors and tree
+        # records unwind as a call stack would. A visit's cleanup that raises does not stop
+        # the rest; the walk's own exception is the one that propagates.
+        nonlocal current_path
+        while frames:
+            walker, current_path = frames.pop()
+            with contextlib.suppress(BaseException):
+                walker.close()
+
+    def resume(walker, error):
+        # One step of a visit: (its next nested request, None, False), or (None, the
+        # exception it ended with or None, True) once it has finished.
+        try:
+            return (next(walker) if error is None else walker.throw(error)), None, False
+        except StopIteration:
+            return None, None, True
+        except BaseException as exc:
+            if walker.gi_frame is not None:
+                raise  # landed here, not in the still-suspended visit: unwind every visit
+            return None, exc, True
 
     def admit_directory(path, explicit, parent_fd, referenced, fd):
         """Return None to stop traversal, or a bool to continue (True starts a tree)."""
@@ -984,11 +1049,12 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     target = Path(os.readlink(ancestor))
                     target = _absolute(target if target.is_absolute() else ancestor.parent / target)
                     edge(ancestor, target, 'symlink', depth, follow=False)
-                    edge(path, target / path.relative_to(ancestor), 'symlink_suffix', depth)
+                    if (request := edge(path, target / path.relative_to(ancestor), 'symlink_suffix', depth)) is not None:
+                        yield request
                     return
             if parent_fd is None and path != Path('/'):
                 with _directory_fd(path.parent) as anchored:
-                    visit(path, depth, explicit, parent_fd=anchored, referenced=referenced)
+                    yield _VisitRequest(path, depth, explicit, parent_fd=anchored, referenced=referenced)
                 return
             if not admit(path):
                 return
@@ -1002,7 +1068,8 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 return
             if stat.S_ISLNK(info.st_mode):
                 target = Path(os.readlink(path.name, dir_fd=parent_fd))
-                edge(path, _absolute(target if target.is_absolute() else path.parent / target), 'symlink', depth)
+                if (request := edge(path, _absolute(target if target.is_absolute() else path.parent / target), 'symlink', depth)) is not None:
+                    yield request
                 return
             if stat.S_ISDIR(info.st_mode):
                 if path == profile / 'profiles' and not explicit:
@@ -1029,7 +1096,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                                     break
                                 if in_venv and not venv_kept(entry):
                                     continue
-                                visit(path / entry.name, depth + 1, parent_fd=fd)
+                                yield _VisitRequest(path / entry.name, depth + 1, parent_fd=fd)
                     finally:
                         if starts_tree:
                             _, started = tree_stack.pop()
@@ -1046,10 +1113,10 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
             if info.st_nlink > 1:
                 hardlinks.setdefault((info.st_dev, info.st_ino), {'count': info.st_nlink, 'paths': []})['paths'].append(path)
             if path.suffix.lower() in _DB_SUFFIXES and not is_sensitive:
-                inspect_session_db(path, parent_fd, info)
+                yield from inspect_session_db(path, parent_fd, info)
                 return
             if path.name.endswith(('-wal', '-shm', '-journal')) and Path(str(path).rsplit('-', 1)[0]).suffix.lower() in _DB_SUFFIXES:
-                visit(Path(str(path).rsplit('-', 1)[0]), depth, explicit=True)
+                yield _VisitRequest(Path(str(path).rsplit('-', 1)[0]), depth, explicit=True)
                 return
             outside = not unbounded and not in_subject(path)
             if outside and info.st_size > outside_file_limit:
@@ -1067,7 +1134,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     unknown('file_changed_during_inspection: ' + str(path))
                     return
                 if not is_sensitive and stream.read(16) == b'SQLite format 3\x00':
-                    inspect_session_db(path, parent_fd, info)
+                    yield from inspect_session_db(path, parent_fd, info)
                     return
                 if byte_limit is not None and budget['bytes_read'] + info.st_size > byte_limit:
                     unknown('total_byte_limit_exceeded: ' + str(path))
@@ -1114,7 +1181,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 unknown('file_byte_limit_exceeded: ' + str(path))
                 return
             processed_content.add(str(path))
-            inspect_content(path, data, info, depth)
+            yield from inspect_content(path, data, info, depth)
         except OSError as exc:
             unknown('inspection_failed:' + type(exc).__name__ + ': ' + str(path))
 
@@ -1249,9 +1316,9 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     continue
                 target = _resolve_target(raw, home, sibling)
                 if _within_any(target, roots):
-                    edge(source, target, 'incoming_sibling_reference', 0)
+                    run_visit_request(edge(source, target, 'incoming_sibling_reference', 0))
                     if section in {'skills', 'plugins'} and (sibling / section).exists():
-                        edge(source, sibling / section, 'incoming_sibling_region', 0)
+                        run_visit_request(edge(source, sibling / section, 'incoming_sibling_region', 0))
         except FileNotFoundError:
             pass
         except (OSError, ValueError, UnicodeError, RecursionError, ImportError):
@@ -1273,8 +1340,8 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     ('dynamic_execution', 'cross_project_isolation') if reason == 'git_include_condition_unresolved' else (owner(path),))
         for reference in context.edges:
             if reference.target.exists() or reference.target.is_symlink():
-                edge(reference.source, reference.target, reference.relationship, 0,
-                     follow=reference.relationship not in {'git_context', 'git_directory', 'git_common_directory'})
+                run_visit_request(edge(reference.source, reference.target, reference.relationship, 0,
+                                       follow=reference.relationship not in {'git_context', 'git_directory', 'git_common_directory'}))
         visit(project, explicit=True)
         boundary = next((p for p in (project, *project.parents) if (p / '.git').exists()), Path('/'))
         result['limits']['parent_context_boundary'] = str(boundary)
@@ -1292,10 +1359,10 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                 except OSError:
                     unknown('parent_context_stat_failed: ' + str(candidate))
                     continue
-                edge(project, candidate, 'parent_context', 0)
+                run_visit_request(edge(project, candidate, 'parent_context', 0))
             rules = parent / '.cursor' / 'rules'
             if rules.is_dir():
-                edge(project, rules, 'parent_context', 0)
+                run_visit_request(edge(project, rules, 'parent_context', 0))
             if parent == boundary:
                 break
 
@@ -1316,7 +1383,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
     visit(profile, explicit=True)
     shared_kanban = default_profile / 'kanban.db'
     if profile != default_profile and (shared_kanban.exists() or shared_kanban.is_symlink()):
-        edge(profile, shared_kanban, 'shared_kanban', 0)
+        run_visit_request(edge(profile, shared_kanban, 'shared_kanban', 0))
 
     container = default_profile / 'profiles'
     result['limits']['unrelated_siblings'] = 'top-level lstat and config.yaml declarations (including default); unrelated content not inspected'

@@ -92,7 +92,7 @@ from pathlib import Path, PurePath
 from typing import TYPE_CHECKING, Any, Iterator
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable
     from typing import Protocol
 
     class _RedactionOwnerState(Protocol):
@@ -978,19 +978,32 @@ def _taint_final(owner: _DeferredOwner | None) -> dict | None:
 
 
 def _rehome_redactions(
-    redactions: dict, deferred: Sequence[Any], state: _RedactionOwnerState,
+    redactions: dict, deferred: list[Any] | tuple[Any, ...],
+    state: _RedactionOwnerState,
 ) -> dict:
     """Resolve regions before assigning any child fields to the parent's taint.
 
-    Invalid deferred references or item containers fail closed with
-    BudgetExceeded, leaving the parent's taint data unassigned.
+    deferred is the child's list (or tuple) of sources; _merge_taint passes []
+    in place of a missing or falsy one. Each deferred region must end in an
+    index into it written only with ASCII digits 0-9 (leading zeros allowed,
+    so '01' is index 1; no sign, space or other characters). The container is
+    only checked when a deferred region is present: then any other deferred
+    container (mapping, str, bytes, range, ...) fails closed, as does any
+    reference that is malformed, out of range or too long for int(). With only
+    plain regions, deferred is not looked at. Separately, any region whose
+    items are not a set, frozenset, list or tuple fails closed. Failing closed
+    raises BudgetExceeded('stopped') before the parent's taint data is
+    assigned.
     """
     rehomed: dict = {}
     for region, items in redactions.items():
         if isinstance(region, str) and region.startswith(_DEFERRED):
+            index = region[len(_DEFERRED):]
+            if not (isinstance(deferred, (list, tuple)) and index.isascii() and index.isdigit()):
+                raise BudgetExceeded('stopped')
             try:
-                source = deferred[int(region[len(_DEFERRED):])]
-            except (IndexError, ValueError, TypeError):
+                source = deferred[int(index)]
+            except (IndexError, ValueError):
                 raise BudgetExceeded('stopped') from None
             # The region the parent's owner would have assigned in-process.
             region = state.owner(source) if state.owner else 'shared_infrastructure'

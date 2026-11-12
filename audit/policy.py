@@ -277,6 +277,76 @@ def opened_credential(info, path, real=None, parent_info=None):
     return any(p.casefold() in view.lexical or p.casefold() in view.real for p in _with_parents(_normal(real)))
 
 
+def _anchor(text):
+    """The root `text` hangs from: '//' or '/'.
+
+    POSIX lets an implementation give exactly two leading slashes their own meaning, so
+    os.path.normpath and Path keep '//x' as written (three or more collapse to '/').
+    '//' is therefore a separate root: '/' never covers '//x', and '//' never covers '/x'.
+    """
+    return '//' if text.startswith('//') else '/'
+
+
+def _covers(absolute, entry):
+    """True when the normalised text path `entry` is `absolute` or one of its ancestors."""
+    if absolute == entry:
+        return True
+    prefix = entry if entry.endswith('/') else entry + '/'
+    return absolute.startswith(prefix) and _anchor(absolute) == _anchor(entry)
+
+
+def _self_or_inside(absolute, entries):
+    """True when an entry is `absolute` (a str in Path normal form) or one of its ancestors.
+
+    An entry counts in its lexical normal form (os.path.normpath), whether given as str
+    or as a path object; entries that are not text paths (bytes, other objects) never
+    match. The filesystem root keeps its own slash (see _anchor).
+
+    Cost per call, for N entries of total length T and a path of length L:
+    - every entry a str, in a set, frozenset, list or tuple (what the producers make):
+      O(N + T) C-level work (one join and one str.startswith per entry; a miss adds one
+      normpath over the joined text) plus one normpath and compare for each entry that
+      is a string prefix of `absolute`. Those entries are drawn from the L + 1 prefixes
+      of `absolute`, so a set or frozenset holds at most L + 1 of them; a list or tuple
+      may repeat one any number of times, and each repeat is normalised again. There is
+      no other per-entry Python work, but the O(N) scan remains: without a cache, any
+      one entry could be an unnormalised spelling of an ancestor, so every entry must
+      be looked at.
+      On a miss, the slow loop below then also runs, exactly when os.path.normpath
+      changes the joined text. That includes every unnormalised absolute entry,
+      unnormalised relative entries such as 'rel/' and 'a/./b', and some entries that
+      are already in normal form: '/' or a '//'-rooted entry in any position but the
+      first, and '//' in any position (normpath keeps two leading slashes only at the
+      start of the whole text).
+    - otherwise (an entry that is not a str, such as a path object or bytes, or another
+      container): only the slow loop runs.
+    The slow loop normalises and compares each entry, O(T + N * L). Both paths give the
+    same verdict for every input.
+    """
+    if type(entries) in (set, frozenset, list, tuple):
+        try:
+            text = '/\0'.join(entries)  # TypeError unless every entry is a str.
+        except TypeError:
+            text = None
+        if text is not None:
+            if any(_covers(absolute, os.path.normpath(entry)) for entry in filter(absolute.startswith, entries)):
+                return True
+            # '/\0' between entries keeps their boundaries visible to normpath: a doubled
+            # or trailing slash, or a '.' or '..' component, in any absolute entry changes
+            # the joined text. An unchanged text means every absolute entry is already in
+            # normal form, so only entries that prefix `absolute` could have matched.
+            if os.path.normpath(text) == text:
+                return False
+    for entry in entries:
+        try:
+            entry = os.fspath(entry)
+        except TypeError:
+            continue
+        if isinstance(entry, str) and _covers(absolute, os.path.normpath(entry)):
+            return True
+    return False
+
+
 def credential_verdict(path):
     """'credential', 'unverified' (could not be checked: never open it) or None."""
     if declaration_source(path):
@@ -284,11 +354,10 @@ def credential_verdict(path):
     from .redaction import _CURRENT
     state = _CURRENT.get()
     if state is not None:
-        absolute = Path(os.path.abspath(path))
-        if any(str(parent) in state.credential_paths for parent in (absolute, *absolute.parents)):
+        absolute = str(Path(os.path.abspath(path)))
+        if _self_or_inside(absolute, state.credential_paths):
             return 'credential'
-        if any(absolute == root or root in absolute.parents
-               for root in getattr(state, 'credential_uncertain_roots', ())):
+        if _self_or_inside(absolute, getattr(state, 'credential_uncertain_roots', ())):
             return 'credential'
         if os.path.isabs(os.fspath(path)):
             match = _declared_match(state, path)
