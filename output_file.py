@@ -202,6 +202,40 @@ def _open_child_dir(parent_fd: int, name: str, role: str, shown: str) -> int:
         raise SafetyError(f"Refusing {role} path whose parent is not a folder: {shown}") from exc
 
 
+def _replace_output_file(fd: int, lex: Path, data: bytes, role: str) -> None:
+    """Write a temporary sibling and replace the checked leaf through its parent handle."""
+    leaf = lex.name
+    try:
+        st: Optional[os.stat_result] = os.stat(leaf, dir_fd=fd, follow_symlinks=False)
+    except FileNotFoundError:
+        st = None
+    if st is not None and stat.S_ISLNK(st.st_mode):
+        raise _symlink_error(role, lex)
+    if st is not None and not stat.S_ISREG(st.st_mode):
+        raise SafetyError(f"Refusing to overwrite non-regular file at {role} path: {lex}")
+    tmp_name = f"{_TEMP_PREFIX}{secrets.token_hex(8)}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_NOFOLLOW | _O_CLOEXEC
+    try:
+        tfd = os.open(tmp_name, flags, 0o666, dir_fd=fd)
+    except OSError as exc:
+        raise SafetyError(f"Could not write {role} file ({exc.strerror}): {lex}") from exc
+    try:
+        with os.fdopen(tfd, "wb") as fh:
+            if st is not None:
+                os.fchmod(fh.fileno(), stat.S_IMODE(st.st_mode))
+            fh.write(data)
+        os.replace(tmp_name, leaf, src_dir_fd=fd, dst_dir_fd=fd)
+    except BaseException as exc:
+        try:
+            os.unlink(tmp_name, dir_fd=fd)
+        except OSError:
+            pass
+        if isinstance(exc, OSError):
+            reason = exc.strerror or str(exc)
+            raise SafetyError(f"Could not write {role} file ({reason}): {lex}") from exc
+        raise
+
+
 def write_output_text(
     path: os.PathLike | str,
     text: str,
@@ -251,36 +285,7 @@ def write_output_text(
             child = _open_child_dir(fd, name, role, shown)
             os.close(fd)
             fd = child
-        leaf = lex.name
-        try:
-            st: Optional[os.stat_result] = os.stat(leaf, dir_fd=fd, follow_symlinks=False)
-        except FileNotFoundError:
-            st = None
-        if st is not None and stat.S_ISLNK(st.st_mode):
-            raise _symlink_error(role, lex)
-        if st is not None and not stat.S_ISREG(st.st_mode):
-            raise SafetyError(f"Refusing to overwrite non-regular file at {role} path: {lex}")
-        tmp_name = f"{_TEMP_PREFIX}{secrets.token_hex(8)}.tmp"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _O_NOFOLLOW | _O_CLOEXEC
-        try:
-            tfd = os.open(tmp_name, flags, 0o666, dir_fd=fd)
-        except OSError as exc:
-            raise SafetyError(f"Could not write {role} file ({exc.strerror}): {lex}") from exc
-        try:
-            with os.fdopen(tfd, "wb") as fh:
-                if st is not None:
-                    os.fchmod(fh.fileno(), stat.S_IMODE(st.st_mode))
-                fh.write(data)
-            os.replace(tmp_name, leaf, src_dir_fd=fd, dst_dir_fd=fd)
-        except BaseException as exc:
-            try:
-                os.unlink(tmp_name, dir_fd=fd)
-            except OSError:
-                pass
-            if isinstance(exc, OSError):
-                reason = exc.strerror or str(exc)
-                raise SafetyError(f"Could not write {role} file ({reason}): {lex}") from exc
-            raise
+        _replace_output_file(fd, lex, data, role)
     finally:
         os.close(fd)
     return lex

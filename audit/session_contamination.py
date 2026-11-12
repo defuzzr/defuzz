@@ -351,6 +351,45 @@ def _summary(rows):
     return result
 
 
+def _contamination_report(rows, projects, findings, path, outside, limits, cut_reasons, state):
+    grouped, months = defaultdict(list), defaultdict(list)
+    for row in rows:
+        grouped[row['project_root']].append(row)
+        if row['month'] and row['prompt_chars'] is not None:
+            months[row['month']].append(row['prompt_chars'])
+    project_rows = []
+    for root, prows in sorted(grouped.items()):
+        summary = _summary(prows)
+        project_rows.append({'project_root': root, 'coverage': projects[root][1], 'project_coverage': projects[root][1],
+                             'project_families': sorted(projects[root][0]), **summary})
+        if summary['sessions_classified'] >= MIN_PROJECT_SESSIONS and summary['contamination_rate'] >= FOREIGN_RATE_THRESHOLD:
+            evidence = {**summary, 'project_root': root}
+            findings.append(_finding('session_contamination.foreign_memory_in_project', root, evidence, classification='warning'))
+    overall = _summary(rows)
+    monthly = [{'year': y, 'month': m, 'sessions_examined': len(values), 'median_system_prompt_chars': median(values)}
+               for (y, m), values in sorted(months.items())]
+    if len(monthly) >= 2:
+        first, last = monthly[0]['median_system_prompt_chars'], monthly[-1]['median_system_prompt_chars']
+        if last >= first * GROWTH_FACTOR and last - first >= GROWTH_CHARS:
+            findings.append(_finding('session_contamination.system_prompt_growth', path,
+                                      {'earliest_chars': first, 'latest_chars': last, 'growth_chars': last - first}))
+    if overall['memory_context_blocks']:
+        findings.append(_finding('session_contamination.external_memory_injection_observed', path,
+                                  {'memory_context_blocks': overall['memory_context_blocks'],
+                                   'memory_context_chars': overall['memory_context_chars']}))
+    coverage = 'could_not_verify' if (state['changed_during_read'] or limits['cuts'] or
+                                      any(not r['classified'] for r in rows)) else 'verified'
+    if state.get('truncated_by'):
+        state['reason'] = state['truncated_by']
+    section = {'sessions_outside_registered_projects': outside, 'coverage': coverage, 'status': 'completed', 'overall': overall, 'projects': project_rows,
+               'top_projects': sorted(project_rows, key=lambda r: (-(r['contamination_rate'] or 0), r['project_root']))[:10],
+               'system_prompt_by_month': monthly, 'limits': limits, 'cut_reasons': sorted(cut_reasons), **state,
+               'immutable': state['read_mode'] == 'immutable', 'database_copied': False,
+               'thresholds': {'min_project_sessions': MIN_PROJECT_SESSIONS, 'foreign_rate': FOREIGN_RATE_THRESHOLD,
+                              'growth_factor': GROWTH_FACTOR, 'growth_chars': GROWTH_CHARS}}
+    return make_component_envelope(findings=findings, coverage=coverage, extra={'session_contamination': section})
+
+
 def audit_session_contamination(*, profile_path, sessions: bool = False, selected_projects=()):
     if type(sessions) is not bool:
         raise ValueError('sessions must be a boolean')
@@ -669,39 +708,4 @@ def audit_session_contamination(*, profile_path, sessions: bool = False, selecte
             coverage='could_not_verify', affected_identities=[str(path)], source_paths=[str(path)],
             evidence={'changed_during_read': True},
             consequence='Counts may be off by the sessions written during the read.'))
-    grouped, months = defaultdict(list), defaultdict(list)
-    for row in rows:
-        grouped[row['project_root']].append(row)
-        if row['month'] and row['prompt_chars'] is not None:
-            months[row['month']].append(row['prompt_chars'])
-    project_rows = []
-    for root, prows in sorted(grouped.items()):
-        summary = _summary(prows)
-        project_rows.append({'project_root': root, 'coverage': projects[root][1], 'project_coverage': projects[root][1],
-                             'project_families': sorted(projects[root][0]), **summary})
-        if summary['sessions_classified'] >= MIN_PROJECT_SESSIONS and summary['contamination_rate'] >= FOREIGN_RATE_THRESHOLD:
-            evidence = {**summary, 'project_root': root}
-            findings.append(_finding('session_contamination.foreign_memory_in_project', root, evidence, classification='warning'))
-    overall = _summary(rows)
-    monthly = [{'year': y, 'month': m, 'sessions_examined': len(values), 'median_system_prompt_chars': median(values)}
-               for (y, m), values in sorted(months.items())]
-    if len(monthly) >= 2:
-        first, last = monthly[0]['median_system_prompt_chars'], monthly[-1]['median_system_prompt_chars']
-        if last >= first * GROWTH_FACTOR and last - first >= GROWTH_CHARS:
-            findings.append(_finding('session_contamination.system_prompt_growth', path,
-                                      {'earliest_chars': first, 'latest_chars': last, 'growth_chars': last - first}))
-    if overall['memory_context_blocks']:
-        findings.append(_finding('session_contamination.external_memory_injection_observed', path,
-                                  {'memory_context_blocks': overall['memory_context_blocks'],
-                                   'memory_context_chars': overall['memory_context_chars']}))
-    coverage = 'could_not_verify' if (state['changed_during_read'] or limits['cuts'] or
-                                      any(not r['classified'] for r in rows)) else 'verified'
-    if state.get('truncated_by'):
-        state['reason'] = state['truncated_by']
-    section = {'sessions_outside_registered_projects': outside, 'coverage': coverage, 'status': 'completed', 'overall': overall, 'projects': project_rows,
-               'top_projects': sorted(project_rows, key=lambda r: (-(r['contamination_rate'] or 0), r['project_root']))[:10],
-               'system_prompt_by_month': monthly, 'limits': limits, 'cut_reasons': sorted(cut_reasons), **state,
-               'immutable': state['read_mode'] == 'immutable', 'database_copied': False,
-               'thresholds': {'min_project_sessions': MIN_PROJECT_SESSIONS, 'foreign_rate': FOREIGN_RATE_THRESHOLD,
-                              'growth_factor': GROWTH_FACTOR, 'growth_chars': GROWTH_CHARS}}
-    return make_component_envelope(findings=findings, coverage=coverage, extra={'session_contamination': section})
+    return _contamination_report(rows, projects, findings, path, outside, limits, cut_reasons, state)

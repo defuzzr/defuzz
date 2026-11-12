@@ -416,6 +416,62 @@ def _finding(rule, path, evidence, coverage='verified', classification='review_s
                         evidence=evidence, consequence=FINDING_CONSEQUENCES[rule])
 
 
+def _parse_manifest(manifest_raw):
+    manifest = {}
+    manifest_ok = manifest_raw is not None
+    if manifest_ok:
+        try:
+            for line in manifest_raw.decode('utf-8-sig').splitlines():
+                if not line.strip():
+                    continue
+                name, _, origin = line.strip().partition(':')
+                if name in manifest or not re.fullmatch(r'[0-9a-f]{32}', origin.strip()):
+                    manifest_ok = False
+                manifest[name.strip()] = origin.strip()
+        except UnicodeError:
+            manifest_ok = False
+    return manifest, manifest_ok
+
+
+def _package_hashes(raw_files):
+    # Hermes tools/skills_sync.py:187-212: sorted relative OS paths followed by raw bytes,
+    # MD5, compare BOTH cache-filtered and exact legacy hashes. Never persist either hash.
+    current, legacy = hashlib.md5(), hashlib.md5()
+    for relative, data in sorted(raw_files.items(), key=lambda kv: Path(kv[0]).parts):
+        path = Path(relative)
+        cached = any(p in CACHE_DIRS for p in path.parts[:-1]) or (
+            path.suffix in {'.pyc', '.pyo'} and str(path.with_suffix('.py')) in raw_files)
+        legacy.update(relative.encode('utf-8', errors='surrogateescape')); legacy.update(data)
+        if not cached:
+            current.update(relative.encode('utf-8', errors='surrogateescape')); current.update(data)
+    return current, legacy
+
+
+def _resolve_manifest_origins(rows, origins, manifest):
+    # The v2 manifest usually contains names, not category paths (tools/skills_sync.py:113-128,170-185,325).
+    # Resolve all claimants together: exact hash wins; without a hash match, a single claimant is
+    # that stock skill, while multiple claimants require an exact recorded install path.
+    matched_names = set()
+    for row in rows:
+        if row['provenance'] not in {'hub', 'external_dir'}:
+            row.update(bundled=False, provenance='user_authored', modified=False, verified_unmodified=False)
+    for key, origin in manifest.items():
+        candidates = [(r, rel, hashes) for r, rel, name, hashes in origins
+                      if r['provenance'] not in {'hub', 'external_dir'} and (rel == key or Path(rel).name == key or name == key)]
+        verified = [(r, rel, hashes) for r, rel, hashes in candidates
+                    if r['coverage'] == 'verified' and origin in hashes]
+        exact = [(r, rel, hashes) for r, rel, hashes in candidates if rel == key]
+        chosen = (next((c for c in verified if c[1] == key), verified[0]) if verified
+                  else candidates[0] if len(candidates) == 1 else exact[0] if len(exact) == 1 else None)
+        if chosen is not None:
+            row = chosen[0]
+            valid = bool(re.fullmatch(r'[0-9a-f]{32}', origin)) and row['coverage'] == 'verified'
+            row.update(bundled=True, provenance='stock', verified_unmodified=bool(verified),
+                       modified=valid and not verified)
+            matched_names.add(key)
+    return matched_names
+
+
 def audit_skill_hygiene(*, profile_path):
     root = Path(profile_path).absolute()
     skills_root = root / 'skills'
@@ -528,19 +584,7 @@ def audit_skill_hygiene(*, profile_path):
             cuts += 1
 
     manifest_raw = read(root / MANIFEST)
-    manifest = {}
-    manifest_ok = manifest_raw is not None
-    if manifest_ok:
-        try:
-            for line in manifest_raw.decode('utf-8-sig').splitlines():
-                if not line.strip():
-                    continue
-                name, _, origin = line.strip().partition(':')
-                if name in manifest or not re.fullmatch(r'[0-9a-f]{32}', origin.strip()):
-                    manifest_ok = False
-                manifest[name.strip()] = origin.strip()
-        except UnicodeError:
-            manifest_ok = False
+    manifest, manifest_ok = _parse_manifest(manifest_raw)
     # tools/skills_sync_optional.py:73-88,222-227; skills_hub.py:323-365.
     # Only official sources gain exemption; lock paths never authorize new reads.
     hub_lock = skills_root / '.hub/lock.json'
@@ -579,7 +623,6 @@ def audit_skill_hygiene(*, profile_path):
         except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
             hub, hub_ok = {}, False
     rows, candidate_rows, findings, normalized, names = [], [], [], {}, {}
-    matched_names = set()
     origins = []
     skill_packages.sort()
     pkg_set = set(skill_packages)
@@ -629,16 +672,7 @@ def audit_skill_hygiene(*, profile_path):
         total = {k: sum(m[k] for m in metrics) for k in (*PATTERNS, 'lesson_headings', 'total_lines', 'characters')}
         total['longest_bullet_run'] = max((m['longest_bullet_run'] for m in metrics), default=0)
         score = residue_score(total)
-        # Hermes tools/skills_sync.py:187-212: sorted relative OS paths followed by raw bytes,
-        # MD5, compare BOTH cache-filtered and exact legacy hashes. Never persist either hash.
-        current, legacy = hashlib.md5(), hashlib.md5()
-        for relative, data in sorted(raw_files.items(), key=lambda kv: Path(kv[0]).parts):
-            path = Path(relative)
-            cached = any(p in CACHE_DIRS for p in path.parts[:-1]) or (
-                path.suffix in {'.pyc', '.pyo'} and str(path.with_suffix('.py')) in raw_files)
-            legacy.update(relative.encode('utf-8', errors='surrogateescape')); legacy.update(data)
-            if not cached:
-                current.update(relative.encode('utf-8', errors='surrogateescape')); current.update(data)
+        current, legacy = _package_hashes(raw_files)
         is_local = package.is_relative_to(skills_root)
         rel_pkg = package.relative_to(skills_root).as_posix() if is_local else None
         manifest_key = (
@@ -647,8 +681,6 @@ def audit_skill_hygiene(*, profile_path):
             )
         )
         tracked = is_local and manifest_key is not None
-        if tracked:
-            matched_names.add(manifest_key)
         complete = before == cuts and not _has_symlink_below(package, root)
         valid_origin = tracked and re.fullmatch(r'[0-9a-f]{32}', manifest[manifest_key]) is not None
         verified_unmodified = bool(valid_origin and complete and manifest[manifest_key] in (current.hexdigest(), legacy.hexdigest()))
@@ -677,27 +709,7 @@ def audit_skill_hygiene(*, profile_path):
             normalized.setdefault(digest, []).append(str(md))
             names.setdefault(re.sub('[-_]', '', name.casefold()), []).append(str(md))
 
-    # The v2 manifest usually contains names, not category paths (tools/skills_sync.py:113-128,170-185,325).
-    # Resolve all claimants together: exact hash wins; without a hash match, a single claimant is
-    # that stock skill, while multiple claimants require an exact recorded install path.
-    matched_names.clear()
-    for row in rows:
-        if row['provenance'] not in {'hub', 'external_dir'}:
-            row.update(bundled=False, provenance='user_authored', modified=False, verified_unmodified=False)
-    for key, origin in manifest.items():
-        candidates = [(r, rel, hashes) for r, rel, name, hashes in origins
-                      if r['provenance'] not in {'hub', 'external_dir'} and (rel == key or Path(rel).name == key or name == key)]
-        verified = [(r, rel, hashes) for r, rel, hashes in candidates
-                    if r['coverage'] == 'verified' and origin in hashes]
-        exact = [(r, rel, hashes) for r, rel, hashes in candidates if rel == key]
-        chosen = (next((c for c in verified if c[1] == key), verified[0]) if verified
-                  else candidates[0] if len(candidates) == 1 else exact[0] if len(exact) == 1 else None)
-        if chosen is not None:
-            row = chosen[0]
-            valid = bool(re.fullmatch(r'[0-9a-f]{32}', origin)) and row['coverage'] == 'verified'
-            row.update(bundled=True, provenance='stock', verified_unmodified=bool(verified),
-                       modified=valid and not verified)
-            matched_names.add(key)
+    matched_names = _resolve_manifest_origins(rows, origins, manifest)
     for row in rows:
         md = Path(row['skill_md_path'])
         verified_unmodified, modified = row['verified_unmodified'], row['modified']

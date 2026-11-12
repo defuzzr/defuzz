@@ -203,19 +203,20 @@ def prefill(
         return []
 
     if qid == "engine":
-        if building in {"game", "studio"}:
-            langs = ans.get("languages") or []
-            if isinstance(langs, str):
-                langs = [langs]
-            lang_set = {str(x).strip().lower() for x in langs}
-            if "gdscript" in lang_set and "rust" not in lang_set:
-                return ["godot"]
-            if "rust" in lang_set and "gdscript" not in lang_set:
-                return ["bevy"]
-            if "csharp" in lang_set:
-                return ["unity"]
-            if "cpp" in lang_set:
-                return ["unreal"]
+        if building not in {"game", "studio"}:
+            return []
+        langs = ans.get("languages") or []
+        if isinstance(langs, str):
+            langs = [langs]
+        lang_set = {str(x).strip().lower() for x in langs}
+        if "gdscript" in lang_set and "rust" not in lang_set:
+            return ["godot"]
+        if "rust" in lang_set and "gdscript" not in lang_set:
+            return ["bevy"]
+        if "csharp" in lang_set:
+            return ["unity"]
+        if "cpp" in lang_set:
+            return ["unreal"]
         return []
 
     return []

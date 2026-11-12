@@ -1651,6 +1651,53 @@ def _norm_index(words: Iterable[str], *, min_len: int = 3) -> dict[str, str]:
     return out
 
 
+def _score_kit_words(
+    kit: KitInfo, kit_tokens: list[str], kit_token_pos: dict[str, int],
+) -> tuple[int, list[str], int, int, dict[str, str]]:
+    """Score only indexed kit words, retaining prompt order for reasons."""
+    score = 0
+    reasons: List[str] = []
+
+    norm_tags = _norm_index((t.strip() for t in kit.tags), min_len=1)
+    norm_id_parts = _norm_index(kit.id.lower().split("-"))
+    norm_name_words = _norm_index(
+        _ALNUM_WORD_RE.findall(positive_kit_text(kit.name[:MAX_KIT_NAME_CHARS]).lower())
+    )
+    norm_summary_words = _norm_index(
+        _ALNUM_WORD_RE.findall(positive_kit_text(kit.summary[:MAX_KIT_SUMMARY_CHARS]).lower())
+    )
+
+    id_part_hits = 0
+    tag_hits = 0
+
+    # Only tokens found in one of the kit's word indexes can score; visit exactly
+    # those, in prompt-token order, which is the order the reasons are listed in.
+    hit_positions = {
+        pos
+        for index in (norm_tags, norm_id_parts, norm_name_words, norm_summary_words)
+        for word in index
+        if (pos := kit_token_pos.get(word)) is not None
+    }
+    for tok in (kit_tokens[pos] for pos in sorted(hit_positions)):
+        if tok in norm_id_parts:
+            id_part_hits += 1
+        if tok in norm_tags:
+            tag_hits += 1
+            score += 3
+            reasons.append(f"matches tag '{norm_tags[tok]}'")
+        elif tok in norm_id_parts:
+            score += 2
+            reasons.append(f"matches id part '{norm_id_parts[tok]}'")
+        elif tok in norm_name_words:
+            score += 1
+            reasons.append(f"matches name word '{norm_name_words[tok]}'")
+        elif tok in norm_summary_words:
+            score += 1
+            reasons.append(f"matches summary word '{norm_summary_words[tok]}'")
+
+    return score, reasons, tag_hits, id_part_hits, norm_tags
+
+
 def match_kits(
     kits: Sequence[Any],
     prompt: str,
@@ -1717,46 +1764,10 @@ def match_kits(
         kit_tokens = non_subject_tokens if use_non_subject else tokens
         kit_token_pos = non_subject_pos if use_non_subject else token_pos
 
-        score = 0
-        reasons: List[str] = []
-
-        norm_tags = _norm_index((t.strip() for t in kit.tags), min_len=1)
-        norm_id_parts = _norm_index(kit.id.lower().split("-"))
-        norm_name_words = _norm_index(
-            _ALNUM_WORD_RE.findall(positive_kit_text(kit.name[:MAX_KIT_NAME_CHARS]).lower())
+        score, reasons, tag_hits, id_part_hits, norm_tags = _score_kit_words(
+            kit, kit_tokens, kit_token_pos
         )
-        norm_summary_words = _norm_index(
-            _ALNUM_WORD_RE.findall(positive_kit_text(kit.summary[:MAX_KIT_SUMMARY_CHARS]).lower())
-        )
-
-        id_part_hits = 0
-        tag_hits = 0
         building_boost = False
-
-        # Only tokens found in one of the kit's word indexes can score; visit exactly
-        # those, in prompt-token order, which is the order the reasons are listed in.
-        hit_positions = {
-            pos
-            for index in (norm_tags, norm_id_parts, norm_name_words, norm_summary_words)
-            for word in index
-            if (pos := kit_token_pos.get(word)) is not None
-        }
-        for tok in (kit_tokens[pos] for pos in sorted(hit_positions)):
-            if tok in norm_id_parts:
-                id_part_hits += 1
-            if tok in norm_tags:
-                tag_hits += 1
-                score += 3
-                reasons.append(f"matches tag '{norm_tags[tok]}'")
-            elif tok in norm_id_parts:
-                score += 2
-                reasons.append(f"matches id part '{norm_id_parts[tok]}'")
-            elif tok in norm_name_words:
-                score += 1
-                reasons.append(f"matches name word '{norm_name_words[tok]}'")
-            elif tok in norm_summary_words:
-                score += 1
-                reasons.append(f"matches summary word '{norm_summary_words[tok]}'")
 
         family_hit = False
         if families:

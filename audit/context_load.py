@@ -413,6 +413,29 @@ def _normalize_project_entries(
     return projects_out
 
 
+def _build_source_rows(raw_comps: Mapping[str, Any]) -> list[dict[str, Any]]:
+    source_rows: list[dict[str, Any]] = []
+    for src_name in SOURCE_ORDER:
+        raw_src = raw_comps.get(src_name)
+        src_map: Mapping[str, Any] = raw_src if isinstance(raw_src, Mapping) else {}
+        chars = max(0, int(src_map.get("characters") or 0))
+        src_bytes = src_map.get("utf8_bytes")
+        utf8_bytes = max(0, int(src_bytes) if src_bytes is not None else chars)
+        est_tokens = _est_tokens(chars, src_map.get("estimated_tokens"))
+        cov = str(src_map.get("coverage") or COVERAGE_VERIFIED)
+        if cov != COVERAGE_VERIFIED:
+            cov = COVERAGE_COULD_NOT_VERIFY
+        source_rows.append({
+            "source": src_name,
+            "characters": chars,
+            "utf8_bytes": utf8_bytes,
+            "estimated_tokens": est_tokens,
+            "coverage": cov,
+            "share_of_fixed": 0.0,
+        })
+    return source_rows
+
+
 def evaluate_context_load(
     profile_context_result: Mapping[str, Any],
     *,
@@ -451,25 +474,7 @@ def evaluate_context_load(
     )
     is_exact = bool(totals.get("is_exact", False))
 
-    source_rows: list[dict[str, Any]] = []
-    for src_name in SOURCE_ORDER:
-        raw_src = raw_comps.get(src_name)
-        src_map: Mapping[str, Any] = raw_src if isinstance(raw_src, Mapping) else {}
-        chars = max(0, int(src_map.get("characters") or 0))
-        src_bytes = src_map.get("utf8_bytes")
-        utf8_bytes = max(0, int(src_bytes) if src_bytes is not None else chars)
-        est_tokens = _est_tokens(chars, src_map.get("estimated_tokens"))
-        cov = str(src_map.get("coverage") or COVERAGE_VERIFIED)
-        if cov != COVERAGE_VERIFIED:
-            cov = COVERAGE_COULD_NOT_VERIFY
-        source_rows.append({
-            "source": src_name,
-            "characters": chars,
-            "utf8_bytes": utf8_bytes,
-            "estimated_tokens": est_tokens,
-            "coverage": cov,
-            "share_of_fixed": 0.0,
-        })
+    source_rows = _build_source_rows(raw_comps)
 
     fixed_chars = int(
         totals["characters"]

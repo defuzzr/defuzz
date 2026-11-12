@@ -420,6 +420,77 @@ def apply_rules_to_copy(
         return _apply_rules_to_copy(copy_root, inventory, rules_spec, report_dest=dest, **kwargs)
 
 
+def _archive_existing_agents_md(copy_path: Path) -> str | None:
+    existing_agents_path = copy_path / "AGENTS.md"
+    if not os.path.lexists(existing_agents_path):
+        return None
+    st = os.lstat(existing_agents_path)
+    if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
+        return None
+    safe_write_bytes(
+        copy_path, "_archive/AGENTS.pre-adopt.md", existing_agents_path.read_bytes(), overwrite=False
+    )
+    return "_archive/AGENTS.pre-adopt.md"
+
+
+def _write_adoption_rules(
+    copy_path: Path,
+    plan: dict[str, Any],
+    validated_rules: dict[str, Any],
+    inventory: dict[str, Any],
+    agents_md_max_lines: int,
+) -> tuple[dict[str, Any], str]:
+    rules_payload = {
+        "schema": 1,
+        "schema_version": 1,
+        "project_slug": plan["project_slug"],
+        "declared_dirs": plan["declared_dirs"],
+        "folder_rules": validated_rules["folder_rules"],
+        "placement_rules": plan["placement_rules"],
+        "ignore_patterns": plan["ignore_patterns"],
+        "lfs_patterns": plan["lfs_patterns"],
+        "local_only_branches": list((inventory.get("git") or {}).get("local_only_branches") or []),
+        "agents_md_max_lines": agents_md_max_lines,
+    }
+    rules_text = json.dumps(rules_payload, indent=2, sort_keys=False) + "\n"
+    safe_write_text(copy_path, ".adopt/rules.json", rules_text, overwrite=True)
+    rules_hash = hashlib.sha256(rules_text.encode("utf-8")).hexdigest()
+    return rules_payload, rules_hash
+
+
+def _register_adopted_project(
+    copy_path: Path,
+    plan: dict[str, Any],
+    rules_hash: str,
+    db_path: Path | str | None,
+    state_store: Any | None,
+    record_fn: Callable[..., Any] | None,
+) -> tuple[bool, str | None]:
+    target_db = Path(db_path).expanduser() if db_path is not None else state_db_path()
+    registered = False
+    registration_error: str | None = None
+    effective_record_fn = (
+        record_fn
+        if record_fn is not None
+        else (state_store.record_project if state_store is not None else record_project)
+    )
+    try:
+        effective_record_fn(
+            path=copy_path.resolve(),
+            name=plan["project_slug"],
+            slug=plan["project_slug"],
+            template_id="adopted",
+            answers={"building": "other", "layout": "single", "languages": []},
+            hermes_project_id=None,
+            db_path=target_db,
+            rules_hash=rules_hash,
+        )
+        registered = True
+    except Exception as exc:
+        registration_error = str(exc) or type(exc).__name__
+    return registered, registration_error
+
+
 def _apply_rules_to_copy(
     copy_root: os.PathLike | str,
     inventory: Dict[str, Any],
@@ -462,31 +533,11 @@ def _apply_rules_to_copy(
     )
     moves_applied, links_rewritten = _apply_structural_moves(copy_path, plan, initial_links)
 
-    existing_agents_path = copy_path / "AGENTS.md"
-    archived_agents_md: Optional[str] = None
-    if os.path.lexists(existing_agents_path):
-        st = os.lstat(existing_agents_path)
-        if not stat.S_ISLNK(st.st_mode) and stat.S_ISREG(st.st_mode):
-            safe_write_bytes(
-                copy_path, "_archive/AGENTS.pre-adopt.md", existing_agents_path.read_bytes(), overwrite=False
-            )
-            archived_agents_md = "_archive/AGENTS.pre-adopt.md"
+    archived_agents_md = _archive_existing_agents_md(copy_path)
 
-    rules_payload = {
-        "schema": 1,
-        "schema_version": 1,
-        "project_slug": plan["project_slug"],
-        "declared_dirs": plan["declared_dirs"],
-        "folder_rules": validated_rules["folder_rules"],
-        "placement_rules": plan["placement_rules"],
-        "ignore_patterns": plan["ignore_patterns"],
-        "lfs_patterns": plan["lfs_patterns"],
-        "local_only_branches": list((inventory.get("git") or {}).get("local_only_branches") or []),
-        "agents_md_max_lines": agents_md_max_lines,
-    }
-    rules_text = json.dumps(rules_payload, indent=2, sort_keys=False) + "\n"
-    safe_write_text(copy_path, ".adopt/rules.json", rules_text, overwrite=True)
-    rules_hash = hashlib.sha256(rules_text.encode("utf-8")).hexdigest()
+    rules_payload, rules_hash = _write_adoption_rules(
+        copy_path, plan, validated_rules, inventory, agents_md_max_lines
+    )
 
     from .componentize_settings import load as load_componentize_settings
     reserve_lines = 0
@@ -576,28 +627,9 @@ def _apply_rules_to_copy(
     if tools_lock_notes:
         report["tools_lock_notes"] = tools_lock_notes
 
-    target_db = Path(db_path).expanduser() if db_path is not None else state_db_path()
-    registered = False
-    registration_error: Optional[str] = None
-    effective_record_fn = (
-        record_fn
-        if record_fn is not None
-        else (state_store.record_project if state_store is not None else record_project)
+    registered, registration_error = _register_adopted_project(
+        copy_path, plan, rules_hash, db_path, state_store, record_fn
     )
-    try:
-        effective_record_fn(
-            path=copy_path.resolve(),
-            name=plan["project_slug"],
-            slug=plan["project_slug"],
-            template_id="adopted",
-            answers={"building": "other", "layout": "single", "languages": []},
-            hermes_project_id=None,
-            db_path=target_db,
-            rules_hash=rules_hash,
-        )
-        registered = True
-    except Exception as exc:
-        registration_error = str(exc) or type(exc).__name__
 
     report["registered"] = registered
     report["registration_error"] = registration_error

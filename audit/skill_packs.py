@@ -534,6 +534,36 @@ def _empty_section(*, status: str, coverage: str, reason: str | None, limits: di
     }
 
 
+def _usage_age_buckets(
+    loadable: Sequence[Mapping[str, Any]],
+    states: Mapping[int, str],
+    use_record: Callable[[Mapping[str, Any]], Mapping[str, Any] | None],
+    last_dt: datetime,
+) -> dict[str, int]:
+    buckets = {"never": 0, "gt_90_days": 0, "days_30_to_90": 0, "lt_30_days": 0, "unverifiable": 0}
+    for r in loadable:
+        state = states[id(r)]
+        if state == "zero":
+            buckets["never"] += 1
+            continue
+        if state == "unverifiable":
+            buckets["unverifiable"] += 1
+            continue
+        urec = use_record(r)
+        latest = urec["latest"] if urec else None
+        if latest is None:
+            buckets["unverifiable"] += 1
+            continue
+        age_days = max(0.0, (last_dt - latest).total_seconds() / 86400.0)
+        if age_days < 30.0:
+            buckets["lt_30_days"] += 1
+        elif age_days <= 90.0:
+            buckets["days_30_to_90"] += 1
+        else:
+            buckets["gt_90_days"] += 1
+    return buckets
+
+
 def audit_skill_packs(
     profile_path: str | os.PathLike[str],
     *,
@@ -1346,28 +1376,7 @@ def audit_skill_packs(
         ns_evaluated = len(ns_eval)
         non_stock_zero_use_count = sum(1 for r in ns_eval if states[id(r)] == "zero")
         non_stock_never_used_share = round(non_stock_zero_use_count / ns_evaluated, 4) if ns_evaluated else 0.0
-        buckets = {"never": 0, "gt_90_days": 0, "days_30_to_90": 0, "lt_30_days": 0, "unverifiable": 0}
-        for r in loadable:
-            state = states[id(r)]
-            if state == "zero":
-                buckets["never"] += 1
-                continue
-            if state == "unverifiable":
-                buckets["unverifiable"] += 1
-                continue
-            urec = use_record(r)
-            latest = urec["latest"] if urec else None
-            if latest is None:
-                buckets["unverifiable"] += 1
-                continue
-            age_days = max(0.0, (last_dt - latest).total_seconds() / 86400.0)
-            if age_days < 30.0:
-                buckets["lt_30_days"] += 1
-            elif age_days <= 90.0:
-                buckets["days_30_to_90"] += 1
-            else:
-                buckets["gt_90_days"] += 1
-        days_buckets = buckets
+        days_buckets = _usage_age_buckets(loadable, states, use_record, last_dt)
     else:
         ns_evaluated = len(non_stock_loadable)
 

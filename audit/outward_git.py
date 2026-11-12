@@ -168,6 +168,31 @@ def _xdg_config_root(home: Path) -> Path:
     return home / '.config'
 
 
+def _config_values(path, text, issues):
+    section = ''
+    for line in _LINE_CONTINUATION.sub(r'\1', text).splitlines():
+        line = line.strip()
+        if not line or line.startswith(('#', ';')):
+            continue
+        if line.startswith('['):
+            match = _SECTION_LINE.fullmatch(line)
+            if not match:
+                issues.append((path, 'git_config_parse_failed'))
+                section = ''
+            else:
+                section = match[1].lower()
+            continue
+        match = _KEY_VALUE_LINE.fullmatch(line)
+        if not match or (section, match[1].lower()) not in {('core', 'hookspath'), ('include', 'path'), ('includeif', 'path')}:
+            continue
+        try:
+            raw = _value(match[2])
+        except ValueError:
+            issues.append((path, 'git_config_parse_failed'))
+            continue
+        yield section, raw
+
+
 def discover_git_context(project, *, home, system_config=Path('/etc/gitconfig'),
                          max_file_bytes=1024 * 1024, max_configs=128, max_edges=256,
                          allow_path=None, unbounded=False):
@@ -245,27 +270,7 @@ def discover_git_context(project, *, home, system_config=Path('/etc/gitconfig'),
         text = read(path, required=depth > 0)
         if text is None:
             return
-        section = ''
-        for line in _LINE_CONTINUATION.sub(r'\1', text).splitlines():
-            line = line.strip()
-            if not line or line.startswith(('#', ';')):
-                continue
-            if line.startswith('['):
-                match = _SECTION_LINE.fullmatch(line)
-                if not match:
-                    result.issues.append((path, 'git_config_parse_failed'))
-                    section = ''
-                else:
-                    section = match[1].lower()
-                continue
-            match = _KEY_VALUE_LINE.fullmatch(line)
-            if not match or (section, match[1].lower()) not in {('core', 'hookspath'), ('include', 'path'), ('includeif', 'path')}:
-                continue
-            try:
-                raw = _value(match[2])
-            except ValueError:
-                result.issues.append((path, 'git_config_parse_failed'))
-                continue
+        for section, raw in _config_values(path, text, result.issues):
             target = path_value(path, raw, (result.repository or project) if section == 'core' else path.parent)
             if target is None:
                 continue

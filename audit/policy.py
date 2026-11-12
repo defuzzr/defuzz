@@ -353,6 +353,48 @@ def declare_credential(path):
         state.credential_paths.add(os.path.abspath(path))
 
 
+def _declare_git_includes(text, source, home):
+    # Git includes are declarations only; never recursively read targets.
+    import re
+    from .outward_git import _value
+    section = ''
+    text = re.sub(r'(?<!\\)((?:\\\\)*)\\\r?\n', r'\1', text)
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith('['):
+            match = re.match(r'\[(include|includeif)(?:\s|\])', line, re.I)
+            section = match[1].lower() if match else ''
+        elif section:
+            match = re.match(r'path\s*=\s*(.*)', line, re.I)
+            if match:
+                raw = _value(match[1])
+                if raw and not any(c in raw for c in '$\x00\n'):
+                    target = Path(home) / raw[2:] if raw.startswith('~/') else Path(raw)
+                    declare_credential(target if target.is_absolute() else source.parent / target)
+
+
+def _declare_config_credentials(config, source, home):
+    visited = set()
+    def walk(value):
+        if isinstance(value, (dict, list)):
+            if id(value) in visited:
+                return
+            visited.add(id(value))
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key in {'credential_file', 'credentials_file', 'env_file'}:
+                    for raw in item if isinstance(item, list) else [item]:
+                        if isinstance(raw, str) and raw and not any(c in raw for c in '$\x00\n*?['):
+                            target = Path(home) / raw[2:] if raw.startswith('~/') else Path(raw)
+                            declare_credential(target if target.is_absolute() else source.parent / target)
+                else:
+                    walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                walk(item)
+    walk(config)
+
+
 def credential_declarations(root, home, *, max_bytes=1024 * 1024, excluded_paths=()):
     """Read the fixed declaration-source set first, never arbitrary candidates.
 
@@ -402,23 +444,7 @@ def credential_declarations(root, home, *, max_bytes=1024 * 1024, excluded_paths
     try:
         text = (read.content or b'').decode('utf-8')
         if source.name == 'config' and source.parent.name == '.git':
-            # Git includes are declarations only; never recursively read targets.
-            import re
-            from .outward_git import _value
-            section = ''
-            text = re.sub(r'(?<!\\)((?:\\\\)*)\\\r?\n', r'\1', text)
-            for line in text.splitlines():
-                line = line.strip()
-                if line.startswith('['):
-                    match = re.match(r'\[(include|includeif)(?:\s|\])', line, re.I)
-                    section = match[1].lower() if match else ''
-                elif section:
-                    match = re.match(r'path\s*=\s*(.*)', line, re.I)
-                    if match:
-                        raw = _value(match[1])
-                        if raw and not any(c in raw for c in '$\x00\n'):
-                            target = Path(home) / raw[2:] if raw.startswith('~/') else Path(raw)
-                            declare_credential(target if target.is_absolute() else source.parent / target)
+            _declare_git_includes(text, source, home)
             return
         if source.suffix.lower() == '.toml':
             import tomllib
@@ -428,22 +454,4 @@ def credential_declarations(root, home, *, max_bytes=1024 * 1024, excluded_paths
     except (ValueError, ImportError, UnicodeError, RecursionError):
         return
 
-    visited = set()
-    def walk(value):
-        if isinstance(value, (dict, list)):
-            if id(value) in visited:
-                return
-            visited.add(id(value))
-        if isinstance(value, dict):
-            for key, item in value.items():
-                if key in {'credential_file', 'credentials_file', 'env_file'}:
-                    for raw in item if isinstance(item, list) else [item]:
-                        if isinstance(raw, str) and raw and not any(c in raw for c in '$\x00\n*?['):
-                            target = Path(home) / raw[2:] if raw.startswith('~/') else Path(raw)
-                            declare_credential(target if target.is_absolute() else source.parent / target)
-                else:
-                    walk(item)
-        elif isinstance(value, list):
-            for item in value:
-                walk(item)
-    walk(config)
+    _declare_config_credentials(config, source, home)

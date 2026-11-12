@@ -866,6 +866,49 @@ def _envelope(
     return out
 
 
+def _fixture_home_dirs(
+    dir_child_names: dict[tuple[str, ...], set[str]],
+) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]], set[tuple[str, ...]]]:
+    """Identify nested fixture homes, keeping only outermost homes for membership checks."""
+    all_fixture_dirs: list[tuple[str, ...]] = []
+    for d_parts, c_names in sorted(dir_child_names.items()):
+        if _is_fixture_home_dir(d_parts, c_names):
+            all_fixture_dirs.append(d_parts)
+
+    top_fixture_homes: list[tuple[str, ...]] = []
+    top_fixture_homes_set: set[tuple[str, ...]] = set()
+    for d_parts in all_fixture_dirs:
+        if not any(d_parts[:k] in top_fixture_homes_set for k in range(1, len(d_parts))):
+            top_fixture_homes.append(d_parts)
+            top_fixture_homes_set.add(d_parts)
+    return all_fixture_dirs, top_fixture_homes, top_fixture_homes_set
+
+
+def _resolve_backup_copies(
+    pending_backups: list[tuple[tuple[str, ...], str, str, str, int, float]],
+    live_secret_sizes: dict[tuple[tuple[str, ...], str], int],
+) -> tuple[list[dict[str, Any]], int]:
+    """Resolve backup copies against live file sizes, never reporting raw sizes."""
+    backup_copies_list: list[dict[str, Any]] = []
+    same_size_count = 0
+    for owner, secret_kind, live_name, scope, bak_size, mtime in pending_backups:
+        live_size = live_secret_sizes.get((owner, live_name))
+        if live_size is None and owner:
+            live_size = live_secret_sizes.get(((), live_name))
+        same_size = bool(live_size is not None and bak_size == live_size)
+        if same_size:
+            same_size_count += 1
+        year, month = _mtime_year_month(mtime)
+        backup_copies_list.append({
+            "secret_kind": secret_kind,
+            "scope": scope,
+            "same_size_as_live": same_size,
+            "year": year,
+            "month": month,
+        })
+    return backup_copies_list, same_size_count
+
+
 def audit_secret_file_copies(
     profile_path: str | Path,
     *,
@@ -1006,17 +1049,7 @@ def audit_secret_file_copies(
             stack.append(item)
 
     # Identify nested fixture home directories (excluding the real home and profiles/<name>).
-    all_fixture_dirs: list[tuple[str, ...]] = []
-    for d_parts, c_names in sorted(dir_child_names.items()):
-        if _is_fixture_home_dir(d_parts, c_names):
-            all_fixture_dirs.append(d_parts)
-
-    top_fixture_homes: list[tuple[str, ...]] = []
-    top_fixture_homes_set: set[tuple[str, ...]] = set()
-    for d_parts in all_fixture_dirs:
-        if not any(d_parts[:k] in top_fixture_homes_set for k in range(1, len(d_parts))):
-            top_fixture_homes.append(d_parts)
-            top_fixture_homes_set.add(d_parts)
+    all_fixture_dirs, top_fixture_homes, top_fixture_homes_set = _fixture_home_dirs(dir_child_names)
 
     def _inside_fixture_home(parts: tuple[str, ...]) -> bool:
         return any(parts[:k] in top_fixture_homes_set for k in range(1, len(parts)))
@@ -1107,24 +1140,7 @@ def audit_secret_file_copies(
                 plugin_dotenv_count += 1
                 plugin_folders_with_dotenv.add(os.path.join(root_abs, *plugin_parts))
 
-    # Resolve backup copies against live file sizes (never reporting raw sizes).
-    backup_copies_list: list[dict[str, Any]] = []
-    same_size_count = 0
-    for owner, secret_kind, live_name, scope, bak_size, mtime in pending_backups:
-        live_size = live_secret_sizes.get((owner, live_name))
-        if live_size is None and owner:
-            live_size = live_secret_sizes.get(((), live_name))
-        same_size = bool(live_size is not None and bak_size == live_size)
-        if same_size:
-            same_size_count += 1
-        year, month = _mtime_year_month(mtime)
-        backup_copies_list.append({
-            "secret_kind": secret_kind,
-            "scope": scope,
-            "same_size_as_live": same_size,
-            "year": year,
-            "month": month,
-        })
+    backup_copies_list, same_size_count = _resolve_backup_copies(pending_backups, live_secret_sizes)
 
     mode_check, mode_check_reason = _mode_check(all_file_modes)
     readable_by_others_count: int | None = None

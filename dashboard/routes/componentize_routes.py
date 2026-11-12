@@ -51,22 +51,22 @@ def put_settings(body: Any = Body(default=None)):
 
 
 def _status(project_root):
-    root = None
-    if project_root is not None:
-        if not project_root.strip() or '\x00' in project_root:
-            raise ValueError('project_root must be a non-empty path')
-        from hermes_constants import get_hermes_home
-        from ...audit.readonly_db import read_profile_registrations_readonly
-        from ...safety import assert_safe_root, SafetyError
-        try:
-            root = assert_safe_root(project_root, role='componentize_root')
-        except SafetyError as exc:
-            raise ValueError(str(exc)) from exc
-        snapshot = read_profile_registrations_readonly('active', get_hermes_home())
-        if snapshot.coverage != 'verified' or snapshot.changed_during_read:
-            raise ValueError('Active-profile registrations could not be verified')
-        if str(root.resolve()) not in {row['canonical_path'] for row in snapshot.records}:
-            raise ValueError('Project is not registered in the active profile')
+    if project_root is None:
+        return componentize_settings.status(None)
+    if not project_root.strip() or '\x00' in project_root:
+        raise ValueError('project_root must be a non-empty path')
+    from hermes_constants import get_hermes_home
+    from ...audit.readonly_db import read_profile_registrations_readonly
+    from ...safety import assert_safe_root, SafetyError
+    try:
+        root = assert_safe_root(project_root, role='componentize_root')
+    except SafetyError as exc:
+        raise ValueError(str(exc)) from exc
+    snapshot = read_profile_registrations_readonly('active', get_hermes_home())
+    if snapshot.coverage != 'verified' or snapshot.changed_during_read:
+        raise ValueError('Active-profile registrations could not be verified')
+    if str(root.resolve()) not in {row['canonical_path'] for row in snapshot.records}:
+        raise ValueError('Project is not registered in the active profile')
     return componentize_settings.status(root)
 
 

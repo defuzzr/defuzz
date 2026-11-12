@@ -304,6 +304,42 @@ def build_catalog(templates: Sequence[Any], kits: Sequence[Any], *, picker: Opti
     return build_catalog_counted(templates, kits, picker=picker)[0]
 
 
+def _catalog_row(kind: str, item_id: str, item: Any, picker_entries: Any,
+                 group_rank: Mapping[str, int], group_title: Mapping[str, str]) -> tuple:
+    """Render one validated catalog item and its display ordering key."""
+    key = f"{kind}:{item_id}"
+    text: Mapping[str, Any] = _picker_entry(picker_entries, key) or {}
+    title = _cut(_clean(_raw(text.get("title"))), TITLE_MAX) if text else ""
+    line = _cut(_clean(_raw(text.get("line"))), LINE_MAX) if text else ""
+    described = bool(title or line)
+    if not title:
+        title = _cut(_clean(_raw(_field(item, "name"))), TITLE_MAX) or _cut(_clean(item_id), TITLE_MAX)
+    if not line:
+        line = _fallback_line(_raw(_field(item, "summary")))
+    group = text.get("group") if described else None
+    if not isinstance(group, str) or group not in group_rank:
+        group = _KIND_GROUP[kind]
+    entry = {
+        "kind": kind,
+        "id": item_id,
+        "title": title,
+        "line": line,
+        "group": group,
+        "group_title": group_title[group],
+        "flag": f"--{kind} {item_id}",
+    }
+    if text.get("coming_soon") is True:
+        entry.update(coming_soon=True, selectable=False)
+    sort_key = (
+        group_rank[group],
+        0 if described else 1,
+        _order_of(text) if described else _UNORDERED,
+        item_id,
+        _KIND_RANK[kind],
+    )
+    return sort_key, entry
+
+
 def build_catalog_counted(
     templates: Sequence[Any], kits: Sequence[Any], *, picker: Optional[Mapping[str, Any]] = None
 ) -> tuple:
@@ -336,36 +372,7 @@ def build_catalog_counted(
             if key in seen:
                 continue
             seen.add(key)
-            text: Mapping[str, Any] = _picker_entry(picker_entries, key) or {}
-            title = _cut(_clean(_raw(text.get("title"))), TITLE_MAX) if text else ""
-            line = _cut(_clean(_raw(text.get("line"))), LINE_MAX) if text else ""
-            described = bool(title or line)
-            if not title:
-                title = _cut(_clean(_raw(_field(item, "name"))), TITLE_MAX) or _cut(_clean(item_id), TITLE_MAX)
-            if not line:
-                line = _fallback_line(_raw(_field(item, "summary")))
-            group = text.get("group") if described else None
-            if not isinstance(group, str) or group not in group_rank:
-                group = _KIND_GROUP[kind]
-            entry = {
-                "kind": kind,
-                "id": item_id,
-                "title": title,
-                "line": line,
-                "group": group,
-                "group_title": group_title[group],
-                "flag": f"--{kind} {item_id}",
-            }
-            if text.get("coming_soon") is True:
-                entry.update(coming_soon=True, selectable=False)
-            sort_key = (
-                group_rank[group],
-                0 if described else 1,
-                _order_of(text) if described else _UNORDERED,
-                item_id,
-                _KIND_RANK[kind],
-            )
-            rows.append((sort_key, entry))
+            rows.append(_catalog_row(kind, item_id, item, picker_entries, group_rank, group_title))
     rows.sort(key=lambda r: r[0])
     shown = {"template": 0, "kit": 0}
     out: List[dict] = []

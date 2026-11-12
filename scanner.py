@@ -657,6 +657,44 @@ def _discover_left_behind_secret_files(src_lex: Path, copy_root: Path) -> List[s
     return sorted(found)
 
 
+def _flag_absent_secret_files(
+    copy_root: Path,
+    src_lex: Path | None,
+    secret_files_left_behind: Sequence[str] | None,
+    tracked_set: set[str],
+    secrets_flagged: list[dict[str, Any]],
+    secret_counter: int,
+) -> list[str]:
+    """Append placeholders for absent secrets, preserving scan numbering and order."""
+    if secret_files_left_behind is not None:
+        left_behind_list = sorted(
+            {str(p).replace("\\", "/").strip("/") for p in secret_files_left_behind if str(p).strip("/")}
+        )
+    elif src_lex is not None:
+        left_behind_list = _discover_left_behind_secret_files(src_lex, copy_root)
+    else:
+        left_behind_list = []
+
+    flagged_paths: Set[str] = {s["path"] for s in secrets_flagged}
+    absent_secret_paths: List[str] = list(left_behind_list)
+    for t_rel in sorted(tracked_set):
+        if _is_secret_filename(t_rel) and not os.path.lexists(copy_root / t_rel) and t_rel not in absent_secret_paths:
+            absent_secret_paths.append(t_rel)
+    for absent_rel in absent_secret_paths:
+        if absent_rel in flagged_paths:
+            continue
+        secret_counter += 1
+        secrets_flagged.append({
+            "path": absent_rel,
+            "placeholder": f"<secret-{secret_counter}>",
+            "reasons": ["secret_filename"],
+            "git_policy": "ignore",
+            "left_behind": True,
+        })
+        flagged_paths.add(absent_rel)
+    return left_behind_list
+
+
 def scan_folder(
     folder_path: os.PathLike | str,
     *,
@@ -786,32 +824,9 @@ def scan_folder(
                 "secret_placeholder": placeholder,
             })
 
-    if secret_files_left_behind is not None:
-        left_behind_list = sorted(
-            {str(p).replace("\\", "/").strip("/") for p in secret_files_left_behind if str(p).strip("/")}
-        )
-    elif src_lex is not None:
-        left_behind_list = _discover_left_behind_secret_files(src_lex, copy_root)
-    else:
-        left_behind_list = []
-
-    flagged_paths: Set[str] = {s["path"] for s in secrets_flagged}
-    absent_secret_paths: List[str] = list(left_behind_list)
-    for t_rel in sorted(tracked_set):
-        if _is_secret_filename(t_rel) and not os.path.lexists(copy_root / t_rel) and t_rel not in absent_secret_paths:
-            absent_secret_paths.append(t_rel)
-    for absent_rel in absent_secret_paths:
-        if absent_rel in flagged_paths:
-            continue
-        secret_counter += 1
-        secrets_flagged.append({
-            "path": absent_rel,
-            "placeholder": f"<secret-{secret_counter}>",
-            "reasons": ["secret_filename"],
-            "git_policy": "ignore",
-            "left_behind": True,
-        })
-        flagged_paths.add(absent_rel)
+    left_behind_list = _flag_absent_secret_files(
+        copy_root, src_lex, secret_files_left_behind, tracked_set, secrets_flagged, secret_counter,
+    )
 
     duplicate_hashes = [
         {"sha256": h, "paths": sorted(paths)}

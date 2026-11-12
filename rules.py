@@ -339,6 +339,123 @@ def _collect_package_json_exports(node: Any, out: Set[str], depth: int = 0) -> N
             _collect_package_json_exports(item, out, depth + 1)
 
 
+def _add_clean_entry(entries: set[str], raw: Any) -> None:
+    cleaned = _clean_manifest_rel_path(raw)
+    if cleaned:
+        entries.add(cleaned)
+
+
+def _add_py_module_entry(entries: set[str], mod: str) -> None:
+    rel_mod = mod.replace(".", "/") + ".py"
+    entries.add(rel_mod)
+    entries.add(f"src/{rel_mod}")
+
+
+def _dict_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _add_package_json_entries(root: Path, entries: set[str]) -> None:
+    """package.json: main, module, types, typings, bin, exports."""
+    pkg_raw = _read_manifest_nofollow(root, "package.json")
+    if pkg_raw is None:
+        return
+    try:
+        pkg = json.loads(pkg_raw)
+    except Exception:
+        return
+    if not isinstance(pkg, dict):
+        return
+    for key in ("main", "module", "types", "typings", "unpkg", "jsdelivr", "browser"):
+        _add_clean_entry(entries, pkg.get(key))
+    bin_field = pkg.get("bin")
+    if isinstance(bin_field, str):
+        _add_clean_entry(entries, bin_field)
+    elif isinstance(bin_field, dict):
+        for bval in bin_field.values():
+            _add_clean_entry(entries, bval)
+    if "exports" in pkg:
+        _collect_package_json_exports(pkg["exports"], entries)
+
+
+def _add_script_map_entries(entries: set[str], script_map: Any) -> None:
+    if not isinstance(script_map, dict):
+        return
+    for spec in script_map.values():
+        if isinstance(spec, str):
+            mod = spec.split(":", 1)[0].strip()
+            if _PY_IDENT_RE.match(mod):
+                _add_py_module_entry(entries, mod)
+
+
+def _add_pyproject_entries(root: Path, entries: set[str]) -> None:
+    """pyproject.toml: project.scripts, project.gui-scripts, tool.poetry.scripts, tool.setuptools.py-modules."""
+    pyproj_raw = _read_manifest_nofollow(root, "pyproject.toml")
+    if pyproj_raw is None:
+        return
+    try:
+        pyproj = tomllib.loads(pyproj_raw)
+    except Exception:
+        return
+    if not isinstance(pyproj, dict):
+        return
+    proj_tbl = _dict_or_empty(pyproj.get("project"))
+    tool_tbl = _dict_or_empty(pyproj.get("tool"))
+    poetry_tbl = _dict_or_empty(tool_tbl.get("poetry"))
+    for script_map in (
+        proj_tbl.get("scripts"),
+        proj_tbl.get("gui-scripts"),
+        poetry_tbl.get("scripts"),
+    ):
+        _add_script_map_entries(entries, script_map)
+    setuptools_tbl = _dict_or_empty(tool_tbl.get("setuptools"))
+    py_mods = setuptools_tbl.get("py-modules")
+    if isinstance(py_mods, list):
+        for mod in py_mods:
+            if isinstance(mod, str) and _PY_IDENT_RE.match(mod.strip()):
+                _add_py_module_entry(entries, mod.strip())
+
+
+def _add_cargo_entries(root: Path, entries: set[str]) -> None:
+    """Cargo.toml: package.build, lib.path, [[bin]]/[[example]]/[[bench]]/[[test]].path."""
+    cargo_raw = _read_manifest_nofollow(root, "Cargo.toml")
+    if cargo_raw is None:
+        return
+    try:
+        cargo = tomllib.loads(cargo_raw)
+    except Exception:
+        return
+    if not isinstance(cargo, dict):
+        return
+    _add_clean_entry(entries, _dict_or_empty(cargo.get("package")).get("build"))
+    _add_clean_entry(entries, _dict_or_empty(cargo.get("lib")).get("path"))
+    for list_key in ("bin", "example", "bench", "test"):
+        items = cargo.get(list_key)
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict):
+                    _add_clean_entry(entries, item.get("path"))
+
+
+_CMAKE_TARGET_KEYWORDS = frozenset({
+    "STATIC", "SHARED", "MODULE", "OBJECT", "INTERFACE", "WIN32", "MACOSX_BUNDLE", "EXCLUDE_FROM_ALL",
+})
+
+
+def _add_cmake_entries(root: Path, entries: set[str]) -> None:
+    """CMakeLists.txt: source files named directly in add_executable / add_library."""
+    cmake_raw = _read_manifest_nofollow(root, "CMakeLists.txt")
+    if cmake_raw is None:
+        return
+    for match in _CMAKE_TARGET_RE.finditer(cmake_raw):
+        for tok in match.group(1).split():
+            tok_clean = tok.strip("\"'")
+            if "$" in tok_clean or tok_clean.upper() in _CMAKE_TARGET_KEYWORDS:
+                continue
+            if tok_clean.lower().endswith((".c", ".cc", ".cpp", ".cxx")):
+                _add_clean_entry(entries, tok_clean)
+
+
 def extract_manifest_entry_files(proj_root: Optional[Path]) -> Set[str]:
     """Extract normalized relative entry-file paths declared in root manifests (never raises)."""
     entries: Set[str] = set()
@@ -349,110 +466,10 @@ def extract_manifest_entry_files(proj_root: Optional[Path]) -> Set[str]:
     except Exception:
         return entries
 
-    # 1. package.json: main, module, types, typings, bin, exports
-    pkg_raw = _read_manifest_nofollow(root, "package.json")
-    if pkg_raw is not None:
-        try:
-            pkg = json.loads(pkg_raw)
-        except Exception:
-            pkg = None
-        if isinstance(pkg, dict):
-            for key in ("main", "module", "types", "typings", "unpkg", "jsdelivr", "browser"):
-                cleaned = _clean_manifest_rel_path(pkg.get(key))
-                if cleaned:
-                    entries.add(cleaned)
-            bin_field = pkg.get("bin")
-            if isinstance(bin_field, str):
-                cleaned = _clean_manifest_rel_path(bin_field)
-                if cleaned:
-                    entries.add(cleaned)
-            elif isinstance(bin_field, dict):
-                for bval in bin_field.values():
-                    cleaned = _clean_manifest_rel_path(bval)
-                    if cleaned:
-                        entries.add(cleaned)
-            if "exports" in pkg:
-                _collect_package_json_exports(pkg["exports"], entries)
-
-    # 2. pyproject.toml: project.scripts, project.gui-scripts, tool.poetry.scripts, tool.setuptools.py-modules
-    pyproj_raw = _read_manifest_nofollow(root, "pyproject.toml")
-    if pyproj_raw is not None:
-        try:
-            pyproj = tomllib.loads(pyproj_raw)
-        except Exception:
-            pyproj = None
-        if isinstance(pyproj, dict):
-            raw_proj = pyproj.get("project")
-            proj_tbl: Dict[str, Any] = raw_proj if isinstance(raw_proj, dict) else {}
-            raw_tool = pyproj.get("tool")
-            tool_tbl: Dict[str, Any] = raw_tool if isinstance(raw_tool, dict) else {}
-            raw_poetry = tool_tbl.get("poetry")
-            poetry_tbl: Dict[str, Any] = raw_poetry if isinstance(raw_poetry, dict) else {}
-            for script_map in (
-                proj_tbl.get("scripts"),
-                proj_tbl.get("gui-scripts"),
-                poetry_tbl.get("scripts"),
-            ):
-                if isinstance(script_map, dict):
-                    for spec in script_map.values():
-                        if isinstance(spec, str):
-                            mod = spec.split(":", 1)[0].strip()
-                            if _PY_IDENT_RE.match(mod):
-                                rel_mod = mod.replace(".", "/") + ".py"
-                                entries.add(rel_mod)
-                                entries.add(f"src/{rel_mod}")
-            raw_st = tool_tbl.get("setuptools")
-            setuptools_tbl: Dict[str, Any] = raw_st if isinstance(raw_st, dict) else {}
-            py_mods = setuptools_tbl.get("py-modules")
-            if isinstance(py_mods, list):
-                for mod in py_mods:
-                    if isinstance(mod, str) and _PY_IDENT_RE.match(mod.strip()):
-                        rel_mod = mod.strip().replace(".", "/") + ".py"
-                        entries.add(rel_mod)
-                        entries.add(f"src/{rel_mod}")
-
-    # 3. Cargo.toml: package.build, lib.path, [[bin]]/[[example]]/[[bench]]/[[test]].path
-    cargo_raw = _read_manifest_nofollow(root, "Cargo.toml")
-    if cargo_raw is not None:
-        try:
-            cargo = tomllib.loads(cargo_raw)
-        except Exception:
-            cargo = None
-        if isinstance(cargo, dict):
-            raw_pkg = cargo.get("package")
-            pkg_tbl: Dict[str, Any] = raw_pkg if isinstance(raw_pkg, dict) else {}
-            build_val = _clean_manifest_rel_path(pkg_tbl.get("build"))
-            if build_val:
-                entries.add(build_val)
-            raw_lib = cargo.get("lib")
-            lib_tbl: Dict[str, Any] = raw_lib if isinstance(raw_lib, dict) else {}
-            lib_path = _clean_manifest_rel_path(lib_tbl.get("path"))
-            if lib_path:
-                entries.add(lib_path)
-            for list_key in ("bin", "example", "bench", "test"):
-                items = cargo.get(list_key)
-                if isinstance(items, list):
-                    for item in items:
-                        if isinstance(item, dict):
-                            p = _clean_manifest_rel_path(item.get("path"))
-                            if p:
-                                entries.add(p)
-
-    # 4. CMakeLists.txt: source files named directly in add_executable / add_library
-    cmake_raw = _read_manifest_nofollow(root, "CMakeLists.txt")
-    if cmake_raw is not None:
-        for match in _CMAKE_TARGET_RE.finditer(cmake_raw):
-            for tok in match.group(1).split():
-                tok_clean = tok.strip("\"'")
-                if "$" in tok_clean or tok_clean.upper() in {
-                    "STATIC", "SHARED", "MODULE", "OBJECT", "INTERFACE", "WIN32", "MACOSX_BUNDLE", "EXCLUDE_FROM_ALL",
-                }:
-                    continue
-                if tok_clean.lower().endswith((".c", ".cc", ".cpp", ".cxx")):
-                    cleaned = _clean_manifest_rel_path(tok_clean)
-                    if cleaned:
-                        entries.add(cleaned)
-
+    _add_package_json_entries(root, entries)
+    _add_pyproject_entries(root, entries)
+    _add_cargo_entries(root, entries)
+    _add_cmake_entries(root, entries)
     return entries
 
 
@@ -549,6 +566,75 @@ def _validate_glob_patterns(patterns: Optional[Sequence[str]], field_name: str) 
     return out
 
 
+def _validate_folder_rule(idx: int, r: dict[str, Any]) -> dict[str, Any]:
+    disp = str(r.get("disposition") or "").strip().lower()
+    if disp not in ALLOWED_DISPOSITIONS:
+        raise SafetyError(
+            f"folder_rules[{idx}].disposition={disp!r} is not in allowlist {sorted(ALLOWED_DISPOSITIONS)}"
+        )
+    git_pol = str(r.get("git_policy") or "").strip().lower()
+    if git_pol not in ALLOWED_GIT_POLICIES:
+        raise SafetyError(
+            f"folder_rules[{idx}].git_policy={git_pol!r} is not in allowlist {sorted(ALLOWED_GIT_POLICIES)}"
+        )
+    match_prefix = _validate_safe_rel_prefix(r.get("match", "."), f"folder_rules[{idx}].match", allow_dot=True)
+    exts = _validate_extensions(r.get("ext"), f"folder_rules[{idx}].ext")
+
+    # Never reshuffle source or test trees.
+    if match_prefix.split("/", 1)[0] in {"src", "tests", "test"} and disp != "keep":
+        raise SafetyError(f"Refusing to move or archive inside src/, tests/, or test/: folder_rules[{idx}]")
+
+    to_prefix = ""
+    if disp == "move":
+        to_prefix = _validate_safe_rel_prefix(r.get("to", ""), f"folder_rules[{idx}].to", allow_dot=False)
+    elif disp == "archive":
+        raw_to = r.get("to") or f"_archive/{match_prefix if match_prefix != '.' else 'root'}"
+        to_prefix = _validate_safe_rel_prefix(raw_to, f"folder_rules[{idx}].to", allow_dot=False)
+        if not (to_prefix == "_archive" or to_prefix.startswith("_archive/")):
+            to_prefix = f"_archive/{to_prefix}"
+
+    reason = " ".join(str(r.get("reason") or "organized by folder rule").split())[:120]
+    return {
+        "match": match_prefix,
+        "ext": exts,
+        "disposition": disp,
+        "git_policy": git_pol,
+        "to": to_prefix,
+        "reason": reason,
+    }
+
+
+def _validate_placement_rule(idx: int, pr: dict[str, Any]) -> dict[str, Any]:
+    kind = re.sub(r"[^a-z0-9_-]", "", str(pr.get("kind") or f"kind_{idx}").lower())[:24] or f"kind_{idx}"
+    exts = _validate_extensions(pr.get("match_ext"), f"placement_rules[{idx}].match_ext")
+    globs = _validate_glob_patterns(pr.get("match_glob"), f"placement_rules[{idx}].match_glob")
+    if not exts and not globs:
+        raise SafetyError(f"placement_rules[{idx}].match_ext must be non-empty")
+    dest_dir = _validate_safe_rel_prefix(pr.get("dest_dir", "_inbox"), f"placement_rules[{idx}].dest_dir", allow_dot=False)
+    lfs_flag = bool(pr.get("lfs", False))
+    reason = " ".join(str(pr.get("reason") or f"route {kind} files to {dest_dir}").split())[:100]
+    raw_root_only = pr.get("root_only")
+    if raw_root_only is not None and not isinstance(raw_root_only, bool):
+        raise SafetyError(f"placement_rules[{idx}].root_only={raw_root_only!r} must be a boolean")
+    raw_source = pr.get("source")
+    if raw_source is not None and raw_source not in ("explicit", "fallback"):
+        raise SafetyError(f"placement_rules[{idx}].source={raw_source!r} must be 'explicit' or 'fallback'")
+    clean_pr: Dict[str, Any] = {
+        "kind": kind,
+        "match_ext": exts,
+        "dest_dir": dest_dir,
+        "lfs": lfs_flag,
+        "reason": reason,
+    }
+    if globs:
+        clean_pr["match_glob"] = globs
+    if raw_root_only is True:
+        clean_pr["root_only"] = True
+    if raw_source in ("explicit", "fallback"):
+        clean_pr["source"] = raw_source
+    return clean_pr
+
+
 def validate_rules_spec(raw_spec: Dict[str, Any], inventory: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Validate untrusted model/user rules spec against fixed allowlists."""
     if not isinstance(raw_spec, dict):
@@ -569,41 +655,9 @@ def validate_rules_spec(raw_spec: Dict[str, Any], inventory: Optional[Dict[str, 
     for idx, r in enumerate(raw_folder_rules):
         if not isinstance(r, dict):
             raise SafetyError(f"folder_rules[{idx}] must be an object")
-        disp = str(r.get("disposition") or "").strip().lower()
-        if disp not in ALLOWED_DISPOSITIONS:
-            raise SafetyError(
-                f"folder_rules[{idx}].disposition={disp!r} is not in allowlist {sorted(ALLOWED_DISPOSITIONS)}"
-            )
-        git_pol = str(r.get("git_policy") or "").strip().lower()
-        if git_pol not in ALLOWED_GIT_POLICIES:
-            raise SafetyError(
-                f"folder_rules[{idx}].git_policy={git_pol!r} is not in allowlist {sorted(ALLOWED_GIT_POLICIES)}"
-            )
-        match_prefix = _validate_safe_rel_prefix(r.get("match", "."), f"folder_rules[{idx}].match", allow_dot=True)
-        exts = _validate_extensions(r.get("ext"), f"folder_rules[{idx}].ext")
-
-        # Never reshuffle source or test trees.
-        if match_prefix.split("/", 1)[0] in {"src", "tests", "test"} and disp != "keep":
-            raise SafetyError(f"Refusing to move or archive inside src/, tests/, or test/: folder_rules[{idx}]")
-
-        to_prefix = ""
-        if disp == "move":
-            to_prefix = _validate_safe_rel_prefix(r.get("to", ""), f"folder_rules[{idx}].to", allow_dot=False)
-        elif disp == "archive":
-            raw_to = r.get("to") or f"_archive/{match_prefix if match_prefix != '.' else 'root'}"
-            to_prefix = _validate_safe_rel_prefix(raw_to, f"folder_rules[{idx}].to", allow_dot=False)
-            if not (to_prefix == "_archive" or to_prefix.startswith("_archive/")):
-                to_prefix = f"_archive/{to_prefix}"
-
-        reason = " ".join(str(r.get("reason") or "organized by folder rule").split())[:120]
-        clean_rule = {
-            "match": match_prefix,
-            "ext": exts,
-            "disposition": disp,
-            "git_policy": git_pol,
-            "to": to_prefix,
-            "reason": reason,
-        }
+        clean_rule = _validate_folder_rule(idx, r)
+        match_prefix = clean_rule["match"]
+        exts = clean_rule["ext"]
 
         spec_key = (match_prefix, tuple(exts))
         prev = seen_specificity.get(spec_key)
@@ -626,34 +680,7 @@ def validate_rules_spec(raw_spec: Dict[str, Any], inventory: Optional[Dict[str, 
     for idx, pr in enumerate(raw_place):
         if not isinstance(pr, dict):
             raise SafetyError(f"placement_rules[{idx}] must be an object")
-        kind = re.sub(r"[^a-z0-9_-]", "", str(pr.get("kind") or f"kind_{idx}").lower())[:24] or f"kind_{idx}"
-        exts = _validate_extensions(pr.get("match_ext"), f"placement_rules[{idx}].match_ext")
-        globs = _validate_glob_patterns(pr.get("match_glob"), f"placement_rules[{idx}].match_glob")
-        if not exts and not globs:
-            raise SafetyError(f"placement_rules[{idx}].match_ext must be non-empty")
-        dest_dir = _validate_safe_rel_prefix(pr.get("dest_dir", "_inbox"), f"placement_rules[{idx}].dest_dir", allow_dot=False)
-        lfs_flag = bool(pr.get("lfs", False))
-        reason = " ".join(str(pr.get("reason") or f"route {kind} files to {dest_dir}").split())[:100]
-        raw_root_only = pr.get("root_only")
-        if raw_root_only is not None and not isinstance(raw_root_only, bool):
-            raise SafetyError(f"placement_rules[{idx}].root_only={raw_root_only!r} must be a boolean")
-        raw_source = pr.get("source")
-        if raw_source is not None and raw_source not in ("explicit", "fallback"):
-            raise SafetyError(f"placement_rules[{idx}].source={raw_source!r} must be 'explicit' or 'fallback'")
-        clean_pr: Dict[str, Any] = {
-            "kind": kind,
-            "match_ext": exts,
-            "dest_dir": dest_dir,
-            "lfs": lfs_flag,
-            "reason": reason,
-        }
-        if globs:
-            clean_pr["match_glob"] = globs
-        if raw_root_only is True:
-            clean_pr["root_only"] = True
-        if raw_source in ("explicit", "fallback"):
-            clean_pr["source"] = raw_source
-        validated_place.append(clean_pr)
+        validated_place.append(_validate_placement_rule(idx, pr))
 
     # Validate declared_dirs
     raw_dirs = raw_spec.get("declared_dirs") or []

@@ -547,6 +547,38 @@ def _validate_version_probe_argv(tool: str, raw_argv: Any) -> list[str]:
     return out
 
 
+def _validate_file_version_probe(tool: str, raw_probe: Mapping) -> dict[str, Any]:
+    """Validate the relative file and selector fields of a file version probe."""
+    rel_file = raw_probe.get("file")
+    if not isinstance(rel_file, str) or not rel_file.strip():
+        raise ValueError(f"file version probe for {tool!r} requires non-empty 'file'")
+    norm_file = rel_file.replace("\\", "/").strip("/")
+    if (
+        not norm_file
+        or rel_file.startswith(("/", "\\"))
+        or any(p in ("", ".", "..") for p in Path(norm_file).parts)
+    ):
+        raise ValueError(f"invalid relative file {rel_file!r} in version probe for {tool!r}")
+    has_key = "key" in raw_probe and raw_probe["key"] is not None
+    has_regex = "regex" in raw_probe and raw_probe["regex"] is not None
+    if has_key == has_regex:
+        raise ValueError(
+            f"file version probe for {tool!r} requires exactly one of 'key' or 'regex'"
+        )
+    extra: dict[str, Any] = {"file": norm_file}
+    if has_key:
+        key_val = raw_probe["key"]
+        if not isinstance(key_val, str) or not key_val.strip():
+            raise ValueError(f"file version probe 'key' for {tool!r} must be a non-empty string")
+        extra["key"] = key_val.strip()
+    else:
+        regex_val = raw_probe["regex"]
+        if not isinstance(regex_val, str) or not regex_val.strip():
+            raise ValueError(f"file version probe 'regex' for {tool!r} must be a non-empty string")
+        extra["regex"] = regex_val
+    return extra
+
+
 def _build_entry_from_version_probe(
     tool: str,
     raw_probe: Any,
@@ -580,33 +612,7 @@ def _build_entry_from_version_probe(
                 argv=argv,
             )
         if probe_kind == "file":
-            rel_file = raw_probe.get("file")
-            if not isinstance(rel_file, str) or not rel_file.strip():
-                raise ValueError(f"file version probe for {tool!r} requires non-empty 'file'")
-            norm_file = rel_file.replace("\\", "/").strip("/")
-            if (
-                not norm_file
-                or rel_file.startswith(("/", "\\"))
-                or any(p in ("", ".", "..") for p in Path(norm_file).parts)
-            ):
-                raise ValueError(f"invalid relative file {rel_file!r} in version probe for {tool!r}")
-            has_key = "key" in raw_probe and raw_probe["key"] is not None
-            has_regex = "regex" in raw_probe and raw_probe["regex"] is not None
-            if has_key == has_regex:
-                raise ValueError(
-                    f"file version probe for {tool!r} requires exactly one of 'key' or 'regex'"
-                )
-            extra: dict[str, Any] = {"file": norm_file}
-            if has_key:
-                key_val = raw_probe["key"]
-                if not isinstance(key_val, str) or not key_val.strip():
-                    raise ValueError(f"file version probe 'key' for {tool!r} must be a non-empty string")
-                extra["key"] = key_val.strip()
-            else:
-                regex_val = raw_probe["regex"]
-                if not isinstance(regex_val, str) or not regex_val.strip():
-                    raise ValueError(f"file version probe 'regex' for {tool!r} must be a non-empty string")
-                extra["regex"] = regex_val
+            extra = _validate_file_version_probe(tool, raw_probe)
             return _base_entry(
                 chosen=chosen,
                 evidence="template needs",

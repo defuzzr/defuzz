@@ -83,9 +83,7 @@ def _names(value):
     return value if isinstance(value, list) and all(isinstance(v, str) for v in value) else None
 
 
-def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
-    root = Path(profile_path)
-    managed_active = _has_managed_overlay(managed_dir)
+def _read_settings_config(root, managed_active):
     read = safe_read_regular_file(root, 'config.yaml', max_bytes=MAX_CONFIG_BYTES)
     # Missing config means defaults; other read failures never mean defaults verified.
     missing = read.kind == 'missing'
@@ -103,6 +101,10 @@ def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
             readable = False
     if managed_active and readable:
         config_reason = 'managed_overlay'
+    return config, readable, config_reason
+
+
+def _resolve_settings(config, readable, managed_active):
     settings = {}
     for key, default in DEFAULTS.items():
         subsystem, field = key.split('.')
@@ -145,6 +147,10 @@ def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
             except (TypeError, ValueError, OverflowError):
                 value, source = None, 'could_not_verify'
         settings[key] = {'value': value, 'source': source}
+    return settings
+
+
+def _resolve_tool_selection(config, readable, managed_active):
     # Hermes hermes_cli/tools_config.py:580-616,631-642: CLI platform selection and global
     # denylist; runtime/plugin expansions deliberately unknown. Other surfaces may differ.
     platforms = _section(config, 'platform_toolsets')
@@ -161,6 +167,16 @@ def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
                 tool_unknown = True
     tools -= deny
     availability = {name: (None if tool_unknown else name in tools) for name in ('skill_manage', 'memory')}
+    return enabled, disabled, tool_source, tool_unknown, availability
+
+
+def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
+    root = Path(profile_path)
+    managed_active = _has_managed_overlay(managed_dir)
+    config, readable, config_reason = _read_settings_config(root, managed_active)
+    settings = _resolve_settings(config, readable, managed_active)
+    enabled, disabled, tool_source, tool_unknown, availability = _resolve_tool_selection(
+        config, readable, managed_active)
     flags = [settings[k]['value'] for k in ('memory.memory_enabled', 'memory.user_profile_enabled')]
     memory_on = True if True in flags else (None if None in flags else False)
 

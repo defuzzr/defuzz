@@ -790,6 +790,34 @@ def _empty_section(
     }
 
 
+def _unmeasured_root(
+    reason: str,
+    pet_norm: bool | None,
+    unverified_checks: set[str],
+    *,
+    symlinks_skipped: int = 0,
+) -> dict[str, Any]:
+    """Build the common not-measured result for an unusable home root."""
+    sec = _empty_section(
+        status="not_measured",
+        coverage=COVERAGE_COULD_NOT_VERIFY,
+        reason=reason,
+        truncated_by=None,
+        pet_enabled_norm=pet_norm,
+        unverified_checks=sorted(unverified_checks),
+        symlinks_skipped=symlinks_skipped,
+        cuts=1,
+    )
+    f = _finding(
+        "dead_stores.could_not_verify",
+        ".",
+        {"cuts": 1, "unverified_count": len(sec["unverified_checks"])},
+        classification=CLASSIFICATION_INFO,
+        coverage=COVERAGE_COULD_NOT_VERIFY,
+    )
+    return _envelope([f], COVERAGE_COULD_NOT_VERIFY, sec)
+
+
 def audit_dead_stores(
     profile_path: Path | str,
     *,
@@ -830,83 +858,18 @@ def audit_dead_stores(
         st_root = os.lstat(root)
     except FileNotFoundError:
         unverified_checks.add("root_missing")
-        sec = _empty_section(
-            status="not_measured",
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-            reason="missing",
-            truncated_by=None,
-            pet_enabled_norm=pet_norm,
-            unverified_checks=sorted(unverified_checks),
-            cuts=1,
-        )
-        f = _finding(
-            "dead_stores.could_not_verify",
-            ".",
-            {"cuts": 1, "unverified_count": len(sec["unverified_checks"])},
-            classification=CLASSIFICATION_INFO,
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-        )
-        return _envelope([f], COVERAGE_COULD_NOT_VERIFY, sec)
+        return _unmeasured_root("missing", pet_norm, unverified_checks)
     except (OSError, TypeError, ValueError):
         unverified_checks.add("root_unreadable")
-        sec = _empty_section(
-            status="not_measured",
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-            reason="unreadable",
-            truncated_by=None,
-            pet_enabled_norm=pet_norm,
-            unverified_checks=sorted(unverified_checks),
-            cuts=1,
-        )
-        f = _finding(
-            "dead_stores.could_not_verify",
-            ".",
-            {"cuts": 1, "unverified_count": len(sec["unverified_checks"])},
-            classification=CLASSIFICATION_INFO,
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-        )
-        return _envelope([f], COVERAGE_COULD_NOT_VERIFY, sec)
+        return _unmeasured_root("unreadable", pet_norm, unverified_checks)
 
     if stat.S_ISLNK(st_root.st_mode):
         unverified_checks.add("root_symlink")
-        sec = _empty_section(
-            status="not_measured",
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-            reason="symlink_root",
-            truncated_by=None,
-            pet_enabled_norm=pet_norm,
-            unverified_checks=sorted(unverified_checks),
-            symlinks_skipped=1,
-            cuts=1,
-        )
-        f = _finding(
-            "dead_stores.could_not_verify",
-            ".",
-            {"cuts": 1, "unverified_count": len(sec["unverified_checks"])},
-            classification=CLASSIFICATION_INFO,
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-        )
-        return _envelope([f], COVERAGE_COULD_NOT_VERIFY, sec)
+        return _unmeasured_root("symlink_root", pet_norm, unverified_checks, symlinks_skipped=1)
 
     if not stat.S_ISDIR(st_root.st_mode):
         unverified_checks.add("root_not_directory")
-        sec = _empty_section(
-            status="not_measured",
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-            reason="not_directory",
-            truncated_by=None,
-            pet_enabled_norm=pet_norm,
-            unverified_checks=sorted(unverified_checks),
-            cuts=1,
-        )
-        f = _finding(
-            "dead_stores.could_not_verify",
-            ".",
-            {"cuts": 1, "unverified_count": len(sec["unverified_checks"])},
-            classification=CLASSIFICATION_INFO,
-            coverage=COVERAGE_COULD_NOT_VERIFY,
-        )
-        return _envelope([f], COVERAGE_COULD_NOT_VERIFY, sec)
+        return _unmeasured_root("not_directory", pet_norm, unverified_checks)
 
     real_root = os.path.realpath(root)
 
@@ -1058,23 +1021,7 @@ def audit_dead_stores(
         except OSError:
             if not rel_parts:
                 unverified_checks.add("root_unreadable")
-                sec = _empty_section(
-                    status="not_measured",
-                    coverage=COVERAGE_COULD_NOT_VERIFY,
-                    reason="unreadable",
-                    truncated_by=None,
-                    pet_enabled_norm=pet_norm,
-                    unverified_checks=sorted(unverified_checks),
-                    cuts=1,
-                )
-                f = _finding(
-                    "dead_stores.could_not_verify",
-                    ".",
-                    {"cuts": 1, "unverified_count": len(sec["unverified_checks"])},
-                    classification=CLASSIFICATION_INFO,
-                    coverage=COVERAGE_COULD_NOT_VERIFY,
-                )
-                return _envelope([f], COVERAGE_COULD_NOT_VERIFY, sec)
+                return _unmeasured_root("unreadable", pet_norm, unverified_checks)
             cuts += 1
             unverified_checks.add("unreadable_subdir")
             continue

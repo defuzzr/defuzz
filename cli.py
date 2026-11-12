@@ -1572,6 +1572,89 @@ def _missing_yaml_message(ns: argparse.Namespace) -> Optional[str]:
     return None
 
 
+def _handle_audit_subcommand(ns: argparse.Namespace) -> int:
+    from .audit_surface import AUDIT_SCOPE_DISCLOSURE, execute_audit
+    if ns.audit_action in ("run", "resume"):
+        print(AUDIT_SCOPE_DISCLOSURE, file=sys.stderr)
+    args: Dict[str, Any] = {
+        "action": ns.audit_action,
+        "run_id": ns.run_id,
+        "root": ns.root,
+        "unused_threshold_days": ns.unused_threshold_days,
+        "full_home": getattr(ns, "full_home", False),
+        "quick": getattr(ns, "quick", False),
+        "sessions": getattr(ns, "sessions", False),
+    }
+    for key in ("max_entries", "max_bytes", "max_file_bytes", "unbounded", "as_of"):
+        value = getattr(ns, key, None)
+        if value is not None:
+            args[key] = value
+    try:
+        result = execute_audit(args, wait=True)
+        report = result.get("report") if isinstance(result, dict) else None
+        if getattr(ns, "summary", False) and not getattr(ns, "json", False) and isinstance(report, dict):
+            from .audit_summary import render_text, summarize
+            print(render_text(summarize(report, home=_audit_home())), end="")
+        else:
+            print(json.dumps(result, indent=2))
+        return 0
+    except (ValueError, KeyError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
+def _handle_copy_subcommand(ns: argparse.Namespace) -> int:
+    include_secret_files = bool(getattr(ns, "include_secret_files", False))
+    left_behind: List[str] = []
+    dst = copy_tree_nofollow(
+        ns.source,
+        ns.copy_path,
+        staging_root=ns.staging_path,
+        include_secret_files=include_secret_files,
+        left_behind=left_behind,
+        base=ns.copy_path,  # the folder the person chose (links above it are theirs)
+    )
+    notice = format_secret_files_left_behind(left_behind, ns.source)
+    if notice:
+        print(notice, file=sys.stderr)
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "action": "copy",
+                "source": ns.source,
+                "copy_root": str(dst),
+                "secret_files_left_behind": left_behind,
+                "secret_files_left_behind_count": len(left_behind),
+                "secret_files_notice": notice or None,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _handle_place_subcommand(ns: argparse.Namespace) -> int:
+    if ns.rule:
+        place_args: Dict[str, Any] = {
+            "action": "add_rule",
+            "project_root": ns.project_root,
+            "ext": ns.rule[0],
+            "dest_dir": ns.rule[1],
+            "lfs": ns.lfs,
+        }
+    elif ns.undo is not None:
+        place_args = {"action": "undo", "project_root": ns.project_root, "count": ns.undo}
+    elif ns.sweep:
+        place_args = {"action": "sweep", "project_root": ns.project_root}
+    elif ns.paths:
+        place_args = {"action": "place", "project_root": ns.project_root, "paths": ns.paths}
+    else:
+        place_args = {"action": "status", "project_root": ns.project_root}
+    print(json.dumps(execute_defuzz_place(place_args), indent=2))
+    return 0
+
+
 def handle_defuzz_cli(ns: argparse.Namespace, ctx: Any = None) -> int:
     """Execute parsed CLI namespace and print JSON summary to stdout."""
     subcmd = getattr(ns, "defuzz_subcommand", None)
@@ -1583,34 +1666,7 @@ def handle_defuzz_cli(ns: argparse.Namespace, ctx: Any = None) -> int:
         if subcmd == "check":
             return _handle_check_subcommand(ns)
         if subcmd == "audit":
-            from .audit_surface import AUDIT_SCOPE_DISCLOSURE, execute_audit
-            if ns.audit_action in ("run", "resume"):
-                print(AUDIT_SCOPE_DISCLOSURE, file=sys.stderr)
-            args: Dict[str, Any] = {
-                "action": ns.audit_action,
-                "run_id": ns.run_id,
-                "root": ns.root,
-                "unused_threshold_days": ns.unused_threshold_days,
-                "full_home": getattr(ns, "full_home", False),
-                "quick": getattr(ns, "quick", False),
-                "sessions": getattr(ns, "sessions", False),
-            }
-            for key in ("max_entries", "max_bytes", "max_file_bytes", "unbounded", "as_of"):
-                value = getattr(ns, key, None)
-                if value is not None:
-                    args[key] = value
-            try:
-                result = execute_audit(args, wait=True)
-                report = result.get("report") if isinstance(result, dict) else None
-                if getattr(ns, "summary", False) and not getattr(ns, "json", False) and isinstance(report, dict):
-                    from .audit_summary import render_text, summarize
-                    print(render_text(summarize(report, home=_audit_home())), end="")
-                else:
-                    print(json.dumps(result, indent=2))
-                return 0
-            except (ValueError, KeyError) as exc:
-                print(str(exc), file=sys.stderr)
-                return 1
+            return _handle_audit_subcommand(ns)
         if subcmd == "templates":
             return _handle_templates_subcommand(ns)
         if subcmd == "kits":
@@ -1628,34 +1684,7 @@ def handle_defuzz_cli(ns: argparse.Namespace, ctx: Any = None) -> int:
         if subcmd == "tools":
             return _handle_tools_subcommand(ns)
         if subcmd == "copy":
-            include_secret_files = bool(getattr(ns, "include_secret_files", False))
-            left_behind: List[str] = []
-            dst = copy_tree_nofollow(
-                ns.source,
-                ns.copy_path,
-                staging_root=ns.staging_path,
-                include_secret_files=include_secret_files,
-                left_behind=left_behind,
-                base=ns.copy_path,  # the folder the person chose (links above it are theirs)
-            )
-            notice = format_secret_files_left_behind(left_behind, ns.source)
-            if notice:
-                print(notice, file=sys.stderr)
-            print(
-                json.dumps(
-                    {
-                        "ok": True,
-                        "action": "copy",
-                        "source": ns.source,
-                        "copy_root": str(dst),
-                        "secret_files_left_behind": left_behind,
-                        "secret_files_left_behind_count": len(left_behind),
-                        "secret_files_notice": notice or None,
-                    },
-                    indent=2,
-                )
-            )
-            return 0
+            return _handle_copy_subcommand(ns)
         if subcmd in ("scan", "rules", "apply", "run"):
             action_map = {"scan": "scan", "rules": "propose_rules", "apply": "apply", "run": "run"}
             if subcmd in ("apply", "run"):
@@ -1682,24 +1711,7 @@ def handle_defuzz_cli(ns: argparse.Namespace, ctx: Any = None) -> int:
             print(json.dumps(_handle_trust_subcommand(ns.folder, declared_only=bool(getattr(ns, "declared_only", False))), indent=2))
             return 0
         if subcmd == "place":
-            if ns.rule:
-                place_args: Dict[str, Any] = {
-                    "action": "add_rule",
-                    "project_root": ns.project_root,
-                    "ext": ns.rule[0],
-                    "dest_dir": ns.rule[1],
-                    "lfs": ns.lfs,
-                }
-            elif ns.undo is not None:
-                place_args = {"action": "undo", "project_root": ns.project_root, "count": ns.undo}
-            elif ns.sweep:
-                place_args = {"action": "sweep", "project_root": ns.project_root}
-            elif ns.paths:
-                place_args = {"action": "place", "project_root": ns.project_root, "paths": ns.paths}
-            else:
-                place_args = {"action": "status", "project_root": ns.project_root}
-            print(json.dumps(execute_defuzz_place(place_args), indent=2))
-            return 0
+            return _handle_place_subcommand(ns)
         print(json.dumps({"ok": False, "error": "Specify a subcommand: scan, copy, rules, apply, run, place, templates, list, new, folder, lint, or setup-tools"}))
         return 2
     except (GitUnavailableError, StateDirNotWritable, workspace_root.WorkspaceRootError) as exc:

@@ -603,6 +603,59 @@ def _log_stats(directory, root, archived, reference, budget):
     return result
 
 
+def _board_findings(b, source):
+    findings = []
+    cov = b['coverage']
+    top = b['retry_context']['growth_example']
+    if top:
+        # Flat numeric evidence only; a null ratio (zero first figure) is omitted.
+        evidence = {k: top[k] for k in RETRY_EVIDENCE_KEYS if top.get(k) is not None}
+        evidence['growth_tasks'] = b['retry_context']['growth_tasks']
+        findings.append(_finding('retry_context_growth', evidence, 'review_suggested', cov, source))
+    loops, auth, mb, logs_b = b['loops'], b['authorship'], b['machine_binding'], b.get('logs', {})
+    if loops['four_runs_without_completion'] or loops['repeated_block_threshold']:
+        findings.append(_finding('blocked_loops', {
+            'four_runs_without_completion': loops['four_runs_without_completion'],
+            'repeated_block_threshold': loops['repeated_block_threshold'],
+            'repeated_block_nonzero': loops['repeated_block_nonzero'],
+            'max_block_recurrences': loops['max_block_recurrences'],
+            'repeated_block_limit': BLOCK_THRESHOLD}, 'review_suggested', cov, source))
+    if (b['tasks'] >= AGENT_MIN_TASKS and auth['coverage'] == 'verified' and
+            auth['tasks']['agent'] / b['tasks'] >= AGENT_SHARE):
+        findings.append(_finding('agent_authored_board', {
+            'tasks': b['tasks'], 'agent_tasks': auth['tasks']['agent'], 'user_tasks': auth['tasks']['user'],
+            'unclassified_tasks': auth['tasks']['unclassified']}, 'info', cov, source))
+    aged = b['archived_share'] >= ARCHIVED_SHARE and b['gc_eligible_events'] > 0
+    archived_logs = logs_b.get('archived_bytes', 0)
+    if aged or archived_logs > ARCHIVED_LOG_BYTES:
+        findings.append(_finding('archived_never_collected', {
+            'archived_share': b['archived_share'], 'gc_eligible_events': b['gc_eligible_events'],
+            'archived_log_bytes': archived_logs}, 'review_suggested', cov, source))
+    if b['events'] >= HEARTBEAT_MIN_EVENTS and b['heartbeat_share'] > HEARTBEAT_SHARE:
+        findings.append(_finding('heartbeat_bloat', {
+            'events': b['events'], 'heartbeat_events': b['heartbeat_events'],
+            'heartbeat_share': b['heartbeat_share']}, 'info', cov, source))
+    if loops['never_run_older_than_seven_days'] / b['tasks'] > NEVER_RUN_SHARE:
+        findings.append(_finding('never_run_backlog', {
+            'tasks': b['tasks'], 'never_run': loops['never_run'],
+            'never_run_older_than_seven_days': loops['never_run_older_than_seven_days']}, 'info', cov, source))
+    # Hermes's own scratch root holds every scratch task's path by design,
+    # so only paths elsewhere inside the home count toward the trigger.
+    other_ws = mb['workspaces_inside_home'] - mb['workspaces_in_kanban_scratch_root']
+    if other_ws >= WORKSPACE_MIN:
+        findings.append(_finding('workspaces_inside_home', {
+            'workspaces_inside_home': mb['workspaces_inside_home'],
+            'workspaces_in_kanban_scratch_root': mb['workspaces_in_kanban_scratch_root'],
+            'workspaces_outside_kanban_scratch_root': other_ws}, 'review_suggested', cov, source))
+    if (mb['bodies_with_home_paths'] / b['tasks'] > MACHINE_SHARE or
+            mb['comments_with_home_paths'] / max(1, b['comments']) > MACHINE_SHARE):
+        findings.append(_finding('machine_paths_in_tasks', {
+            'tasks': b['tasks'], 'comments': b['comments'],
+            'bodies_with_home_paths': mb['bodies_with_home_paths'],
+            'comments_with_home_paths': mb['comments_with_home_paths']}, 'info', cov, source))
+    return findings
+
+
 def audit_kanban_residue(*, profile_path, db_path=None, reference_time=None, home_path=None, clock=None):
     """Audit only the supplied home. home_path maps historical backup paths;
     db_path replaces the main DB (e.g. a renamed backup), never expands scope.
@@ -697,54 +750,7 @@ def audit_kanban_residue(*, profile_path, db_path=None, reference_time=None, hom
     for b in boards:
         if 'retry_context' not in b or not b.get('tasks'):
             continue
-        source, cov = sources.get(id(b), 'kanban.db'), b['coverage']
-        top = b['retry_context']['growth_example']
-        if top:
-            # Flat numeric evidence only; a null ratio (zero first figure) is omitted.
-            evidence = {k: top[k] for k in RETRY_EVIDENCE_KEYS if top.get(k) is not None}
-            evidence['growth_tasks'] = b['retry_context']['growth_tasks']
-            findings.append(_finding('retry_context_growth', evidence, 'review_suggested', cov, source))
-        loops, auth, mb, logs_b = b['loops'], b['authorship'], b['machine_binding'], b.get('logs', {})
-        if loops['four_runs_without_completion'] or loops['repeated_block_threshold']:
-            findings.append(_finding('blocked_loops', {
-                'four_runs_without_completion': loops['four_runs_without_completion'],
-                'repeated_block_threshold': loops['repeated_block_threshold'],
-                'repeated_block_nonzero': loops['repeated_block_nonzero'],
-                'max_block_recurrences': loops['max_block_recurrences'],
-                'repeated_block_limit': BLOCK_THRESHOLD}, 'review_suggested', cov, source))
-        if (b['tasks'] >= AGENT_MIN_TASKS and auth['coverage'] == 'verified' and
-                auth['tasks']['agent'] / b['tasks'] >= AGENT_SHARE):
-            findings.append(_finding('agent_authored_board', {
-                'tasks': b['tasks'], 'agent_tasks': auth['tasks']['agent'], 'user_tasks': auth['tasks']['user'],
-                'unclassified_tasks': auth['tasks']['unclassified']}, 'info', cov, source))
-        aged = b['archived_share'] >= ARCHIVED_SHARE and b['gc_eligible_events'] > 0
-        archived_logs = logs_b.get('archived_bytes', 0)
-        if aged or archived_logs > ARCHIVED_LOG_BYTES:
-            findings.append(_finding('archived_never_collected', {
-                'archived_share': b['archived_share'], 'gc_eligible_events': b['gc_eligible_events'],
-                'archived_log_bytes': archived_logs}, 'review_suggested', cov, source))
-        if b['events'] >= HEARTBEAT_MIN_EVENTS and b['heartbeat_share'] > HEARTBEAT_SHARE:
-            findings.append(_finding('heartbeat_bloat', {
-                'events': b['events'], 'heartbeat_events': b['heartbeat_events'],
-                'heartbeat_share': b['heartbeat_share']}, 'info', cov, source))
-        if loops['never_run_older_than_seven_days'] / b['tasks'] > NEVER_RUN_SHARE:
-            findings.append(_finding('never_run_backlog', {
-                'tasks': b['tasks'], 'never_run': loops['never_run'],
-                'never_run_older_than_seven_days': loops['never_run_older_than_seven_days']}, 'info', cov, source))
-        # Hermes's own scratch root holds every scratch task's path by design,
-        # so only paths elsewhere inside the home count toward the trigger.
-        other_ws = mb['workspaces_inside_home'] - mb['workspaces_in_kanban_scratch_root']
-        if other_ws >= WORKSPACE_MIN:
-            findings.append(_finding('workspaces_inside_home', {
-                'workspaces_inside_home': mb['workspaces_inside_home'],
-                'workspaces_in_kanban_scratch_root': mb['workspaces_in_kanban_scratch_root'],
-                'workspaces_outside_kanban_scratch_root': other_ws}, 'review_suggested', cov, source))
-        if (mb['bodies_with_home_paths'] / b['tasks'] > MACHINE_SHARE or
-                mb['comments_with_home_paths'] / max(1, b['comments']) > MACHINE_SHARE):
-            findings.append(_finding('machine_paths_in_tasks', {
-                'tasks': b['tasks'], 'comments': b['comments'],
-                'bodies_with_home_paths': mb['bodies_with_home_paths'],
-                'comments_with_home_paths': mb['comments_with_home_paths']}, 'info', cov, source))
+        findings.extend(_board_findings(b, sources.get(id(b), 'kanban.db')))
     if orphan:
         findings.append(_finding('orphan_board_folders', {'orphan_board_folders': orphan}, 'info',
                                  source=str(root / 'kanban/boards')))

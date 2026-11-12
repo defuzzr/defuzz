@@ -343,6 +343,11 @@ def _load_ndjson_objects(inp: ParseInput) -> tuple[list[dict[str, Any]], bool]:
     return (objs, True) if objs else ([], False)
 
 
+def _object_or_array_items(data: Any) -> list[Any] | None:
+    """Treat a single JSON object as a one-item list; pass lists through; else None."""
+    return [data] if isinstance(data, dict) else (data if isinstance(data, list) else None)
+
+
 def _parse_regex_lines(
     inp: ParseInput,
     pattern: str,
@@ -789,7 +794,7 @@ def _parse_pwsh_parse_json(inp: ParseInput) -> list[dict[str, Any]]:
 
     return _parse_json_items(
         inp,
-        lambda d: [d] if isinstance(d, dict) else (d if isinstance(d, list) else None),
+        _object_or_array_items,
         _build,
     )
 
@@ -806,7 +811,7 @@ def _parse_psscriptanalyzer_json(inp: ParseInput) -> list[dict[str, Any]]:
 
     return _parse_json_items(
         inp,
-        lambda d: [d] if isinstance(d, dict) else (d if isinstance(d, list) else None),
+        _object_or_array_items,
         _build,
     )
 
@@ -1130,6 +1135,18 @@ def _filter_enabled_modes(
     return enabled_modes
 
 
+def _record_mode_statuses(
+    tool_statuses: list[dict[str, Any]],
+    spec: ToolSpec,
+    modes: Sequence[str],
+    status: str,
+    message: str,
+) -> None:
+    """Append one skipped-run status entry per mode for spec."""
+    for m in modes:
+        tool_statuses.append(_make_tool_status(spec.tool, m, status, message))
+
+
 def _not_configured_message(spec: ToolSpec) -> str:
     """Build a human-readable configuration error message for an unsatisfied ToolSpec."""
     if "compile_commands.json" in spec.requires:
@@ -1166,15 +1183,20 @@ def _execute_tool_mode(
             cmd[o_idx + 1] = str(tmp_spv_path)
 
     t0 = time.monotonic()
+    cp: Any = None
+    exec_exc: Exception | None = None
     try:
         cp = lint_env.run(cmd, cwd=root_path, env=run_env, timeout_s=timeout_s, runner=runner)
     except Exception as exc:
-        if tmp_spv_path is not None:
-            tmp_spv_path.unlink(missing_ok=True)
-        return cmd, None, int((time.monotonic() - t0) * 1000), exc
+        exec_exc = exc
     if tmp_spv_path is not None:
         tmp_spv_path.unlink(missing_ok=True)
-    return cmd, cp, int((time.monotonic() - t0) * 1000), None
+    return cmd, cp, int((time.monotonic() - t0) * 1000), exec_exc
+
+
+def _is_parse_error_marker(finding: dict[str, Any]) -> bool:
+    """Return True for the file-less parse-error marker emitted by _make_parse_error_marker."""
+    return finding.get("rule") == "parse-error" and finding.get("file", "") == ""
 
 
 def _classify_tool_output(
@@ -1218,9 +1240,8 @@ def _classify_tool_output(
         warnings.append(msg)
         return "crashed", msg, []
 
-    is_marker = lambda f: f.get("rule") == "parse-error" and f.get("file", "") == ""
-    parse_errors = [f for f in raw_parsed if is_marker(f)]
-    tool_findings = [f for f in raw_parsed if not is_marker(f)]
+    parse_errors = [f for f in raw_parsed if _is_parse_error_marker(f)]
+    tool_findings = [f for f in raw_parsed if not _is_parse_error_marker(f)]
 
     if _is_crash_exit(cp.returncode):
         msg = f"tool {spec.tool} crashed (rc={cp.returncode}){_output_snippet(parse_inp)}"
@@ -1379,18 +1400,16 @@ def run_lint(
 
         matched_files = _matching_files_for_spec(spec, all_files)
         if spec.input_globs and not matched_files:
-            for m in active_modes:
-                tool_statuses.append(
-                    _make_tool_status(spec.tool, m, "no_files", f"Skipped {spec.tool}: no matching input files")
-                )
+            _record_mode_statuses(
+                tool_statuses, spec, active_modes, "no_files", f"Skipped {spec.tool}: no matching input files"
+            )
             continue
 
         if not spec.is_satisfied(root_path):
             not_cfg_msg = _not_configured_message(spec)
             warnings.append(not_cfg_msg)
             tool_errors.append(_make_tool_error(spec.tool, active_modes[0], "not_configured", not_cfg_msg))
-            for m in active_modes:
-                tool_statuses.append(_make_tool_status(spec.tool, m, "not_configured", not_cfg_msg))
+            _record_mode_statuses(tool_statuses, spec, active_modes, "not_configured", not_cfg_msg)
             continue
 
         resolved_bins = {b: lint_env.which(b, run_env) for b in spec.binaries}
@@ -1402,8 +1421,7 @@ def run_lint(
                 tools_missing.append(spec.tool)
                 warnings.append(msg)
                 tool_errors.append(_make_tool_error(spec.tool, active_modes[0], "not_installed", msg))
-            for m in active_modes:
-                tool_statuses.append(_make_tool_status(spec.tool, m, "not_installed", msg))
+            _record_mode_statuses(tool_statuses, spec, active_modes, "not_installed", msg)
             continue
 
         if len(matched_files) > MAX_FILES_PER_TOOL:
@@ -1434,6 +1452,33 @@ def run_lint(
                 all_findings,
             )
 
+    return _lint_result(
+        project_str,
+        mode,
+        all_findings,
+        all_files,
+        max_findings,
+        tools_run,
+        tools_missing,
+        tool_statuses,
+        tool_errors,
+        warnings,
+    )
+
+
+def _lint_result(
+    project_str: str,
+    mode: str,
+    all_findings: list[dict[str, Any]],
+    all_files: Sequence[str],
+    max_findings: int,
+    tools_run: list[dict[str, Any]],
+    tools_missing: list[str],
+    tool_statuses: list[dict[str, Any]],
+    tool_errors: list[dict[str, Any]],
+    warnings: list[str],
+) -> dict[str, Any]:
+    """Dedupe/cap findings and assemble the final run_lint response dict."""
     sorted_findings = _dedupe_and_sort_findings(all_findings)
     if len(sorted_findings) > max_findings:
         warnings.append(

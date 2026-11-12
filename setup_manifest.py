@@ -806,24 +806,11 @@ def _validate_download(
     """Validate a single platform Download entry on item."""
     label, problems = _validate_platform_key(item.name, plat)
 
-    parsed = urlparse(dl.url)
-    if parsed.scheme != "https":
-        problems.append(f"{label}: url is not https ({dl.url!r})")
-    if parsed.hostname not in OFFICIAL_HOSTS:
-        problems.append(f"{label}: host {parsed.hostname!r} not in OFFICIAL_HOSTS")
+    problems.extend(_check_artifact_url(label, dl.url))
     if "latest" in dl.url.lower():
         problems.append(f"{label}: unpinned 'latest' in url ({dl.url!r})")
 
-    exp_len = _HASH_LENGTHS.get(dl.hash_algo)
-    if exp_len is None:
-        problems.append(f"{label}: unsupported hash_algo {dl.hash_algo!r}")
-    elif len(dl.hash) != exp_len or not _HEX_RE.match(dl.hash):
-        problems.append(
-            f"{label}: invalid {dl.hash_algo} hash (len={len(dl.hash)}, expected {exp_len} lowercase hex)"
-        )
-
-    if dl.hash_source not in ("published", "computed"):
-        problems.append(f"{label}: invalid hash_source {dl.hash_source!r}")
+    problems.extend(_check_artifact_hash(label, dl.hash, dl.hash_algo, dl.hash_source))
     if dl.archive not in ("tar.gz", "tar.xz", "zip", "binary"):
         problems.append(f"{label}: invalid archive {dl.archive!r}")
     if dl.strip_components < 0:
@@ -845,16 +832,20 @@ def _validate_download(
 _UNPINNED_RE = re.compile(r"(?<![A-Za-z])(stable|latest|nightly|beta)(?![A-Za-z])", re.IGNORECASE)
 
 
-def _check_pinned_hash(label: str, url: str, hash_val: str, hash_algo: str, hash_source: str) -> list[str]:
-    """Shared https/official-host/hash-shape checks for a downloadable artifact."""
+def _check_artifact_url(label: str, url: str) -> list[str]:
+    """Check transport and host policy without imposing a pinning policy."""
     problems: list[str] = []
     parsed = urlparse(url)
     if parsed.scheme != "https":
         problems.append(f"{label}: url is not https ({url!r})")
     if parsed.hostname not in OFFICIAL_HOSTS:
         problems.append(f"{label}: host {parsed.hostname!r} not in OFFICIAL_HOSTS")
-    if _UNPINNED_RE.search(url):
-        problems.append(f"{label}: unpinned channel in url ({url!r})")
+    return problems
+
+
+def _check_artifact_hash(label: str, hash_val: str, hash_algo: str, hash_source: str) -> list[str]:
+    """Check an artifact's checksum shape and provenance."""
+    problems: list[str] = []
     exp_len = _HASH_LENGTHS.get(hash_algo)
     if exp_len is None:
         problems.append(f"{label}: unsupported hash_algo {hash_algo!r}")
@@ -862,6 +853,15 @@ def _check_pinned_hash(label: str, url: str, hash_val: str, hash_algo: str, hash
         problems.append(f"{label}: invalid {hash_algo} hash (len={len(hash_val)}, expected {exp_len} lowercase hex)")
     if hash_source not in ("published", "computed"):
         problems.append(f"{label}: invalid hash_source {hash_source!r}")
+    return problems
+
+
+def _check_pinned_hash(label: str, url: str, hash_val: str, hash_algo: str, hash_source: str) -> list[str]:
+    """Shared https/official-host/hash-shape checks for a downloadable artifact."""
+    problems = _check_artifact_url(label, url)
+    if _UNPINNED_RE.search(url):
+        problems.append(f"{label}: unpinned channel in url ({url!r})")
+    problems.extend(_check_artifact_hash(label, hash_val, hash_algo, hash_source))
     return problems
 
 

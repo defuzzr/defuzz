@@ -1014,17 +1014,7 @@ def _parse_structured_manifest(text: str, suffix: str) -> Any:
         raise ValueError(f"manifest parse error ({type(exc).__name__}, {len(text)} chars)") from None
 
 
-def _probe_file(entry: dict[str, Any], project_root: Path) -> tuple[str, str]:
-    rel_file = entry.get("file")
-    if not rel_file or not isinstance(rel_file, str):
-        raise ValueError("file probe requires 'file' path")
-
-    has_key = entry.get("key") is not None
-    has_regex = entry.get("regex") is not None
-    if has_key == has_regex:
-        raise ValueError("file probe requires exactly one of 'key' or 'regex'")
-
-    compiled_re = _compile_safe_file_regex(str(entry["regex"])) if has_regex else None
+def _resolve_probe_file_path(rel_file: str, project_root: Path) -> Path:
     if os.path.isabs(rel_file) or rel_file.startswith(("~", "/", "\\")):
         raise ValueError("probe_file_not_relative")
     _refuse_secret_path(rel_file, root=project_root)
@@ -1038,6 +1028,21 @@ def _probe_file(entry: dict[str, Any], project_root: Path) -> tuple[str, str]:
     _refuse_secret_path(target, root=project_root)
     if not _is_allowed_probe_filename(target.name):
         raise ValueError("probe_file_not_allowed")
+    return target
+
+
+def _probe_file(entry: dict[str, Any], project_root: Path) -> tuple[str, str]:
+    rel_file = entry.get("file")
+    if not rel_file or not isinstance(rel_file, str):
+        raise ValueError("file probe requires 'file' path")
+
+    has_key = entry.get("key") is not None
+    has_regex = entry.get("regex") is not None
+    if has_key == has_regex:
+        raise ValueError("file probe requires exactly one of 'key' or 'regex'")
+
+    compiled_re = _compile_safe_file_regex(str(entry["regex"])) if has_regex else None
+    target = _resolve_probe_file_path(rel_file, project_root)
     text = _read_bounded_regular_file(target, max_bytes=MAX_FILE_PROBE_BYTES)
     resolved_str = str(target.resolve())
 

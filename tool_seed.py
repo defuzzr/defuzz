@@ -89,6 +89,28 @@ def _append_tools_log_entries(
         safe_state_store.atomic_write_json(target, entries, mode=0o644)
 
 
+def _probe_seed_entry(
+    name: str,
+    entry: dict[str, Any],
+    root: Path,
+    probe_failed: dict[str, str],
+) -> None:
+    try:
+        installed_ver, _where = toolchk.probe(name, entry, root)
+        entry["version"] = installed_ver
+    except FileNotFoundError:
+        err_str = toolchk.missing_tool_line(name, entry.get("minimum"))
+        entry["version"] = "unknown"
+        entry["reason"] = f"{entry['reason']} Probe failed at seeding: {err_str}"
+        probe_failed[name] = err_str
+    except Exception:  # noqa: BLE001
+        # Plain words only: the raw error can carry paths and command output the user never gave.
+        err_str = f"{name}: found, but its version could not be read. Check that {name} runs, {toolchk.SETUP_HINT}"
+        entry["version"] = "unknown"
+        entry["reason"] = f"{entry['reason']} Probe failed at seeding: {err_str}"
+        probe_failed[name] = err_str
+
+
 def seed_lock(
     project_root: Path | str,
     *,
@@ -150,20 +172,7 @@ def seed_lock(
             entry["source"] = "auto"
         else:
             entry = dict(detected[name])
-        try:
-            installed_ver, _where = toolchk.probe(name, entry, root)
-            entry["version"] = installed_ver
-        except FileNotFoundError:
-            err_str = toolchk.missing_tool_line(name, entry.get("minimum"))
-            entry["version"] = "unknown"
-            entry["reason"] = f"{entry['reason']} Probe failed at seeding: {err_str}"
-            probe_failed[name] = err_str
-        except Exception:  # noqa: BLE001
-            # Plain words only: the raw error can carry paths and command output the user never gave.
-            err_str = f"{name}: found, but its version could not be read. Check that {name} runs, {toolchk.SETUP_HINT}"
-            entry["version"] = "unknown"
-            entry["reason"] = f"{entry['reason']} Probe failed at seeding: {err_str}"
-            probe_failed[name] = err_str
+        _probe_seed_entry(name, entry, root, probe_failed)
 
         merged_tools[name] = entry
         if prev is None:
@@ -338,6 +347,34 @@ def _row_from_check(
     }
 
 
+def _age_nudge_months(loaded: dict[str, Any]) -> int:
+    header = loaded["lock"]
+    raw_nudge = header.get("age_nudge_months", 12)
+    return (
+        int(raw_nudge)
+        if isinstance(raw_nudge, int) and not isinstance(raw_nudge, bool)
+        else 12
+    )
+
+
+def _checked_tool_row(
+    root: Path,
+    loaded: dict[str, Any],
+    tool_name: str,
+    db_path: Path | str | None,
+) -> dict[str, Any]:
+    age_nudge_months = _age_nudge_months(loaded)
+    rep = toolchk.check([tool_name], loaded, root)
+    c_row = rep.get("tools", {}).get(tool_name, {})
+    snoozed_map = snoozed(root, db_path=db_path)
+    return _row_from_check(
+        tool_name,
+        c_row,
+        age_nudge_months=age_nudge_months,
+        snoozed_map=snoozed_map,
+    )
+
+
 def table(
     project_root: Path | str,
     *,
@@ -347,13 +384,7 @@ def table(
     root = Path(project_root)
     target = lock_path(root)
     loaded = toolchk.load_lock(target)
-    header = loaded["lock"]
-    raw_nudge = header.get("age_nudge_months", 12)
-    age_nudge_months = (
-        int(raw_nudge)
-        if isinstance(raw_nudge, int) and not isinstance(raw_nudge, bool)
-        else 12
-    )
+    age_nudge_months = _age_nudge_months(loaded)
     all_tools = list(loaded["tools"].keys())
     rep = toolchk.check(all_tools, loaded, root)
     snoozed_map = snoozed(root, db_path=db_path)
@@ -424,22 +455,7 @@ def accept_installed(
         ],
     )
 
-    header = loaded["lock"]
-    raw_nudge = header.get("age_nudge_months", 12)
-    age_nudge_months = (
-        int(raw_nudge)
-        if isinstance(raw_nudge, int) and not isinstance(raw_nudge, bool)
-        else 12
-    )
-    rep = toolchk.check([tool_name], loaded, root)
-    c_row = rep.get("tools", {}).get(tool_name, {})
-    snoozed_map = snoozed(root, db_path=db_path)
-    return _row_from_check(
-        tool_name,
-        c_row,
-        age_nudge_months=age_nudge_months,
-        snoozed_map=snoozed_map,
-    )
+    return _checked_tool_row(root, loaded, tool_name, db_path)
 
 
 def set_reason(
@@ -491,19 +507,4 @@ def set_reason(
         ],
     )
 
-    header = loaded["lock"]
-    raw_nudge = header.get("age_nudge_months", 12)
-    age_nudge_months = (
-        int(raw_nudge)
-        if isinstance(raw_nudge, int) and not isinstance(raw_nudge, bool)
-        else 12
-    )
-    rep = toolchk.check([tool_name], loaded, root)
-    c_row = rep.get("tools", {}).get(tool_name, {})
-    snoozed_map = snoozed(root, db_path=db_path)
-    return _row_from_check(
-        tool_name,
-        c_row,
-        age_nudge_months=age_nudge_months,
-        snoozed_map=snoozed_map,
-    )
+    return _checked_tool_row(root, loaded, tool_name, db_path)

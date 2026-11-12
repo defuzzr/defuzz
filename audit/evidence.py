@@ -58,7 +58,7 @@ VOCABULARY = _VOCABULARY | RULE_IDS | SCOPE_LABELS | CODE_LABELS | frozenset({
     'memories/MEMORY.md', 'memories/USER.md', 'config.yaml', 'SOUL.md',
     'credential_in_name',
     'skipped_folders',  # outward sweep: dependency, cache and Git object folders not walked
-    'default_profile_never_archived', 'active_profile_never_archived', 'within_active_threshold',  # facts.py:1083
+    'default_profile_never_archived', 'active_profile_never_archived', 'within_active_threshold',  # facts.evaluate_profile_age_and_unused
 })
 
 _FACTORY = object()
@@ -154,50 +154,59 @@ _STRUCTURAL_FIELD_TOKENS = {
         'mode_check', 'mode_check_reason', 'relationship', 'inspection', 'resolution',
     )},
     # Unique leaf names: the value is chosen by audit code, never read from the home.
-    'limit_source': frozenset({'config', 'default', 'could_not_verify', 'caller', 'host'}),  # memory_load.py:592
-    'curator_enabled_source': frozenset({'caller', 'config', 'default', 'could_not_verify'}),  # skill_ledger.py:303,396
-    'last_use_source': frozenset({'captured_evidence'}),  # persistence.py:153
-    'project_families': frozenset({  # session_contamination.py:66-97, emitted at :658
+    # limit_source: chosen in memory_load._resolve_inputs, copied by memory_load._char_limits.
+    'limit_source': frozenset({'config', 'default', 'could_not_verify', 'caller', 'host'}),
+    # curator_enabled_source: set by skill_ledger.audit_skill_ledger.
+    'curator_enabled_source': frozenset({'caller', 'config', 'default', 'could_not_verify'}),
+    'last_use_source': frozenset({'captured_evidence'}),  # persistence.facts_dto
+    'project_families': frozenset({  # session_contamination._project; _contamination_report emits them
         'python', 'javascript', 'java', 'cpp', 'csharp', 'rust', 'go', 'php', 'ruby',
         'swift', 'kotlin', 'unreal', 'unity', 'godot', 'blender', 'houdini',
     }),
-    'file_kind': frozenset({  # profile_duplicates.py:214-233,196-202
+    # file_kind: profile_duplicates._file_kind, plus the size-only classes from
+    # profile_duplicates._size_only_class (_SIZE_ONLY_CLASSES / SIZE_ONLY_OTHER_CLASS).
+    'file_kind': frozenset({
         'hub_index_cache', 'models_dev_cache', 'provider_models_cache', 'skill_md',
         'identity_md', 'agents_md', 'database', 'executable_file', 'large_file',
         'env_file', 'auth_json', 'config_yaml', 'credential_other',
     }),
-    'provenance': frozenset({'external_dir', 'stock', 'user_authored', 'hub'}),  # skill_hygiene.py:519-562
-    'name_pattern_label': frozenset({'name_pattern_not_in_hermes_source'}),  # dead_stores.py:734
+    # provenance: set by skill_hygiene.audit_skill_hygiene and
+    # skill_hygiene._resolve_manifest_origins.
+    'provenance': frozenset({'external_dir', 'stock', 'user_authored', 'hub'}),
+    'name_pattern_label': frozenset({'name_pattern_not_in_hermes_source'}),  # dead_stores.NAME_PATTERN_LABEL
     'parked_name_label': frozenset({'name_pattern_not_in_hermes_source'}),
     'tool_cache_label': frozenset({'cache_in_work_folder'}),
-    'secret_kind': frozenset({  # secret_file_copies.py:166-178
+    # secret_kind: secret_file_copies.EXPECTED_SECRET_KINDS, emitted by
+    # secret_file_copies._match_backup_of_expected_secret.
+    'secret_kind': frozenset({
         'dotenv', 'auth_json', 'shared_auth', 'credentials_store', 'mcp_tokens', 'pairing',
         'vault', 'platform_token_stores', 'oauth_stores', 'browser_and_home_stores',
         'os_credential_dirs',
     }),
-    'target_store': frozenset({'memory', 'user'}),  # vendor/profile_context.py:1230-1248
-    'approvals_mode': frozenset({'approval_off', 'manual', 'smart', 'other'}),  # unattended_exposure.py:1958
-    'cli_powerful_tools': frozenset({  # unattended_exposure.py:120-123
+    'target_store': frozenset({'memory', 'user'}),  # vendor.profile_context.audit_profile_context
+    'approvals_mode': frozenset({'approval_off', 'manual', 'smart', 'other'}),  # unattended_exposure.audit_unattended_exposure
+    'cli_powerful_tools': frozenset({  # unattended_exposure.POWERFUL_TOOLS; emitted by
+        # unattended_exposure._evaluate_platform_toolsets.
         'terminal', 'code_execution', 'cronjob', 'delegation', 'memory', 'skill_manage',
         'computer_use', 'browser',
     }),
-    'unmeasured': frozenset({  # context_load.py:109-118
+    'unmeasured': frozenset({  # context_load.UNMEASURED_DYNAMIC_SOURCES
         'dynamic_plugin_prompt_sections', 'plugin_registered_skills', 'builtin_tool_schemas',
         'mcp_tool_schemas', 'external_memory_provider_prefetch_and_blocks',
         'caller_ephemeral_system_message', 'workspace_git_status_snapshot',
         'runtime_environment_metadata',
     }),
-    'estimator_version': frozenset({'hermes-rough-bytes4-cjk1-v1'}),  # vendor/profile_context.py:47
+    'estimator_version': frozenset({'hermes-rough-bytes4-cjk1-v1'}),  # vendor.profile_context.TOKEN_ESTIMATOR_VERSION
     'contract_version': frozenset({'2.0.0'}),
     'observation': frozenset({'size_only_not_hashed'}),
     'reference': frozenset({'newest_mtime_in_home'}),
     'reference_clock': frozenset({'newest_event'}),
     'gc_ever_run': frozenset({'could_not_verify', 'verified', 'not_measured'}),
-    'schema': frozenset({'unknown'}),  # outward_db.py:112; classified names are not vocabulary words
+    'schema': frozenset({'unknown'}),  # outward_db.inspect_database; classified names are not vocabulary words
     'contract': frozenset({'2.0.0'}),
     'parser_policy': frozenset({'safe-load-json-v2'}),
     'persistence_policy': frozenset({'allowlist-v2'}),
-    'ineligible_reason': frozenset({'last_use_could_not_verify', 'default_profile_never_archived',  # facts.py:1072
+    'ineligible_reason': frozenset({'last_use_could_not_verify', 'default_profile_never_archived',  # facts.evaluate_profile_age_and_unused
                                     'active_profile_never_archived', 'within_active_threshold'}),
 }
 
@@ -205,7 +214,7 @@ _STRUCTURAL_FIELD_TOKENS = {
 # including a dotted settings key such as 'approvals.mode'). The longest match wins.
 # A value outside that rule's set stays taint-first. Ambiguous leaves are not in
 # _STRUCTURAL_FIELD_TOKENS, so a bare use still seals.
-# String values set_row emits. unattended_exposure.py:70-114,539-554,611-919.
+# String values set_row emits. unattended_exposure._evaluate_settings_and_sanity.set_row.
 # Bools and counts are not strings. Unknown input becomes 'other' or is omitted.
 _SETTING_VALUES = frozenset({
     'approval_off', 'approve', 'deny', 'manual', 'smart', 'other',
@@ -216,36 +225,44 @@ _SETTING_VALUES = frozenset({
     'unset', 'unclassified', 'flash', 'mini', 'nano', 'haiku', 'lite', 'small',
 })
 _STRUCTURAL_PATH_RULES = (
-    # Settings provenance. write_settings.py:109,150,237; unattended_exposure.py:611-630.
+    # Settings provenance. write_settings._resolve_settings;
+    # unattended_exposure._evaluate_settings_and_sanity.set_row.
     (('settings', '*', 'source'), frozenset({'config', 'default', 'could_not_verify'})),
     (('tool_selection', 'source'), frozenset({'config', 'default', 'could_not_verify'})),
     (('flush_interval', 'source'), frozenset({'not_found'})),
-    # Finding evidence copies that token. Sealed as a bare list (store.py:445) and
-    # under findings[] (contract.py:820). write_settings.py:186; unattended_exposure.py:2063,2072.
+    # Finding evidence copies that token. Sealed as a bare list
+    # (store._store_component_results) and under findings[]
+    # (contract.canonical_report_payload). write_settings.audit_write_settings;
+    # unattended_exposure.audit_unattended_exposure.
     (('evidence', 'source'), frozenset({'config', 'default', 'could_not_verify', 'not_found'})),
-    # vendor/memory.py:693. Built-in store label, not a user name. Bare `store` stays user data.
+    # vendor.memory.audit_profile_memory. Built-in store label, not a user name.
+    # Bare `store` stays user data.
     (('evidence', 'store'), frozenset({'memory', 'user'})),
-    # context_load.py:197-215; vendor/profile_context.py:1506; context_load.py:96-102.
+    # context_load.resolve_context_file_max_chars; vendor.profile_context.audit_profile_context.
     (('context_file_max_chars', 'source'), frozenset({'config', 'assumed_default'})),
     (('persona', 'source'), frozenset({'SOUL.md', 'DEFAULT_AGENT_IDENTITY'})),
+    # context_load.SOURCE_ORDER; emitted as row['source'] by context_load._build_source_rows.
     (('sources', 'source'), frozenset({
         'identity_soul', 'core_guidance', 'enabled_memory_files',
         'auto_loaded_skill_bodies', 'skills_index_text',
     })),
-    # memory_load.py:851-852 chooses these labels, never a value from the home.
+    # memory_load.audit_memory_load chooses these labels, never a value from the home.
     (('memory_load', 'foreign_technology_reason'), frozenset({'no_projects', 'input_unknown'})),
-    # memory_load.py:543-561. The leaf name is the input, the value is the provenance token.
+    # memory_load._resolve_inputs. The leaf name is the input, the value is the provenance token.
     (('input_sources', '*'), frozenset({'config', 'default', 'could_not_verify', 'caller', 'host'})),
     # Coerced setting labels, not the raw config string. unattended_exposure.py set_row values.
     (('settings', '*', 'value'), _SETTING_VALUES),
-    # kanban_residue.py:663 maps the slug to a label; the slug itself is not emitted.
+    # kanban_residue.audit_kanban_residue maps the slug to a label; the slug itself is not emitted.
     (('boards', 'board'), frozenset({'default', 'named_board'})),
-    # memory_load.py:662-719. 'files' is also the snapshot file list.
+    # memory_load._scan_snapshots. 'files' is also the snapshot file list.
     (('files', 'kind'), frozenset({'memory', 'user'})),
+    # memory_load._scan_snapshots ('snapshot') and memory_load.audit_memory_load
+    # ('main'/'profile').
     (('files', 'scope'), frozenset({'main', 'profile', 'snapshot'})),
-    # secret_file_copies.py:529-539. Region .scope sentences are fixed sentences, not this set.
+    # secret_file_copies._match_backup_of_expected_secret. Region .scope sentences are
+    # fixed sentences, not this set.
     (('copies', 'scope'), frozenset({'home', 'profile', 'backups'})),
-    (('tool_selection', 'surface'), frozenset({'cli'})),  # write_settings.py:231
+    (('tool_selection', 'surface'), frozenset({'cli'})),  # write_settings.audit_write_settings
     # Finding evidence copies of closed labels. Top-level terminal_backend/size_class stay user data.
     (('evidence', 'terminal_backend'), frozenset({
         'local', 'docker', 'modal', 'daytona', 'vercel_sandbox', 'ssh', 'managed_modal', 'other',
@@ -253,16 +270,19 @@ _STRUCTURAL_PATH_RULES = (
     (('smart_approval', 'size_class'), frozenset({
         'unset', 'unclassified', 'flash', 'mini', 'nano', 'haiku', 'lite', 'small', 'other',
     })),
-    # home_workdirs.py:764-772. Other kind leaves (credentials, invocations) have their own sets.
+    # home_workdirs._directory_entry_records. Other kind leaves (credentials,
+    # invocations) have their own sets.
     (('not_hermes_folders', 'kind'), frozenset({'symlink', 'directory', 'regular', 'special'})),
     (('credentials', 'kind'), frozenset({'credential_store', 'credential_store_not_opened'})),
     (('dynamic_invocations', 'kind'), frozenset({'execution_surface', 'program_code'})),
     (('dynamic_invocations', 'kinds'), frozenset({'execution_surface', 'program_code'})),
-    (('evidence', 'kind'), frozenset({'kanban_task_workspace', 'symlink'})),  # outward.py:279
+    (('evidence', 'kind'), frozenset({'kanban_task_workspace', 'symlink'})),  # outward.collect_outward
     (('families', 'kind'), frozenset({'alphabetic_prefix', 'digit_series'})),  # profile_duplicates
-    # profile_duplicates.py:990-992. The leaf is the identity-file label, not a user filename.
+    # profile_duplicates._summarize_identity_files. The leaf is the identity-file label,
+    # not a user filename.
     (('files', 'file'), frozenset({'SOUL.md', 'MEMORY.md', 'USER.md'})),
-    # unattended_exposure.py:186-202,1641. Only names in VALID_HOOKS are emitted.
+    # Only names in unattended_exposure.VALID_HOOKS are emitted
+    # (unattended_exposure.audit_unattended_exposure).
     (('hook_plugins', 'hooks'), frozenset({
         'pre_tool_call', 'post_tool_call', 'transform_terminal_output', 'transform_tool_result',
         'transform_llm_output', 'pre_llm_call', 'post_llm_call',
@@ -285,7 +305,8 @@ _STRUCTURAL_PATH_RULES = (
         'transform_terminal_output', 'transform_llm_output', 'pre_approval_request',
         'post_approval_response', 'on_human_input_request', 'on_human_input_resolved',
     })),
-    # unattended_exposure.py:1506-1514. A bare `pinned` stays user data (sealing tests).
+    # unattended_exposure.audit_unattended_exposure.pinned_state. A bare `pinned` stays
+    # user data (sealing tests).
     (('hook_plugins', 'pinned'), frozenset({'yes', 'no', 'unknown'})),
     # scope.limits.regions.<name>.name is the region id, not a profile name.
     (('regions', '*', 'name'), frozenset({
@@ -513,9 +534,8 @@ class EvidenceSerializer:
     def scalar(self, value, field, location, path=()):
         if _is_structural_scalar(field, value, path):
             return value
-        if field in {'config_keys', 'key_path'} and value in CREDENTIAL_KEY_LABELS:
-            return self.token(value, 'credential_overlap', location) if self._tainted(value) else value
-        if value in VOCABULARY:
+        if ((field in {'config_keys', 'key_path'} and value in CREDENTIAL_KEY_LABELS)
+                or value in VOCABULARY):
             return self.token(value, 'credential_overlap', location) if self._tainted(value) else value
         if field == 'provider':
             return self.token(value, 'text', location)
@@ -609,7 +629,7 @@ class EvidenceSerializer:
             return key
         return key_path if key_path is not None and not self._tainted(key_path) else self._seal_key('hmac:' + self._hmac(key))
 
-    def _serialize_dict(self, value, location, field, ancestors, path):
+    def _update_dict_location(self, value, location):
         for key in ('path', 'source', 'database', 'root_path'):
             resolved = self._path(value.get(key))
             if not resolved:
@@ -624,6 +644,9 @@ class EvidenceSerializer:
             location['line'] = value['line']
         elif isinstance(value.get('evidence'), dict) and type(value['evidence'].get('line')) is int:
             location['line'] = value['evidence']['line']
+
+    def _serialize_dict(self, value, location, field, ancestors, path):
+        self._update_dict_location(value, location)
         root = location.get('path')
         is_project_unit = value.get('unit_kind') == 'project'
         out = {}

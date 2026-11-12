@@ -210,6 +210,13 @@ def main(argv: List[str] | None = None) -> int:
             print(line)
         print(f"web-golden: {len(want)} files, {len(diff)} differ")
         return 1 if diff else 0
+    _sync_files(want, have)
+    print(f"web-golden: {len(want)} files written, {len(diff)} changed")
+    return 0
+
+
+def _sync_files(want: dict[str, bytes], have: dict[str, bytes]) -> None:
+    """Apply the expected files and remove obsolete files and empty folders."""
     for name in sorted(set(have) - set(want)):
         (DEST / name).unlink()
     for name, data in sorted(want.items()):
@@ -221,8 +228,6 @@ def main(argv: List[str] | None = None) -> int:
     for folder in sorted((p for p in DEST.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
         if not any(folder.iterdir()):
             folder.rmdir()
-    print(f"web-golden: {len(want)} files written, {len(diff)} changed")
-    return 0
 
 
 if __name__ == "__main__":

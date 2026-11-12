@@ -96,6 +96,11 @@ def generate(source: Path) -> Dict[str, str]:
     if proc.returncode != 0:
         raise GenError(f"loading the companion's kit commands failed:\n{proc.stderr.strip()}")
     calls = json.loads(proc.stdout)["calls"]
+    return _fixture_files(calls)
+
+
+def _fixture_files(calls) -> dict[str, str]:
+    """Validate recorded command replies and map them to fixture files."""
     files: Dict[str, str] = {}
     for c in calls:
         label = "kit " + " ".join(c["argv"])

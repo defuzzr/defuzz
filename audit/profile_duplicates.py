@@ -389,6 +389,85 @@ def _envelope(
     }
 
 
+def _summarize_identity_files(
+    identity_raw_by_kind: dict[str, list[tuple[str, bytes, list[bytes]]]],
+    profile_folder: Callable[[str], str | None],
+) -> dict[str, Any]:
+    identical_profiles_union: set[str] = set()
+    by_kind_summary: dict[str, dict[str, Any]] = {}
+    all_file_shares: list[float] = []
+    per_profile_max_share: dict[str, float] = defaultdict(float)
+    identity_file_rows: list[dict[str, Any]] = []
+
+    for kind in ("SOUL.md", "MEMORY.md", "USER.md"):
+        entries_k = identity_raw_by_kind[kind]
+        by_fdigest: dict[bytes, list[str]] = defaultdict(list)
+        for pname, fdigest, _ in entries_k:
+            by_fdigest[fdigest].append(pname)
+
+        group_sizes = sorted((len(profs) for profs in by_fdigest.values() if len(profs) >= 2), reverse=True)
+        counts_for_finding = kind in CLONED_IDENTITY_FINDING_KINDS
+        if counts_for_finding:
+            for profs in by_fdigest.values():
+                if len(profs) >= 2:
+                    identical_profiles_union.update(profs)
+
+        # Near-clones: for each file of this kind, share of its lines that also appear in >= half of the other profiles
+        n_other = len(entries_k) - 1
+        line_sets_by_prof = {pname: set(lhashes) for pname, _, lhashes in entries_k}
+        kind_shares: list[float] = []
+        for pname, _, lhashes in entries_k:
+            if not lhashes or n_other <= 0:
+                share = 0.0
+            else:
+                shared_count = 0
+                for lh in lhashes:
+                    other_occurrences = sum(
+                        1 for other_p, other_set in line_sets_by_prof.items()
+                        if other_p != pname and lh in other_set
+                    )
+                    if other_occurrences * 2 >= n_other:
+                        shared_count += 1
+                share = round(shared_count / len(lhashes), 4)
+            kind_shares.append(share)
+            if counts_for_finding:
+                all_file_shares.append(share)
+                if share > per_profile_max_share[pname]:
+                    per_profile_max_share[pname] = share
+            identity_file_rows.append({
+                "path": profile_folder(pname),
+                "file": kind,
+                "line_count": len(lhashes),
+                "shared_line_share": share,
+            })
+
+        by_kind_summary[kind] = {
+            "profiles_with_file": len(entries_k),
+            "identical_group_sizes": group_sizes,
+            "identical_profiles_count": sum(group_sizes),
+            "median_shared_line_share": round(float(median(kind_shares)), 4) if kind_shares else 0.0,
+            "max_shared_line_share": round(float(max(kind_shares)), 4) if kind_shares else 0.0,
+        }
+
+    overall_median_share = round(float(median(all_file_shares)), 4) if all_file_shares else 0.0
+    overall_max_share = round(float(max(all_file_shares)), 4) if all_file_shares else 0.0
+    profiles_above_50pct = sum(
+        1 for share in per_profile_max_share.values()
+        if share > CLONED_IDENTITY_SHARED_LINE_THRESHOLD
+    )
+    identical_profiles_count = len(identical_profiles_union)
+
+    return {
+        "identical_profiles_count": identical_profiles_count,
+        "median_shared_line_share": overall_median_share,
+        "max_shared_line_share": overall_max_share,
+        "profiles_above_50pct": profiles_above_50pct,
+        "by_kind": by_kind_summary,
+        "files_count": len(identity_file_rows),
+        "files": [row for row in identity_file_rows if row["path"] is not None][:MAX_IDENTITY_ROWS_LISTED],
+    }
+
+
 def audit_profile_duplicates(
     profile_path: Path | str,
     *,
@@ -953,79 +1032,11 @@ def audit_profile_duplicates(
             line_hashes = _normalize_identity_lines(raw)
             identity_raw_by_kind[kind].append((pname, file_digest, line_hashes))
 
-    identical_profiles_union: set[str] = set()
-    by_kind_summary: dict[str, dict[str, Any]] = {}
-    all_file_shares: list[float] = []
-    per_profile_max_share: dict[str, float] = defaultdict(float)
-    identity_file_rows: list[dict[str, Any]] = []
-
-    for kind in ("SOUL.md", "MEMORY.md", "USER.md"):
-        entries_k = identity_raw_by_kind[kind]
-        by_fdigest: dict[bytes, list[str]] = defaultdict(list)
-        for pname, fdigest, _ in entries_k:
-            by_fdigest[fdigest].append(pname)
-
-        group_sizes = sorted((len(profs) for profs in by_fdigest.values() if len(profs) >= 2), reverse=True)
-        counts_for_finding = kind in CLONED_IDENTITY_FINDING_KINDS
-        if counts_for_finding:
-            for profs in by_fdigest.values():
-                if len(profs) >= 2:
-                    identical_profiles_union.update(profs)
-
-        # Near-clones: for each file of this kind, share of its lines that also appear in >= half of the other profiles
-        n_other = len(entries_k) - 1
-        line_sets_by_prof = {pname: set(lhashes) for pname, _, lhashes in entries_k}
-        kind_shares: list[float] = []
-        for pname, _, lhashes in entries_k:
-            if not lhashes or n_other <= 0:
-                share = 0.0
-            else:
-                shared_count = 0
-                for lh in lhashes:
-                    other_occurrences = sum(
-                        1 for other_p, other_set in line_sets_by_prof.items()
-                        if other_p != pname and lh in other_set
-                    )
-                    if other_occurrences * 2 >= n_other:
-                        shared_count += 1
-                share = round(shared_count / len(lhashes), 4)
-            kind_shares.append(share)
-            if counts_for_finding:
-                all_file_shares.append(share)
-                if share > per_profile_max_share[pname]:
-                    per_profile_max_share[pname] = share
-            identity_file_rows.append({
-                "path": profile_folder(pname),
-                "file": kind,
-                "line_count": len(lhashes),
-                "shared_line_share": share,
-            })
-
-        by_kind_summary[kind] = {
-            "profiles_with_file": len(entries_k),
-            "identical_group_sizes": group_sizes,
-            "identical_profiles_count": sum(group_sizes),
-            "median_shared_line_share": round(float(median(kind_shares)), 4) if kind_shares else 0.0,
-            "max_shared_line_share": round(float(max(kind_shares)), 4) if kind_shares else 0.0,
-        }
-
-    overall_median_share = round(float(median(all_file_shares)), 4) if all_file_shares else 0.0
-    overall_max_share = round(float(max(all_file_shares)), 4) if all_file_shares else 0.0
-    profiles_above_50pct = sum(
-        1 for share in per_profile_max_share.values()
-        if share > CLONED_IDENTITY_SHARED_LINE_THRESHOLD
-    )
-    identical_profiles_count = len(identical_profiles_union)
-
-    cloned_identity_section = {
-        "identical_profiles_count": identical_profiles_count,
-        "median_shared_line_share": overall_median_share,
-        "max_shared_line_share": overall_max_share,
-        "profiles_above_50pct": profiles_above_50pct,
-        "by_kind": by_kind_summary,
-        "files_count": len(identity_file_rows),
-        "files": [row for row in identity_file_rows if row["path"] is not None][:MAX_IDENTITY_ROWS_LISTED],
-    }
+    cloned_identity_section = _summarize_identity_files(identity_raw_by_kind, profile_folder)
+    identical_profiles_count = cloned_identity_section["identical_profiles_count"]
+    overall_median_share = cloned_identity_section["median_shared_line_share"]
+    overall_max_share = cloned_identity_section["max_shared_line_share"]
+    profiles_above_50pct = cloned_identity_section["profiles_above_50pct"]
 
     # (d) Per-profile caches summary
     total_cache_bytes = hub_index_cache_bytes + models_dev_cache_bytes + provider_models_cache_bytes

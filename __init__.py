@@ -209,17 +209,16 @@ def _handle_slash_command(ctx: Any, raw_args: str) -> str:
         return _handle_defuzz_project_tool({"action": "report", "copy_path": tokens[1]}, ctx=ctx)
     if sub in ("scan", "run", "apply") and len(tokens) >= 2:
         payload: Dict[str, Any] = {"action": sub, "copy_path": tokens[1]}
+        path_flags = {
+            "--source": "source_path",
+            "--staging": "staging_path",
+            "--out": "inventory_path",
+        }
         idx = 2
         while idx < len(tokens):
             flag = tokens[idx]
-            if flag == "--source" and idx + 1 < len(tokens):
-                payload["source_path"] = tokens[idx + 1]
-                idx += 2
-            elif flag == "--staging" and idx + 1 < len(tokens):
-                payload["staging_path"] = tokens[idx + 1]
-                idx += 2
-            elif flag == "--out" and idx + 1 < len(tokens):
-                payload["inventory_path"] = tokens[idx + 1]
+            if flag in path_flags and idx + 1 < len(tokens):
+                payload[path_flags[flag]] = tokens[idx + 1]
                 idx += 2
             elif flag == "--deterministic":
                 payload["use_fallback_rules"] = True

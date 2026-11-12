@@ -2189,6 +2189,92 @@ def download_sources(
     return rows
 
 
+def _csharpier_plan_row(
+    item: SetupItem,
+    dl: Download,
+    plat: tuple[str, str],
+    inst_root: Path,
+    item_install_dir: Path,
+    b_dir: Path,
+    r_home: Path,
+    ext_dotnet: str | None,
+) -> dict[str, Any]:
+    """Disclose the versioned CSharpier install and its atomic published link."""
+    csharpier_target_pattern = inst_root / "csharpier" / f"{_CSHARPIER_VERSION}-<random>"
+    csharpier_exe = exe_name("csharpier", plat)
+    published_link = b_dir / csharpier_exe
+    versioned_binary = csharpier_target_pattern / csharpier_exe
+    tool_only_substituted = [
+        _substitute_cmd(
+            cmd,
+            item_install_dir,
+            csharpier_target_pattern,
+            r_home,
+            external_dotnet=ext_dotnet,
+            pkg_dir=_PLAN_PKG_DIR,
+        )
+        for cmd in item.post_install
+    ]
+    tool_sources = _item_sources(item, dl, include_main=False)
+    first = tool_sources[0] if tool_sources else {}
+    return {
+        "name": item.name,
+        "kind": item.kind,
+        "version": _CSHARPIER_VERSION,
+        "size_mb": sum(p.size_mb for p in item.packages),
+        "url": first.get("url", ""),
+        "hash": first.get("hash", ""),
+        "hash_algo": first.get("hash_algo", ""),
+        "verification": VERIFIED_BY_CHECKSUM,
+        "sources": tool_sources,
+        "install_dir": str(csharpier_target_pattern),
+        "post_install": [
+            f"{' '.join(argv)} (symlink {published_link} -> {versioned_binary})"
+            for argv in tool_only_substituted
+        ],
+        "post_install_argv": tool_only_substituted,
+    }
+
+
+def _artifact_plan_row(
+    item: SetupItem,
+    dl: Download,
+    plat: tuple[str, str],
+    item_install_dir: Path,
+    b_dir: Path,
+    r_home: Path,
+    ext_dotnet: str | None,
+) -> dict[str, Any]:
+    """Disclose an artifact and its post-install commands and module destinations."""
+    substituted = [
+        _substitute_cmd(
+            cmd, item_install_dir, b_dir, r_home, external_dotnet=ext_dotnet, pkg_dir=_PLAN_PKG_DIR
+        )
+        for cmd in item.post_install
+    ]
+    post_lines = [" ".join(argv) for argv in substituted]
+    for pkg in item.packages:
+        if pkg.kind == "pwsh-module":
+            post_lines.append(
+                f"extract {pkg.filename} ({VERIFIED_BY_CHECKSUM}) into "
+                f"{pwsh_modules_root(plat, r_home) / pkg.name / pkg.version}"
+            )
+    return {
+        "name": item.name,
+        "kind": item.kind,
+        "version": item.version,
+        "size_mb": item.size_mb,
+        "url": dl.url,
+        "hash": dl.hash,
+        "hash_algo": dl.hash_algo,
+        "verification": VERIFIED_BY_CHECKSUM,
+        "sources": _item_sources(item, dl),
+        "install_dir": str(item_install_dir),
+        "post_install": post_lines,
+        "post_install_argv": substituted,
+    }
+
+
 def describe_plan(
     platform: tuple[str, str] | None = None,
     env: Mapping[str, str] | None = None,
@@ -2211,70 +2297,7 @@ def describe_plan(
             plat, eff_env, b_dir
         )
         if tool_only:
-            csharpier_target_pattern = inst_root / "csharpier" / f"{_CSHARPIER_VERSION}-<random>"
-            csharpier_exe = exe_name("csharpier", plat)
-            published_link = b_dir / csharpier_exe
-            versioned_binary = csharpier_target_pattern / csharpier_exe
-            tool_only_substituted = [
-                _substitute_cmd(
-                    cmd,
-                    item_install_dir,
-                    csharpier_target_pattern,
-                    r_home,
-                    external_dotnet=ext_dotnet,
-                    pkg_dir=_PLAN_PKG_DIR,
-                )
-                for cmd in item.post_install
-            ]
-            tool_sources = _item_sources(item, dl, include_main=False)
-            first = tool_sources[0] if tool_sources else {}
-            plan.append(
-                {
-                    "name": item.name,
-                    "kind": item.kind,
-                    "version": _CSHARPIER_VERSION,
-                    "size_mb": sum(p.size_mb for p in item.packages),
-                    "url": first.get("url", ""),
-                    "hash": first.get("hash", ""),
-                    "hash_algo": first.get("hash_algo", ""),
-                    "verification": VERIFIED_BY_CHECKSUM,
-                    "sources": tool_sources,
-                    "install_dir": str(csharpier_target_pattern),
-                    "post_install": [
-                        f"{' '.join(argv)} (symlink {published_link} -> {versioned_binary})"
-                        for argv in tool_only_substituted
-                    ],
-                    "post_install_argv": tool_only_substituted,
-                }
-            )
+            plan.append(_csharpier_plan_row(item, dl, plat, inst_root, item_install_dir, b_dir, r_home, ext_dotnet))
         else:
-            substituted = [
-                _substitute_cmd(
-                    cmd, item_install_dir, b_dir, r_home, external_dotnet=ext_dotnet, pkg_dir=_PLAN_PKG_DIR
-                )
-                for cmd in item.post_install
-            ]
-            post_lines = [" ".join(argv) for argv in substituted]
-            for pkg in item.packages:
-                if pkg.kind == "pwsh-module":
-                    post_lines.append(
-                        f"extract {pkg.filename} ({VERIFIED_BY_CHECKSUM}) into "
-                        f"{pwsh_modules_root(plat, r_home) / pkg.name / pkg.version}"
-                    )
-            plan.append(
-                {
-                    "name": item.name,
-                    "kind": item.kind,
-                    "version": item.version,
-                    "size_mb": item.size_mb,
-                    "url": dl.url,
-                    "hash": dl.hash,
-                    "hash_algo": dl.hash_algo,
-                    "verification": VERIFIED_BY_CHECKSUM,
-                    "sources": _item_sources(item, dl),
-                    "install_dir": str(item_install_dir),
-                    "post_install": post_lines,
-                    "post_install_argv": substituted,
-                }
-            )
+            plan.append(_artifact_plan_row(item, dl, plat, item_install_dir, b_dir, r_home, ext_dotnet))
     return plan

@@ -382,6 +382,60 @@ def get_tools_status() -> dict[str, Any]:
     return payload
 
 
+def _setup_progress(prog: Any) -> None:
+    with _SETUP_LOCK:
+        _SETUP_STATE.update(
+            {
+                "percent": float(getattr(prog, "percent", 0.0)),
+                "item": getattr(prog, "item", None),
+                "step": getattr(prog, "step", None),
+                "message": getattr(prog, "message", ""),
+            }
+        )
+
+
+def _run_setup(setup_mod: Any, cancel_event: threading.Event) -> None:
+    try:
+        res = setup_mod.run_setup(_setup_progress, cancel=cancel_event)
+        res_dict: dict[str, Any] = (
+            dict(res) if isinstance(res, dict) else dataclasses.asdict(res)
+        )
+        ok = bool(res_dict.get("ok"))
+        with _SETUP_LOCK:
+            _SETUP_STATE.update(
+                {
+                    "state": "done" if ok else "failed",
+                    "percent": 100.0 if ok else _SETUP_STATE["percent"],
+                    "step": "done" if ok else "failed",
+                    "message": (
+                        "Setup complete"
+                        if ok
+                        else (res_dict.get("error") or "Setup failed")
+                    ),
+                    "finished_at": time.time(),
+                    "result": res_dict,
+                }
+            )
+    except Exception as exc:  # noqa: BLE001
+        with _SETUP_LOCK:
+            _SETUP_STATE.update(
+                {
+                    "state": "failed",
+                    "step": "failed",
+                    "message": str(exc),
+                    "finished_at": time.time(),
+                    "result": {
+                        "ok": False,
+                        "installed": [],
+                        "skipped": [],
+                        "failed": {},
+                        "error": str(exc),
+                        "log": [str(exc)],
+                    },
+                }
+            )
+
+
 @router.post("/setup")
 def post_setup(body: Any = Body(default_factory=dict)) -> dict[str, Any]:
     """Start the mandatory user-space tool setup in a background thread after user consent."""
@@ -420,60 +474,9 @@ def post_setup(body: Any = Body(default_factory=dict)) -> dict[str, Any]:
             }
         )
 
-        def _on_progress(prog: Any) -> None:
-            with _SETUP_LOCK:
-                _SETUP_STATE.update(
-                    {
-                        "percent": float(getattr(prog, "percent", 0.0)),
-                        "item": getattr(prog, "item", None),
-                        "step": getattr(prog, "step", None),
-                        "message": getattr(prog, "message", ""),
-                    }
-                )
-
-        def _runner() -> None:
-            try:
-                res = setup_mod.run_setup(_on_progress, cancel=cancel_event)
-                res_dict: dict[str, Any] = (
-                    dict(res) if isinstance(res, dict) else dataclasses.asdict(res)
-                )
-                ok = bool(res_dict.get("ok"))
-                with _SETUP_LOCK:
-                    _SETUP_STATE.update(
-                        {
-                            "state": "done" if ok else "failed",
-                            "percent": 100.0 if ok else _SETUP_STATE["percent"],
-                            "step": "done" if ok else "failed",
-                            "message": (
-                                "Setup complete"
-                                if ok
-                                else (res_dict.get("error") or "Setup failed")
-                            ),
-                            "finished_at": time.time(),
-                            "result": res_dict,
-                        }
-                    )
-            except Exception as exc:  # noqa: BLE001
-                with _SETUP_LOCK:
-                    _SETUP_STATE.update(
-                        {
-                            "state": "failed",
-                            "step": "failed",
-                            "message": str(exc),
-                            "finished_at": time.time(),
-                            "result": {
-                                "ok": False,
-                                "installed": [],
-                                "skipped": [],
-                                "failed": {},
-                                "error": str(exc),
-                                "log": [str(exc)],
-                            },
-                        }
-                    )
-
         thread = threading.Thread(
-            target=_runner,
+            target=_run_setup,
+            args=(setup_mod, cancel_event),
             name="defuzz-setup",
             daemon=True,
         )

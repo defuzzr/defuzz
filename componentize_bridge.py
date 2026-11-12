@@ -403,6 +403,10 @@ def _kit_deadline(timeout: float | None) -> float:
     return time.monotonic() + budget
 
 
+def _kit_timeout_result(call) -> dict:
+    return _kit_result('error', None, f'{TIMEOUT_NOTICE}: componentize kit {call} timed out.', None)
+
+
 def _invoke_kit(
     call: str,
     args: list[str],
@@ -419,7 +423,7 @@ def _invoke_kit(
     eff_deadline = _kit_deadline(timeout) if deadline is None else float(deadline)
     rem_start = eff_deadline - time.monotonic()
     if rem_start <= 0:
-        return _kit_result('error', None, f'{TIMEOUT_NOTICE}: componentize kit {call} timed out.', None)
+        return _kit_timeout_result(call)
     from .componentize_settings import load
     try:
         settings = load()
@@ -427,7 +431,7 @@ def _invoke_kit(
         return _kit_result('error', None, f'componentize settings error: {exc}', None)
     rem_detect = eff_deadline - time.monotonic()
     if rem_detect <= 0:
-        return _kit_result('error', None, f'{TIMEOUT_NOTICE}: componentize kit {call} timed out.', None)
+        return _kit_timeout_result(call)
     det = detect_command(
         settings['cli_path_override'],
         root=root,
@@ -437,22 +441,27 @@ def _invoke_kit(
     command = det[0]
     source = det[1] if len(det) > 1 else ('absent' if command is None else 'path')
     if source == 'timeout':
-        return _kit_result('error', None, f'{TIMEOUT_NOTICE}: componentize kit {call} timed out.', None)
+        return _kit_timeout_result(call)
     if command is None:
         return _kit_result('unavailable', None, UNAVAILABLE_NOTICE, None)
     rem_run = eff_deadline - time.monotonic()
     if rem_run <= 0:
-        return _kit_result('error', None, f'{TIMEOUT_NOTICE}: componentize kit {call} timed out.', None)
+        return _kit_timeout_result(call)
     try:
         proc = _run_cli(command, args, cwd=cwd, timeout=min(60.0, rem_run),
                         **({'cancel': cancel} if cancel is not None else {}))
     except CliCancelled:
         return _kit_result('error', None, f'componentize kit {call} was cancelled.', None)
     except subprocess.TimeoutExpired:
-        return _kit_result('error', None, f'{TIMEOUT_NOTICE}: componentize kit {call} timed out.', None)
+        return _kit_timeout_result(call)
     except (OSError, ValueError) as exc:
         return _kit_result('error', None, f'componentize kit {call} failed: {exc}', None)
 
+    return _interpret_kit_reply(proc, call, kit_id, dest, expected_root)
+
+
+def _interpret_kit_reply(proc, call, kit_id, dest, expected_root) -> dict:
+    """Validate the companion reply against its envelope and original request."""
     try:
         data = _loads(proc.stdout)
     except (ValueError, TypeError):

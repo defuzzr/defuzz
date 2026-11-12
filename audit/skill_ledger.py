@@ -331,24 +331,20 @@ def audit_skill_ledger(
         _cut('time_budget', 'time_budget')
         return True
 
-    # Verify profile root exists and is a non-symlink directory
-    try:
-        st_root = os.lstat(root)
-    except OSError:
-        _note_reason('profile_missing')
+    def _unmeasured_profile(reason: str) -> dict[str, Any]:
         finding = make_finding(
             rule_id='skill_ledger.could_not_verify',
             classification='info',
             coverage='could_not_verify',
             affected_identities=['.'],
             source_paths=['.'],
-            evidence={'cuts': limits['cuts'], 'reason': 'profile_missing'},
+            evidence={'cuts': limits['cuts'], 'reason': reason},
             consequence=CONSEQUENCES['skill_ledger.could_not_verify'],
         )
         section = {
             'status': 'not_measured',
             'coverage': 'could_not_verify',
-            'reason': 'profile_missing',
+            'reason': reason,
             'reasons': reasons,
             'truncated_by': None,
             'ledger_present': False,
@@ -362,33 +358,16 @@ def audit_skill_ledger(
             extra={'skill_ledger': section, 'run_metrics': _run_metrics()},
         )
 
+    # Verify profile root exists and is a non-symlink directory
+    try:
+        st_root = os.lstat(root)
+    except OSError:
+        _note_reason('profile_missing')
+        return _unmeasured_profile('profile_missing')
+
     if stat.S_ISLNK(st_root.st_mode) or not stat.S_ISDIR(st_root.st_mode):
         _cut(reason='profile_unreadable')
-        finding = make_finding(
-            rule_id='skill_ledger.could_not_verify',
-            classification='info',
-            coverage='could_not_verify',
-            affected_identities=['.'],
-            source_paths=['.'],
-            evidence={'cuts': limits['cuts'], 'reason': 'profile_unreadable'},
-            consequence=CONSEQUENCES['skill_ledger.could_not_verify'],
-        )
-        section = {
-            'status': 'not_measured',
-            'coverage': 'could_not_verify',
-            'reason': 'profile_unreadable',
-            'reasons': reasons,
-            'truncated_by': None,
-            'ledger_present': False,
-            'curator_enabled': curator_enabled,
-            'curator_enabled_source': curator_enabled_source,
-            'limits': limits,
-        }
-        return make_component_envelope(
-            findings=[finding],
-            coverage='could_not_verify',
-            extra={'skill_ledger': section, 'run_metrics': _run_metrics()},
-        )
+        return _unmeasured_profile('profile_unreadable')
 
     if curator_enabled is None:
         curator_enabled, curator_enabled_source = _curator_enabled_from_config(root)

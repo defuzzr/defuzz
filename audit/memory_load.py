@@ -667,6 +667,92 @@ def _expired(scan):
     return bool(expired()) if expired is not None else False
 
 
+def _unmeasured_row(kind, scope, profile_index, size):
+    return {'kind': kind, 'scope': scope, 'profile_index': profile_index, 'bytes': size,
+            'characters': None, 'entries': None, 'coverage': 'could_not_verify'}
+
+
+def _measured_row(text, kind, scope, profile_index, size, limit, home_os, native, families_known):
+    row, entries = _metrics(text, kind, scope, limit, home_os)
+    row.update(profile_index=profile_index, bytes=size)
+    row['foreign_technology_entries'] = sum(bool(set(technology_counts(e)) - native) for e in entries) if families_known else None
+    row['foreign_technology_coverage'] = 'verified' if families_known else 'could_not_verify'
+    return row, entries
+
+
+def _scan_snapshots(scan, limits, home_os, native, families_known):
+    """Root home only; exact convention shape (see SNAPSHOT_* above): (rows, records, groups)."""
+    snapshots, records, groups = [], [], set()
+    for stamp_rel, st in scan.children(Path(*SNAPSHOT_PARTS)):
+        if not stat.S_ISDIR(st.st_mode) or not SNAPSHOT_STAMP_RE.fullmatch(stamp_rel.name):
+            scan.cut('snapshot_shape')
+            continue
+        ids = scan.children(stamp_rel)
+        if not ids:
+            scan.cut('snapshot_shape')
+        for id_rel, id_st in ids:
+            if not stat.S_ISDIR(id_st.st_mode) or not SNAPSHOT_ID_RE.fullmatch(id_rel.name):
+                scan.cut('snapshot_shape')
+                continue
+            found = False
+            for rel, file_st in scan.children(id_rel, names=MEMORY_NAMES):
+                if not stat.S_ISREG(file_st.st_mode):
+                    scan.cut('snapshot_shape')
+                    continue
+                found = True
+                groups.add(rel.parent)
+                kind = 'memory' if rel.name == 'MEMORY.md' else 'user'
+                read = scan.read(rel)
+                if read is None:
+                    snapshots.append(_unmeasured_row(kind, 'snapshot', 0, file_st.st_size))
+                    continue
+                row, entries = _measured_row(read[0], kind, 'snapshot', 0, file_st.st_size, limits[kind], home_os, native, families_known)
+                snapshots.append(row)
+                records.append((row, entries, read[1], True))
+            if not found:
+                scan.cut('snapshot_shape')
+    return snapshots, records, groups
+
+
+def _profile_stores(scan, profile, profile_index, children):
+    """memory_store.db and state-directory inventory for one profile (metadata only)."""
+    stores = []
+    for rel, st in children:
+        if rel.name == 'memory_store.db' and stat.S_ISREG(st.st_mode):
+            stores.append({'name': 'memory_store.db', 'profile_index': profile_index,
+                           'files': 1, 'bytes': st.st_size, 'overlap': 'could_not_compare'})
+    state_dirs = [(p, st) for p, st in children if p.name in STATE_DIR_NAMES]
+    state_dirs.extend((p, st) for p, st in scan.children(profile / 'plugin-data', names=STATE_DIR_NAMES))
+    for rel, st in state_dirs:
+        if not stat.S_ISDIR(st.st_mode):
+            continue
+        sizes = Counter(s.st_size for _, s in scan.walk(rel))
+        stores.append({'name': rel.name, 'profile_index': profile_index,
+                       'files': sum(sizes.values()), 'bytes': sum(s * n for s, n in sizes.items()),
+                       'same_size_groups': sum(n > 1 for n in sizes.values()),
+                       'same_size_extra_files': sum(n - 1 for n in sizes.values()),
+                       'overlap': 'could_not_compare'})
+    return stores
+
+
+def _count_findings(all_rows, duplicates, stores, pending):
+    findings = []
+    for rule, count, classification in (
+        ('over_limit', sum(bool(r['over_limit']) for r in all_rows), 'review_suggested'),
+        ('mostly_dated_entries', sum(r['entries'] >= MIN_DATED_ENTRIES and r['dated_entries'] > r['entries'] * DATED_SHARE for r in all_rows), 'info'),
+        # Design decision: other-machine text is left over, not a current fault => info.
+        ('other_machine_entries', sum(r['other_machine_entries'] >= OTHER_MACHINE_COUNT or r['other_machine_entries'] > 0 and r['other_machine_entries'] >= r['entries'] * OTHER_MACHINE_SHARE for r in all_rows if r['other_machine_entries'] is not None), 'info'),
+        ('standing_orders', sum(r['standing_order_entries'] for r in all_rows), 'review_suggested' if any(r['unasked_write_entries'] for r in all_rows) else 'info'),
+        ('duplicate_entries', duplicates['within_file_extra_entries'] + duplicates['across_file_entries'] + duplicates['near_duplicate_pairs'], 'info'),
+        ('foreign_technology_entries', sum(r['foreign_technology_entries'] or 0 for r in all_rows), 'review_suggested'),
+        ('memory_state_sprawl', sum(s['files'] > STATE_SPRAWL_FILES for s in stores if s['name'] != 'memory_store.db'), 'info'),
+        ('stale_pending_edits', pending['stale_edits'], 'info'),
+        ('pending_edit_changes_approval_entry', pending['approval_edits'], 'review_suggested')):
+        if count:
+            findings.append(_finding(rule, {'count': count}, classification))
+    return findings
+
+
 def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char_limit=FROM_PROFILE,
                       memory_provider=FROM_PROFILE,
                       prompt_injecting_plugins: list[str] | None = None,
@@ -703,8 +789,8 @@ def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char
     # It does not make the whole section unverified.
     families_ok = families_known or project_families is None
     input_unknown = not all((os_known, families_ok, plugin_known, provider_known, all(limits.values())))
-    rows, snapshots, records, snapshot_records, stores, pending_paths = [], [], [], [], [], []
-    texts, snapshot_groups = {}, set()
+    rows, records, stores, pending_paths = [], [], [], []
+    texts = {}
     root_names = STATE_DIR_NAMES | {'profiles', 'memory_store.db'}
     root_children = scan.children(Path(), names=root_names)
     profiles = [(Path(), 0)]
@@ -719,18 +805,14 @@ def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char
             if rel.name not in ('MEMORY.md', 'USER.md') or not stat.S_ISREG(st.st_mode):
                 continue
             kind = 'memory' if rel.name == 'MEMORY.md' else 'user'
+            scope = 'main' if profile_index == 0 else 'profile'
             read = scan.read(rel)
             if read is None:
                 # Preserve lstat-only evidence even when content cannot be measured.
-                rows.append({'kind': kind, 'scope': 'main' if profile_index == 0 else 'profile',
-                             'profile_index': profile_index, 'bytes': st.st_size,
-                             'characters': None, 'entries': None, 'coverage': 'could_not_verify'})
+                rows.append(_unmeasured_row(kind, scope, profile_index, st.st_size))
                 continue
             text, _ = read
-            row, entries = _metrics(text, kind, 'main' if profile_index == 0 else 'profile', limits[kind], home_os)
-            row.update(profile_index=profile_index, bytes=st.st_size)
-            row['foreign_technology_entries'] = sum(bool(set(technology_counts(e)) - native) for e in entries) if families_known else None
-            row['foreign_technology_coverage'] = 'verified' if families_known else 'could_not_verify'
+            row, entries = _measured_row(text, kind, scope, profile_index, st.st_size, limits[kind], home_os, native, families_known)
             rows.append(row)
             records.append((row, entries))
             texts[(profile_index, kind)] = text
@@ -738,55 +820,9 @@ def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char
             if rel.suffix == '.json' and stat.S_ISREG(st.st_mode):
                 pending_paths.append((rel, profile_index))
         children = root_children if profile_index == 0 else scan.children(profile, names=root_names)
-        for rel, st in children:
-            if rel.name == 'memory_store.db' and stat.S_ISREG(st.st_mode):
-                stores.append({'name': 'memory_store.db', 'profile_index': profile_index,
-                               'files': 1, 'bytes': st.st_size, 'overlap': 'could_not_compare'})
-        state_dirs = [(p, st) for p, st in children if p.name in STATE_DIR_NAMES]
-        state_dirs.extend((p, st) for p, st in scan.children(profile / 'plugin-data', names=STATE_DIR_NAMES))
-        for rel, st in state_dirs:
-            if not stat.S_ISDIR(st.st_mode):
-                continue
-            sizes = Counter(s.st_size for _, s in scan.walk(rel))
-            stores.append({'name': rel.name, 'profile_index': profile_index,
-                           'files': sum(sizes.values()), 'bytes': sum(s * n for s, n in sizes.items()),
-                           'same_size_groups': sum(n > 1 for n in sizes.values()),
-                           'same_size_extra_files': sum(n - 1 for n in sizes.values()),
-                           'overlap': 'could_not_compare'})
+        stores.extend(_profile_stores(scan, profile, profile_index, children))
     # Root home only; exact convention shape (see SNAPSHOT_* above).
-    for stamp_rel, st in scan.children(Path(*SNAPSHOT_PARTS)):
-        if not stat.S_ISDIR(st.st_mode) or not SNAPSHOT_STAMP_RE.fullmatch(stamp_rel.name):
-            scan.cut('snapshot_shape')
-            continue
-        ids = scan.children(stamp_rel)
-        if not ids:
-            scan.cut('snapshot_shape')
-        for id_rel, id_st in ids:
-            if not stat.S_ISDIR(id_st.st_mode) or not SNAPSHOT_ID_RE.fullmatch(id_rel.name):
-                scan.cut('snapshot_shape')
-                continue
-            found = False
-            for rel, file_st in scan.children(id_rel, names=MEMORY_NAMES):
-                if not stat.S_ISREG(file_st.st_mode):
-                    scan.cut('snapshot_shape')
-                    continue
-                found = True
-                snapshot_groups.add(rel.parent)
-                kind = 'memory' if rel.name == 'MEMORY.md' else 'user'
-                read = scan.read(rel)
-                if read is None:
-                    snapshots.append({'kind': kind, 'scope': 'snapshot', 'profile_index': 0,
-                                      'bytes': file_st.st_size, 'characters': None, 'entries': None,
-                                      'coverage': 'could_not_verify'})
-                    continue
-                row, entries = _metrics(read[0], kind, 'snapshot', limits[kind], home_os)
-                row.update(profile_index=0, bytes=file_st.st_size)
-                row['foreign_technology_entries'] = sum(bool(set(technology_counts(e)) - native) for e in entries) if families_known else None
-                row['foreign_technology_coverage'] = 'verified' if families_known else 'could_not_verify'
-                snapshots.append(row)
-                snapshot_records.append((row, entries, read[1], True))
-            if not found:
-                scan.cut('snapshot_shape')
+    snapshots, snapshot_records, snapshot_groups = _scan_snapshots(scan, limits, home_os, native, families_known)
     pending = _pending(pending_paths, texts, scan)
     duplicates = _duplicates(records, scan)
     builtin = any(r['profile_index'] == 0 and r['entries'] for r in rows)
@@ -799,20 +835,7 @@ def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char
                'prompt_injecting_plugins': plugin_count, 'active_mechanisms': active,
                'coverage': 'verified' if plugin_known and provider_known and builtin is not None else 'could_not_verify', 'stores': stores}
     all_rows = [r for r in rows + snapshots if r['coverage'] == 'verified']
-    findings = []
-    for rule, count, classification in (
-        ('over_limit', sum(bool(r['over_limit']) for r in all_rows), 'review_suggested'),
-        ('mostly_dated_entries', sum(r['entries'] >= MIN_DATED_ENTRIES and r['dated_entries'] > r['entries'] * DATED_SHARE for r in all_rows), 'info'),
-        # Design decision: other-machine text is left over, not a current fault => info.
-        ('other_machine_entries', sum(r['other_machine_entries'] >= OTHER_MACHINE_COUNT or r['other_machine_entries'] > 0 and r['other_machine_entries'] >= r['entries'] * OTHER_MACHINE_SHARE for r in all_rows if r['other_machine_entries'] is not None), 'info'),
-        ('standing_orders', sum(r['standing_order_entries'] for r in all_rows), 'review_suggested' if any(r['unasked_write_entries'] for r in all_rows) else 'info'),
-        ('duplicate_entries', duplicates['within_file_extra_entries'] + duplicates['across_file_entries'] + duplicates['near_duplicate_pairs'], 'info'),
-        ('foreign_technology_entries', sum(r['foreign_technology_entries'] or 0 for r in all_rows), 'review_suggested'),
-        ('memory_state_sprawl', sum(s['files'] > STATE_SPRAWL_FILES for s in stores if s['name'] != 'memory_store.db'), 'info'),
-        ('stale_pending_edits', pending['stale_edits'], 'info'),
-        ('pending_edit_changes_approval_entry', pending['approval_edits'], 'review_suggested')):
-        if count:
-            findings.append(_finding(rule, {'count': count}, classification))
+    findings = _count_findings(all_rows, duplicates, stores, pending)
     char_limits = _char_limits(limits, input_sources, rows, scan)
     if (raised := _limit_raised_finding(char_limits)) is not None:
         findings.append(raised)

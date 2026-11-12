@@ -663,6 +663,80 @@ def _empty_result(given: str, limits: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _resolve_candidate_findings(roots, root_markers, candidates, findings) -> None:
+    """Resolve undeclared roots after their complete subtrees have been counted."""
+    known_kinds = set(_ecosystems(root_markers or []))
+    for r in roots:
+        if r["kind"] in ("declared_member", "declared_submodule"):
+            known_kinds |= _ecosystems(r["markers"])
+    many = _resolve_embedded(candidates, frozenset(known_kinds))
+    for ancestor, count in many:
+        findings.append(_finding(
+            "many_embedded_subprojects", ancestor,
+            f"This folder holds {count} separate packages noted as templates or fixtures, more than "
+            f"{EMBEDDED_CROWD_CAP}; that many is unusual, so check that they are all templates or fixtures.",
+            count=count, cap=EMBEDDED_CROWD_CAP))
+    for c in candidates:
+        if c["reason"]:
+            c["root"]["kind"] = "embedded"
+            detail = {"depth": c["depth"], "markers": c["markers"], "reason": c["reason"]}
+            if c["rule"]:
+                detail["rule"] = c["rule"]
+            findings.append(_finding(
+                "embedded_subproject", c["rel"],
+                f"This folder is a separate package inside this project; this layout is common for "
+                f"{EMBEDDED_REASONS[c['reason']]}, and declaring it silences this note.", **detail))
+        else:
+            findings.append(_root_finding("nested_project", c["rel"], c["depth"], c["markers"]))
+
+
+def _read_declarations(lexical: str, res: dict[str, Any]):
+    """Read root-only member and submodule declarations, recording uncertainty."""
+    findings = res["findings"]
+    ws_globs: List[Tuple[str, List[str], List[str]]] = []
+    ws_unknown = False
+    submodules: List[str] = []
+    gitmodules_unknown = False
+    parsers = {
+        "package.json": _parse_package_json, "pnpm-workspace.yaml": _parse_pnpm_yaml,
+        "Cargo.toml": _parse_cargo, "pyproject.toml": _parse_pyproject, "go.work": _parse_go_work, ".adopt/rules.json": _parse_defuzz_rules,
+    }
+    for name in DECLARATION_FILES:
+        abs_path = os.path.join(lexical, *name.split("/"))
+        try:
+            if "/" in name:
+                parent = os.path.join(lexical, name.split("/")[0])
+                try:
+                    pst = os.lstat(parent)
+                except FileNotFoundError:
+                    res["declarations"][name] = "absent"
+                    continue
+                if not stat.S_ISDIR(pst.st_mode):
+                    raise _Unreadable("its folder is not a real folder")
+            data = _read_small(abs_path)
+            if data is None:
+                res["declarations"][name] = "absent"
+                continue
+            text = _decode(data)
+            if name == ".gitmodules":
+                submodules = _parse_gitmodules(text)
+            else:
+                inc, exc = parsers[name](text)
+                ws_globs.append((name, inc, exc))
+            res["declarations"][name] = "read"
+        except _Unreadable as err:
+            res["declarations"][name] = "unreadable"
+            if name == ".gitmodules":
+                gitmodules_unknown = True
+            else:
+                ws_unknown = True
+            findings.append(_finding(
+                "could_not_verify", name,
+                "This declaration file could not be read, so it is unknown which inner projects it declares.",
+                reason=str(err)))
+    return ws_globs, ws_unknown, submodules, gitmodules_unknown
+
+
 def check_structure(
     path: Any = ".",
     *,
@@ -705,48 +779,7 @@ def check_structure(
             kind=reason))
         return _finish(res, root_scanned=False)
 
-    # Declarations (root only).
-    ws_globs: List[Tuple[str, List[str], List[str]]] = []
-    ws_unknown = False
-    submodules: List[str] = []
-    gitmodules_unknown = False
-    parsers = {
-        "package.json": _parse_package_json, "pnpm-workspace.yaml": _parse_pnpm_yaml,
-        "Cargo.toml": _parse_cargo, "pyproject.toml": _parse_pyproject, "go.work": _parse_go_work, ".adopt/rules.json": _parse_defuzz_rules,
-    }
-    for name in DECLARATION_FILES:
-        abs_path = os.path.join(lexical, *name.split("/"))
-        try:
-            if "/" in name:
-                parent = os.path.join(lexical, name.split("/")[0])
-                try:
-                    pst = os.lstat(parent)
-                except FileNotFoundError:
-                    res["declarations"][name] = "absent"
-                    continue
-                if not stat.S_ISDIR(pst.st_mode):
-                    raise _Unreadable("its folder is not a real folder")
-            data = _read_small(abs_path)
-            if data is None:
-                res["declarations"][name] = "absent"
-                continue
-            text = _decode(data)
-            if name == ".gitmodules":
-                submodules = _parse_gitmodules(text)
-            else:
-                inc, exc = parsers[name](text)
-                ws_globs.append((name, inc, exc))
-            res["declarations"][name] = "read"
-        except _Unreadable as err:
-            res["declarations"][name] = "unreadable"
-            if name == ".gitmodules":
-                gitmodules_unknown = True
-            else:
-                ws_unknown = True
-            findings.append(_finding(
-                "could_not_verify", name,
-                "This declaration file could not be read, so it is unknown which inner projects it declares.",
-                reason=str(err)))
+    ws_globs, ws_unknown, submodules, gitmodules_unknown = _read_declarations(lexical, res)
     submodule_set = set(submodules)
 
     agent_ids = set()
@@ -907,29 +940,7 @@ def check_structure(
 
     res["roots"] = roots
     res["declared_members"] = sum(1 for r in roots if r["kind"] in ("declared_member", "declared_submodule"))
-    known_kinds = set(_ecosystems(root_markers or []))
-    for r in roots:
-        if r["kind"] in ("declared_member", "declared_submodule"):
-            known_kinds |= _ecosystems(r["markers"])
-    many = _resolve_embedded(candidates, frozenset(known_kinds))
-    for ancestor, count in many:
-        findings.append(_finding(
-            "many_embedded_subprojects", ancestor,
-            f"This folder holds {count} separate packages noted as templates or fixtures, more than "
-            f"{EMBEDDED_CROWD_CAP}; that many is unusual, so check that they are all templates or fixtures.",
-            count=count, cap=EMBEDDED_CROWD_CAP))
-    for c in candidates:
-        if c["reason"]:
-            c["root"]["kind"] = "embedded"
-            detail = {"depth": c["depth"], "markers": c["markers"], "reason": c["reason"]}
-            if c["rule"]:
-                detail["rule"] = c["rule"]
-            findings.append(_finding(
-                "embedded_subproject", c["rel"],
-                f"This folder is a separate package inside this project; this layout is common for "
-                f"{EMBEDDED_REASONS[c['reason']]}, and declaring it silences this note.", **detail))
-        else:
-            findings.append(_root_finding("nested_project", c["rel"], c["depth"], c["markers"]))
+    _resolve_candidate_findings(roots, root_markers, candidates, findings)
     depth_shown = _show(depth_example or "")
     if folder_mode and top_level:
         sub_example = _check_each_project(res, lexical, top_level, clock=clock, start=start,

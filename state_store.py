@@ -452,6 +452,11 @@ def _normalize_path_key(path: Path | str) -> str:
     return str(Path(path).expanduser().resolve())
 
 
+def _optional_column(row: sqlite3.Row, row_keys: set[str], name: str) -> Any:
+    """Legacy schemas may predate the provenance columns."""
+    return row[name] if name in row_keys else None
+
+
 def _row_to_project_dict(row: sqlite3.Row) -> dict[str, Any]:
     """Convert a projects table row into a dictionary with parsed languages list."""
     row_keys = set(row.keys())
@@ -463,7 +468,7 @@ def _row_to_project_dict(row: sqlite3.Row) -> dict[str, Any]:
     if not isinstance(parsed_langs, list):
         parsed_langs = [str(parsed_langs)]
 
-    raw_locked = row["locked_hashes"] if "locked_hashes" in row_keys else None
+    raw_locked = _optional_column(row, row_keys, "locked_hashes")
     parsed_locked: Optional[dict[str, str]] = None
     if raw_locked is not None:
         try:
@@ -486,11 +491,11 @@ def _row_to_project_dict(row: sqlite3.Row) -> dict[str, Any]:
         "engine": row["engine"],
         "created_at": row["created_at"],
         "hermes_project_id": row["hermes_project_id"],
-        "rules_hash": row["rules_hash"] if "rules_hash" in row_keys else None,
-        "plugin_commit": row["plugin_commit"] if "plugin_commit" in row_keys else None,
-        "prefix": row["prefix"] if "prefix" in row_keys else None,
+        "rules_hash": _optional_column(row, row_keys, "rules_hash"),
+        "plugin_commit": _optional_column(row, row_keys, "plugin_commit"),
+        "prefix": _optional_column(row, row_keys, "prefix"),
         "locked_hashes": parsed_locked,
-        "trust_mode": row["trust_mode"] if "trust_mode" in row_keys else None,
+        "trust_mode": _optional_column(row, row_keys, "trust_mode"),
     }
 
 
@@ -512,6 +517,35 @@ def save_answers(
             return int(cur.lastrowid or 0)
 
 
+_UPSERT_TEMPLATE_OPTION_SQL = """
+INSERT INTO template_options (template_id, option_id, choice, chosen_at)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(template_id, option_id) DO UPDATE SET
+    choice = excluded.choice,
+    chosen_at = excluded.chosen_at
+"""
+
+
+def _require_nonempty(value: Any, label: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be a non-empty string")
+
+
+def _template_option_dict(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "template_id": row["template_id"],
+        "option_id": row["option_id"],
+        "choice": row["choice"],
+        "chosen_at": row["chosen_at"],
+    }
+
+
+def _state_db_missing(db_path: Path | str | None) -> bool:
+    """Readers return empty results instead of creating a DB that does not exist yet."""
+    target = Path(db_path).expanduser() if db_path is not None else state_db_path()
+    return not target.is_file()
+
+
 def record_template_option(
     template_id: str,
     option_id: str,
@@ -521,23 +555,14 @@ def record_template_option(
     chosen_at: Optional[int] = None,
 ) -> None:
     """Record or update a chosen template option in the template_options table."""
-    if not isinstance(template_id, str) or not template_id.strip():
-        raise ValueError("template_id must be a non-empty string")
-    if not isinstance(option_id, str) or not option_id.strip():
-        raise ValueError("option_id must be a non-empty string")
-    if not isinstance(choice, str) or not choice.strip():
-        raise ValueError("choice must be a non-empty string")
+    _require_nonempty(template_id, "template_id")
+    _require_nonempty(option_id, "option_id")
+    _require_nonempty(choice, "choice")
     ts = int(chosen_at) if chosen_at is not None else int(time.time())
     with closing(_connect(db_path)) as conn:
         with conn:
             conn.execute(
-                """
-                INSERT INTO template_options (template_id, option_id, choice, chosen_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(template_id, option_id) DO UPDATE SET
-                    choice = excluded.choice,
-                    chosen_at = excluded.chosen_at
-                """,
+                _UPSERT_TEMPLATE_OPTION_SQL,
                 (template_id.strip(), option_id.strip(), choice.strip(), ts),
             )
 
@@ -556,26 +581,17 @@ def record_template_options(
     """Record multiple option choices for a template in a single transaction."""
     if not options:
         return
-    if not isinstance(template_id, str) or not template_id.strip():
-        raise ValueError("template_id must be a non-empty string")
+    _require_nonempty(template_id, "template_id")
     ts = int(chosen_at) if chosen_at is not None else int(time.time())
     rows: list[tuple[str, str, str, int]] = []
     for opt_id, choice in options.items():
-        if not isinstance(opt_id, str) or not opt_id.strip():
-            raise ValueError("option_id must be a non-empty string")
-        if not isinstance(choice, str) or not choice.strip():
-            raise ValueError("choice must be a non-empty string")
+        _require_nonempty(opt_id, "option_id")
+        _require_nonempty(choice, "choice")
         rows.append((template_id.strip(), opt_id.strip(), choice.strip(), ts))
     with closing(_connect(db_path)) as conn:
         with conn:
             conn.executemany(
-                """
-                INSERT INTO template_options (template_id, option_id, choice, chosen_at)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(template_id, option_id) DO UPDATE SET
-                    choice = excluded.choice,
-                    chosen_at = excluded.chosen_at
-                """,
+                _UPSERT_TEMPLATE_OPTION_SQL,
                 rows,
             )
 
@@ -589,8 +605,7 @@ def get_template_option(
     db_path: Optional[Path | str] = None,
 ) -> Optional[dict[str, Any]]:
     """Return the recorded template_options row dict for (template_id, option_id), or None."""
-    target = Path(db_path).expanduser() if db_path is not None else state_db_path()
-    if not target.is_file():
+    if _state_db_missing(db_path):
         return None
     with closing(_connect(db_path)) as conn:
         row = conn.execute(
@@ -603,12 +618,7 @@ def get_template_option(
         ).fetchone()
     if row is None:
         return None
-    return {
-        "template_id": row["template_id"],
-        "option_id": row["option_id"],
-        "choice": row["choice"],
-        "chosen_at": row["chosen_at"],
-    }
+    return _template_option_dict(row)
 
 
 def get_template_options(
@@ -616,8 +626,7 @@ def get_template_options(
     db_path: Optional[Path | str] = None,
 ) -> dict[str, str]:
     """Return all recorded {option_id: choice} picks for template_id."""
-    target = Path(db_path).expanduser() if db_path is not None else state_db_path()
-    if not target.is_file():
+    if _state_db_missing(db_path):
         return {}
     with closing(_connect(db_path)) as conn:
         rows = conn.execute(
@@ -637,8 +646,7 @@ def list_template_options(
     db_path: Optional[Path | str] = None,
 ) -> list[dict[str, Any]]:
     """Return recorded template_options rows ordered by template_id, option_id."""
-    target = Path(db_path).expanduser() if db_path is not None else state_db_path()
-    if not target.is_file():
+    if _state_db_missing(db_path):
         return []
     with closing(_connect(db_path)) as conn:
         if template_id is not None:
@@ -659,15 +667,11 @@ def list_template_options(
                 ORDER BY template_id ASC, option_id ASC
                 """
             ).fetchall()
-    return [
-        {
-            "template_id": r["template_id"],
-            "option_id": r["option_id"],
-            "choice": r["choice"],
-            "chosen_at": r["chosen_at"],
-        }
-        for r in rows
-    ]
+    return [_template_option_dict(r) for r in rows]
+
+
+def _optional_str(value: Any) -> str | None:
+    return str(value) if value is not None else None
 
 
 def record_project(
@@ -738,15 +742,15 @@ def record_project(
                     name,
                     slug,
                     template_id,
-                    str(kind) if kind is not None else None,
-                    str(layout) if layout is not None else None,
+                    _optional_str(kind),
+                    _optional_str(layout),
                     json.dumps(langs_list),
-                    str(engine) if engine is not None else None,
+                    _optional_str(engine),
                     now,
                     hermes_project_id,
                     rules_hash,
-                    str(plugin_commit) if plugin_commit is not None else None,
-                    str(prefix) if prefix is not None else None,
+                    _optional_str(plugin_commit),
+                    _optional_str(prefix),
                     locked_hashes_json,
                     trust_mode,
                 ),

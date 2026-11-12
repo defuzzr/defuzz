@@ -257,6 +257,46 @@ def render_agents_md(**kwargs: Any) -> str:
     return files["AGENTS.md"]
 
 
+def _layout_bullets(
+    declared_dirs: Dict[str, Tuple[str, str]], omit_layout_dirs: Collection[str]
+) -> Tuple[List[str], Set[str]]:
+    """Build optional layout bullets and all directories allowed by the validator."""
+    omitted_layout = set(omit_layout_dirs)
+    allowed_dir_set: Set[str] = {"_inbox", "_archive"}
+    layout_optional: List[str] = []
+    for dname in sorted(declared_dirs.keys()):
+        try:
+            clean_d = _validate_safe_rel_prefix(dname, "declared_dirs.dir", allow_dot=False)
+        except SafetyError:
+            continue
+        if clean_d in {"_inbox", "_archive"}:
+            continue
+        allowed_dir_set.add(clean_d)
+        if clean_d in omitted_layout:
+            continue
+        summary, why = declared_dirs[dname]
+        layout_optional.append(
+            f"- `{clean_d}/` — {_sanitize_token(summary)} ({_sanitize_token(why)})"
+        )
+    return layout_optional, allowed_dir_set
+
+
+def _placement_bullets(placement_rules: Sequence[Dict[str, Any]]) -> List[str]:
+    """Render the first placement rule for each sanitized kind, in input order."""
+    bullets: List[str] = []
+    seen_kinds: Set[str] = set()
+    for idx, rule in enumerate(placement_rules):
+        kind = re.sub(r"[^a-z0-9_-]", "", str(rule.get("kind") or f"r{idx}").lower())[:24]
+        if not kind or kind in seen_kinds:
+            continue
+        seen_kinds.add(kind)
+        exts = ", ".join(f"`{_sanitize_token(e)}`" for e in sorted(rule.get("match_ext") or [])) or "any"
+        dest = _sanitize_token(str(rule.get("dest_dir") or "_inbox").strip("/"))
+        reason = _sanitize_token(rule.get("reason") or "placement rule")
+        bullets.append(f"- {exts} files go in `{dest}/` ({reason}).")
+    return bullets
+
+
 def render_agents_md_files(
     *,
     project_slug: str,
@@ -301,23 +341,7 @@ def render_agents_md_files(
             "It is a copy, and the original folder was never modified."
         ]
 
-    omitted_layout = set(omit_layout_dirs)
-    allowed_dir_set: Set[str] = {"_inbox", "_archive"}
-    layout_optional: List[str] = []
-    for dname in sorted(declared_dirs.keys()):
-        try:
-            clean_d = _validate_safe_rel_prefix(dname, "declared_dirs.dir", allow_dot=False)
-        except SafetyError:
-            continue
-        if clean_d in {"_inbox", "_archive"}:
-            continue
-        allowed_dir_set.add(clean_d)
-        if clean_d in omitted_layout:
-            continue
-        summary, why = declared_dirs[dname]
-        layout_optional.append(
-            f"- `{clean_d}/` — {_sanitize_token(summary)} ({_sanitize_token(why)})"
-        )
+    layout_optional, allowed_dir_set = _layout_bullets(declared_dirs, omit_layout_dirs)
     if clean_kit_ids:
         layout_fixed = [
             "- `_inbox/` — files with no placement rule are moved here; ask where they belong, then move them",
@@ -337,17 +361,7 @@ def render_agents_md_files(
             "- New files are placed by the rules in `.adopt/rules.json`.",
             START_PROJECT_RULE,
         ]
-    conv_optional: List[str] = []
-    seen_kinds: Set[str] = set()
-    for idx, rule in enumerate(placement_rules):
-        kind = re.sub(r"[^a-z0-9_-]", "", str(rule.get("kind") or f"r{idx}").lower())[:24]
-        if not kind or kind in seen_kinds:
-            continue
-        seen_kinds.add(kind)
-        exts = ", ".join(f"`{_sanitize_token(e)}`" for e in sorted(rule.get("match_ext") or [])) or "any"
-        dest = _sanitize_token(str(rule.get("dest_dir") or "_inbox").strip("/"))
-        reason = _sanitize_token(rule.get("reason") or "placement rule")
-        conv_optional.append(f"- {exts} files go in `{dest}/` ({reason}).")
+    conv_optional = _placement_bullets(placement_rules)
     if lfs_patterns:
         pats = ", ".join(f"`{_sanitize_token(p)}`" for p in sorted(set(lfs_patterns)))
         conv_optional.append(f"- Git LFS tracks {pats}.")

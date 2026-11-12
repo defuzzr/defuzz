@@ -134,6 +134,30 @@ def path_references(path, data, *, credentials=False, strict=False):
     return list(_path_references(path, data, credentials=credentials, strict=strict))
 
 
+def _credential_execution_lines(path, text):
+    for n, line in enumerate(text.splitlines(), 1):
+        if '=' in line and line.split('=', 1)[0].strip().removeprefix('export ').strip() in ENV_EXEC_KEYS:
+            raw = line.split('=', 1)[1].strip()
+            if path.name == '.npmrc' and line.split('=', 1)[0].strip() in {'pnpmfile', 'globalconfig', 'userconfig', 'init-module'}:
+                raw = raw.strip('\"\'')
+                if not raw.startswith(('/', '.', '~')):
+                    raw = './' + raw
+            yield n, raw
+            continue
+        if path.name != '.envrc':
+            continue
+        try:
+            words = _split_words(line, comments=True)
+        except ValueError:
+            continue
+        if len(words) != 2 or words[0] not in {'source', '.', 'source_env', 'dotenv'}:
+            continue
+        raw = words[1]
+        if not raw.startswith(('/', '.', '~')):
+            raw = './' + raw
+        yield n, raw
+
+
 def _path_references(path, data, *, credentials=False, strict=False):
     """Yield (literal, line); never return surrounding prose or commands."""
     from .redaction import extraction
@@ -146,26 +170,7 @@ def _path_references(path, data, *, credentials=False, strict=False):
         return
     lines = enumerate(text.splitlines(), 1)
     if credentials:
-        def execution_lines():
-            for n, line in enumerate(text.splitlines(), 1):
-                if '=' in line and line.split('=', 1)[0].strip().removeprefix('export ').strip() in ENV_EXEC_KEYS:
-                    raw = line.split('=', 1)[1].strip()
-                    if path.name == '.npmrc' and line.split('=', 1)[0].strip() in {'pnpmfile', 'globalconfig', 'userconfig', 'init-module'}:
-                        raw = raw.strip('\"\'')
-                        if not raw.startswith(('/', '.', '~')):
-                            raw = './' + raw
-                    yield n, raw
-                elif path.name == '.envrc':
-                    try:
-                        words = _split_words(line, comments=True)
-                    except ValueError:
-                        continue
-                    if len(words) == 2 and words[0] in {'source', '.', 'source_env', 'dotenv'}:
-                        raw = words[1]
-                        if not raw.startswith(('/', '.', '~')):
-                            raw = './' + raw
-                        yield n, raw
-        lines = execution_lines()
+        lines = _credential_execution_lines(path, text)
     elif path.suffix.lower() in {'.json', '.jsonc', '.code-workspace', '.yaml', '.yml', '.toml'}:
         from .outward_structured import parse_data
         from .outward_analyzers import credential_key_kind

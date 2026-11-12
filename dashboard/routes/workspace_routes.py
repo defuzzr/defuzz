@@ -366,6 +366,41 @@ def get_projects_root(candidate: str | None = None):
     return payload
 
 
+def _propose_kit_project(body, name, answers, resolved_dest):
+    kit_id = _text(body, 'kit_id')
+    variables = body.get('variables')
+    proposal_id = _reserve('kit')
+    try:
+        proposal = kit_scaffold.propose_kit(
+            kit_id,
+            name,
+            answers,
+            dest_root=str(resolved_dest),
+            variables=variables,
+            bridge=componentize_bridge,
+        )
+    except kit_scaffold.KitUnavailable as exc:
+        with _LOCK:
+            _PROPOSALS.pop(proposal_id, None)
+        raise HTTPException(503, str(exc)) from exc
+    except Exception as exc:
+        with _LOCK:
+            _PROPOSALS.pop(proposal_id, None)
+        raise HTTPException(400, _error_text(exc)) from exc
+    with _LOCK:
+        _PROPOSALS[proposal_id].update(state='ready', kind='kit', proposal=proposal, created=time.monotonic())
+    return {
+        'proposal_id': proposal_id,
+        'kind': 'kit',
+        'kit_id': proposal.kit_id,
+        'slug': proposal.slug,
+        'tree': [{'name': proposal.slug, 'dest': str(proposal.dest), 'files': list(proposal.tree)}],
+        'declared_dirs': _json(proposal.declared_dirs),
+        'placement_rules': _json(proposal.placement_rules),
+        'folder_note': getattr(proposal, 'folder_note', ''),
+    }
+
+
 @router.post('/scaffold/propose')
 def propose_project(body: Any = Body(default_factory=dict)):
     body = _object(body)
@@ -395,38 +430,7 @@ def propose_project(body: Any = Body(default_factory=dict)):
         raise HTTPException(400, str(exc)) from exc
 
     if has_kit:
-        kit_id = _text(body, 'kit_id')
-        variables = body.get('variables')
-        proposal_id = _reserve('kit')
-        try:
-            proposal = kit_scaffold.propose_kit(
-                kit_id,
-                name,
-                answers,
-                dest_root=str(resolved_dest),
-                variables=variables,
-                bridge=componentize_bridge,
-            )
-        except kit_scaffold.KitUnavailable as exc:
-            with _LOCK:
-                _PROPOSALS.pop(proposal_id, None)
-            raise HTTPException(503, str(exc)) from exc
-        except Exception as exc:
-            with _LOCK:
-                _PROPOSALS.pop(proposal_id, None)
-            raise HTTPException(400, _error_text(exc)) from exc
-        with _LOCK:
-            _PROPOSALS[proposal_id].update(state='ready', kind='kit', proposal=proposal, created=time.monotonic())
-        return {
-            'proposal_id': proposal_id,
-            'kind': 'kit',
-            'kit_id': proposal.kit_id,
-            'slug': proposal.slug,
-            'tree': [{'name': proposal.slug, 'dest': str(proposal.dest), 'files': list(proposal.tree)}],
-            'declared_dirs': _json(proposal.declared_dirs),
-            'placement_rules': _json(proposal.placement_rules),
-            'folder_note': getattr(proposal, 'folder_note', ''),
-        }
+        return _propose_kit_project(body, name, answers, resolved_dest)
 
     template_id = _text(body, 'template_id')
     options = body.get('options', {})

@@ -1437,6 +1437,59 @@ def _truncate_context_text_facts(
     return rendered, True
 
 
+def _apply_agents_chain_accounting(
+    active_files: list[dict[str, Any]],
+    context_max_chars: int,
+    cwd_abs: Path | None,
+) -> int:
+    cwd_res = (cwd_abs if cwd_abs is not None else Path(active_files[-1]["path"]).parent).resolve()
+    sections: list[str] = []
+    per_file_trunc: list[bool] = []
+    per_file_inj: list[int] = []
+    for d in active_files:
+        f_path = Path(d["path"]).resolve()
+        label = f_path.name if f_path.parent == cwd_res else os.path.relpath(f_path, cwd_res)
+        txt = str(d.get("_text") or "").removeprefix("\ufeff")
+        body = f"## {label}\n\n{txt}"
+        sec, s_trunc = _truncate_context_text_facts(
+            body, label, context_max_chars, read_path=str(f_path)
+        )
+        sections.append(sec)
+        per_file_trunc.append(s_trunc)
+        per_file_inj.append(len(sec) if s_trunc else int(d["char_count"]))
+    if len(active_files) == 1:
+        active_files[0]["truncated"] = per_file_trunc[0]
+        active_files[0]["injected_chars"] = per_file_inj[0]
+        total_injected_chars = per_file_inj[0]
+    else:
+        joined = "\n\n".join(sections)
+        chain_rendered, chain_trunc = _truncate_context_text_facts(
+            joined,
+            "AGENTS.md (directory chain)",
+            context_max_chars,
+            read_path=str(cwd_res / "AGENTS.md"),
+        )
+        if not chain_trunc:
+            for d, s_trunc, s_inj in zip(active_files, per_file_trunc, per_file_inj):
+                d["truncated"] = s_trunc
+                d["injected_chars"] = s_inj
+            total_injected_chars = sum(per_file_inj)
+        else:
+            total_injected_chars = len(chain_rendered)
+            n = len(active_files)
+            per_share = ((total_injected_chars // n) // 4) * 4
+            allocated = 0
+            for idx, d in enumerate(active_files):
+                d["truncated"] = True
+                if idx < n - 1:
+                    d["injected_chars"] = per_share
+                    allocated += per_share
+                else:
+                    d["injected_chars"] = total_injected_chars - allocated
+
+    return total_injected_chars
+
+
 def _apply_context_precedence(
     discovered: list[dict[str, Any]],
     context_max_chars: int,
@@ -1528,50 +1581,7 @@ def _apply_context_precedence(
                 else:
                     d["injected_chars"] = total_injected_chars - allocated
     elif active_files and winning_kind == "agents_md":
-        cwd_res = (cwd_abs if cwd_abs is not None else Path(active_files[-1]["path"]).parent).resolve()
-        sections: list[str] = []
-        per_file_trunc: list[bool] = []
-        per_file_inj: list[int] = []
-        for d in active_files:
-            f_path = Path(d["path"]).resolve()
-            label = f_path.name if f_path.parent == cwd_res else os.path.relpath(f_path, cwd_res)
-            txt = str(d.get("_text") or "").removeprefix("\ufeff")
-            body = f"## {label}\n\n{txt}"
-            sec, s_trunc = _truncate_context_text_facts(
-                body, label, context_max_chars, read_path=str(f_path)
-            )
-            sections.append(sec)
-            per_file_trunc.append(s_trunc)
-            per_file_inj.append(len(sec) if s_trunc else int(d["char_count"]))
-        if len(active_files) == 1:
-            active_files[0]["truncated"] = per_file_trunc[0]
-            active_files[0]["injected_chars"] = per_file_inj[0]
-            total_injected_chars = per_file_inj[0]
-        else:
-            joined = "\n\n".join(sections)
-            chain_rendered, chain_trunc = _truncate_context_text_facts(
-                joined,
-                "AGENTS.md (directory chain)",
-                context_max_chars,
-                read_path=str(cwd_res / "AGENTS.md"),
-            )
-            if not chain_trunc:
-                for d, s_trunc, s_inj in zip(active_files, per_file_trunc, per_file_inj):
-                    d["truncated"] = s_trunc
-                    d["injected_chars"] = s_inj
-                total_injected_chars = sum(per_file_inj)
-            else:
-                total_injected_chars = len(chain_rendered)
-                n = len(active_files)
-                per_share = ((total_injected_chars // n) // 4) * 4
-                allocated = 0
-                for idx, d in enumerate(active_files):
-                    d["truncated"] = True
-                    if idx < n - 1:
-                        d["injected_chars"] = per_share
-                        allocated += per_share
-                    else:
-                        d["injected_chars"] = total_injected_chars - allocated
+        total_injected_chars = _apply_agents_chain_accounting(active_files, context_max_chars, cwd_abs)
 
     for d in discovered:
         d.pop("_text", None)

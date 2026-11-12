@@ -929,6 +929,33 @@ def _verify_dir_entries_unchanged(
         manifest.coverage = COVERAGE_COULD_NOT_VERIFY
 
 
+def _walk_manifest_subdirectory(
+    manifest: TreeFingerprintManifest,
+    dir_fd: int,
+    name: str,
+    rel: str,
+    st: os.stat_result,
+    walk_dir: Callable[[int, str], None],
+) -> None:
+    """Recurse only after a no-follow open confirms the observed directory inode."""
+    o_nofollow, o_nonblock, o_directory = _require_containment_support()
+    try:
+        sub_fd = os.open(
+            name, os.O_RDONLY | o_nofollow | o_nonblock | o_directory, dir_fd=dir_fd
+        )
+    except OSError as exc:
+        _record_unreadable(manifest, rel, str(exc))
+        return
+    try:
+        st_sub = os.fstat(sub_fd)
+        if (st_sub.st_dev, st_sub.st_ino) != (st.st_dev, st.st_ino):
+            _record_unreadable(manifest, rel, "Directory inode changed during open", unstable=True)
+            return
+        walk_dir(sub_fd, rel)
+    finally:
+        os.close(sub_fd)
+
+
 def build_tree_fingerprint_manifest(
     *,
     unit_kind: str,
@@ -1055,22 +1082,7 @@ def build_tree_fingerprint_manifest(
                         if unit_kind == "project" and name == ".git":
                             manifest.directories[rel] = ["<git_metadata>"]
                             continue
-                        o_nofollow, o_nonblock, o_directory = _require_containment_support()
-                        try:
-                            sub_fd = os.open(
-                                name, os.O_RDONLY | o_nofollow | o_nonblock | o_directory, dir_fd=dir_fd
-                            )
-                        except OSError as exc:
-                            _record_unreadable(manifest, rel, str(exc))
-                            continue
-                        try:
-                            st_sub = os.fstat(sub_fd)
-                            if (st_sub.st_dev, st_sub.st_ino) != (st.st_dev, st.st_ino):
-                                _record_unreadable(manifest, rel, "Directory inode changed during open", unstable=True)
-                                continue
-                            _walk_dir(sub_fd, rel)
-                        finally:
-                            os.close(sub_fd)
+                        _walk_manifest_subdirectory(manifest, dir_fd, name, rel, st, _walk_dir)
                         continue
 
                     if mode_kind != "regular":

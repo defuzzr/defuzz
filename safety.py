@@ -494,6 +494,59 @@ def _skip_line_continuation(text: str, idx: int, length: int) -> int:
     return idx
 
 
+def _parse_git_config_section(
+    text: str, i: int, n: int,
+) -> Tuple[int, Tuple[str, Optional[str]]]:
+    """Parse a section header, preserving subsection spelling."""
+    i += 1
+    sec_start = i
+    while i < n and (text[i].isalnum() or text[i] in "-."):
+        i += 1
+    sec_raw = text[sec_start:i]
+    if not sec_raw:
+        raise _GitConfigParseError("empty section header")
+    while i < n and text[i] in " \t":
+        i += 1
+    if i < n and text[i] == '"':
+        if "." in sec_raw:
+            raise _GitConfigParseError("dot in quoted section header")
+        i += 1
+        sub_chars: List[str] = []
+        while True:
+            if i >= n or text[i] in "\r\n":
+                raise _GitConfigParseError("unterminated subsection header")
+            if text[i] == "\\":
+                i += 1
+                if i >= n or text[i] in "\r\n":
+                    raise _GitConfigParseError("invalid escape in subsection header")
+                sub_chars.append(text[i])
+                i += 1
+            elif text[i] == '"':
+                i += 1
+                break
+            else:
+                sub_chars.append(text[i])
+                i += 1
+        while i < n and text[i] in " \t":
+            i += 1
+        if i >= n or text[i] != "]":
+            raise _GitConfigParseError("missing closing bracket after subsection")
+        i += 1
+        current_section = (sec_raw.lower(), "".join(sub_chars))
+    elif i < n and text[i] == "]":
+        i += 1
+        if "." in sec_raw:
+            head, sub = sec_raw.split(".", 1)
+            if not head or not sub:
+                raise _GitConfigParseError("invalid dot subsection header")
+            current_section = (head.lower(), sub)
+        else:
+            current_section = (sec_raw.lower(), None)
+    else:
+        raise _GitConfigParseError("malformed section header")
+    return i, current_section
+
+
 def _parse_git_config_bytes(
     raw: bytes,
 ) -> Tuple[List[Tuple[str, Optional[str]]], List[Tuple[str, Optional[str], str, Optional[str]]]]:
@@ -523,52 +576,7 @@ def _parse_git_config_bytes(
             continue
 
         if ch == "[":
-            i += 1
-            sec_start = i
-            while i < n and (text[i].isalnum() or text[i] in "-."):
-                i += 1
-            sec_raw = text[sec_start:i]
-            if not sec_raw:
-                raise _GitConfigParseError("empty section header")
-            while i < n and text[i] in " \t":
-                i += 1
-            if i < n and text[i] == '"':
-                if "." in sec_raw:
-                    raise _GitConfigParseError("dot in quoted section header")
-                i += 1
-                sub_chars: List[str] = []
-                while True:
-                    if i >= n or text[i] in "\r\n":
-                        raise _GitConfigParseError("unterminated subsection header")
-                    if text[i] == "\\":
-                        i += 1
-                        if i >= n or text[i] in "\r\n":
-                            raise _GitConfigParseError("invalid escape in subsection header")
-                        sub_chars.append(text[i])
-                        i += 1
-                    elif text[i] == '"':
-                        i += 1
-                        break
-                    else:
-                        sub_chars.append(text[i])
-                        i += 1
-                while i < n and text[i] in " \t":
-                    i += 1
-                if i >= n or text[i] != "]":
-                    raise _GitConfigParseError("missing closing bracket after subsection")
-                i += 1
-                current_section = (sec_raw.lower(), "".join(sub_chars))
-            elif i < n and text[i] == "]":
-                i += 1
-                if "." in sec_raw:
-                    head, sub = sec_raw.split(".", 1)
-                    if not head or not sub:
-                        raise _GitConfigParseError("invalid dot subsection header")
-                    current_section = (head.lower(), sub)
-                else:
-                    current_section = (sec_raw.lower(), None)
-            else:
-                raise _GitConfigParseError("malformed section header")
+            i, current_section = _parse_git_config_section(text, i, n)
             sections.append(current_section)
             continue
 

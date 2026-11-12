@@ -628,6 +628,36 @@ def _envelope(findings: list, coverage: str, section: dict, *, elapsed_ms: int) 
     }
 
 
+def _directory_entry_records(
+    raw_entries: list[os.DirEntry[str]], note_cut: Callable[[str], None],
+) -> tuple[list[tuple[os.DirEntry[str], os.stat_result, str]], set[str], set[str], set[str]]:
+    """Collect no-follow metadata and marker names for one sorted directory."""
+    dir_names: set[str] = set()
+    file_names: set[str] = set()
+    all_names: set[str] = set()
+    entry_records: list[tuple[os.DirEntry[str], os.stat_result, str]] = []
+    for entry in raw_entries:
+        try:
+            st = entry.stat(follow_symlinks=False)
+        except OSError:
+            note_cut("lstat_error")
+            continue
+        mode = st.st_mode
+        if stat.S_ISLNK(mode):
+            kind = "symlink"
+        elif stat.S_ISDIR(mode):
+            kind = "directory"
+            dir_names.add(entry.name)
+        elif stat.S_ISREG(mode):
+            kind = "regular"
+            file_names.add(entry.name)
+        else:
+            kind = "special"
+        all_names.add(entry.name)
+        entry_records.append((entry, st, kind))
+    return entry_records, dir_names, file_names, all_names
+
+
 def audit_home_workdirs(
     profile_path: str | Path,
     *,
@@ -749,30 +779,7 @@ def audit_home_workdirs(
 
         raw_entries.sort(key=lambda e: e.name)
 
-        dir_names: set[str] = set()
-        file_names: set[str] = set()
-        all_names: set[str] = set()
-        entry_records: list[tuple[os.DirEntry[str], os.stat_result, str]] = []
-
-        for entry in raw_entries:
-            try:
-                st = entry.stat(follow_symlinks=False)
-            except OSError:
-                _note_cut("lstat_error")
-                continue
-            mode = st.st_mode
-            if stat.S_ISLNK(mode):
-                kind = "symlink"
-            elif stat.S_ISDIR(mode):
-                kind = "directory"
-                dir_names.add(entry.name)
-            elif stat.S_ISREG(mode):
-                kind = "regular"
-                file_names.add(entry.name)
-            else:
-                kind = "special"
-            all_names.add(entry.name)
-            entry_records.append((entry, st, kind))
+        entry_records, dir_names, file_names, all_names = _directory_entry_records(raw_entries, _note_cut)
 
         cur_buckets = set(active_buckets)
 

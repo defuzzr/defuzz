@@ -329,6 +329,53 @@ def _prepare(store, args, previous=None):
 from .audit.redaction import redaction_scope
 
 
+def _tools_lock_result(identity, summary):
+    """Wrap the static TOOLS.lock summary as the ``tools_lock`` component result.
+
+    ``summary`` is the dict returned by ``tool_guard.static_lock_summary``: its
+    ``coverage`` key becomes both the finding and component coverage, and the whole
+    summary becomes the finding evidence (validation walks every key). Returns a
+    §6-adapted component result carrying one ``tools_lock.static`` info finding. Performs
+    no file I/O: the plain data ``static_lock_summary`` returns is validated as plain data.
+    """
+    lock_finding = make_finding(rule_id='tools_lock.static', classification='info', coverage=summary['coverage'],
+        affected_identities=[identity], consequence='Static TOOLS.lock provenance; installed versions were not probed.', evidence=summary)
+    return adapt_component_result(make_component_envelope(findings=[lock_finding], coverage=summary['coverage']), component_id='tools_lock')
+
+
+def _scope_findings(inventory, outward):
+    """Collect the audit-scope findings added on top of the per-unit results.
+
+    Starts from ``inventory.get('findings', [])``. When ``outward`` is not None, adds one
+    ``audit.scope.<region>`` finding per region (``info`` when coverage is
+    ``verified``, else ``review_suggested``) and one ``audit.blending`` finding per
+    evidenced relationship; otherwise adds one ``audit_scope.unverified``
+    ``review_suggested`` finding with ``could_not_verify`` coverage (via ``_unknown``),
+    because a quick audit leaves those regions uncollected.
+
+    Returns a new list; ``inventory['findings']`` is not mutated. Does no reads or writes
+    of its own, but validating sealed evidence can resolve/lstat the evidence paths and
+    update the run's redaction taint.
+    """
+    extra = list(inventory.get('findings', []))
+    if outward is not None:
+        for name, region in outward['regions'].items():
+            extra.append(make_finding(rule_id='audit.scope.' + name,
+                classification='info' if region['coverage'] == 'verified' else 'review_suggested',
+                coverage=region['coverage'], affected_identities=['system'],
+                consequence='Static outward inspection: ' + name,
+                evidence=region))
+        for relationship in outward['blending']:
+            extra.append(make_finding(rule_id='audit.blending', classification='review_suggested',
+                coverage='verified', affected_identities=[value for value in
+                    (relationship['source'], relationship['target']) if isinstance(value, str)],
+                consequence='BLENDING: an evidenced reference; evidence.inspection distinguishes inspected targets from metadata-only declarations.',
+                evidence=relationship))
+    else:
+        extra.extend(_unknown('audit_scope', 'system', 'Explicit quick audit: uncollected regions remain unknown.')['findings'])
+    return extra
+
+
 @redaction_scope
 @using_store_key
 @bounded_call.worker_scope(cancelled=lambda store, prepared: store.get_run(prepared[0])['status'] == 'cancelled')
@@ -491,6 +538,13 @@ def _sweep(store, prepared):
     from . import templates
     from .audit.contract import resolve_runtime_golden_registry
     from .tool_guard import static_lock_summary
+    # Two constraints from tests/test_audit_open_sites_recheck.py keep this code in _sweep:
+    # (1) credential_path must be called directly from _sweep: the test's _caller_name() pins
+    #     sys._getframe(2).f_code.co_name == '_sweep' on the wrapped call, so a helper caller
+    #     would hide the site. (2) `specs` and `invalid_templates` must stay _sweep locals bound
+    #     before the first project-loop store.get_run: the test's stub get_run reads
+    #     sys._getframe(1).f_locals (the frame calling store.get_run) to stop the sweep once
+    #     templates are loaded.
     from .audit.policy import credential_path
     from .audit.fingerprint import CredentialStoreNotOpened, open_checked
     specs, invalid_templates = {}, {}
@@ -562,9 +616,7 @@ def _sweep(store, prepared):
                 results.append(_component('template_drift', identity, template_drift.audit_template_drift, **captured))
                 results.append(_component('static_code', identity, static_code.audit_static_code, **captured))
         summary = static_lock_summary(identity, db_path=store.db_path)
-        lock_finding = make_finding(rule_id='tools_lock.static', classification='info', coverage=summary['coverage'],
-            affected_identities=[identity], consequence='Static TOOLS.lock provenance; installed versions were not probed.', evidence=summary)
-        results.append(adapt_component_result(make_component_envelope(findings=[lock_finding], coverage=summary['coverage']), component_id='tools_lock'))
+        results.append(_tools_lock_result(identity, summary))
         template_collector = {'coverage': template_manifest['coverage']}
         if spec is None and template_error:
             template_collector['reason'] = 'structured_data_parse_failed'
@@ -574,22 +626,7 @@ def _sweep(store, prepared):
                                                           'template_capture': template_collector}},
                                  component_results=results, sort_order=index)
         _persist_proposals(store, run_id, identity, manifest.get('unit_digest', ''), results)
-    extra = list(inventory.get('findings', []))
-    if outward is not None:
-        for name, region in outward['regions'].items():
-            extra.append(make_finding(rule_id='audit.scope.' + name,
-                classification='info' if region['coverage'] == 'verified' else 'review_suggested',
-                coverage=region['coverage'], affected_identities=['system'],
-                consequence='Static outward inspection: ' + name,
-                evidence=region))
-        for relationship in outward['blending']:
-            extra.append(make_finding(rule_id='audit.blending', classification='review_suggested',
-                coverage='verified', affected_identities=[value for value in
-                    (relationship['source'], relationship['target']) if isinstance(value, str)],
-                consequence='BLENDING: an evidenced reference; evidence.inspection distinguishes inspected targets from metadata-only declarations.',
-                evidence=relationship))
-    else:
-        extra.extend(_unknown('audit_scope', 'system', 'Explicit quick audit: uncollected regions remain unknown.')['findings'])
+    extra = _scope_findings(inventory, outward)
     with _STATE_LOCK:
         if store.get_run(run_id)['status'] == 'cancelled':
             return _public_run(store.get_run(run_id))

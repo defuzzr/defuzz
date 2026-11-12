@@ -588,6 +588,129 @@ def _toolset_labels(names: list[str], *, explicit_path: bool) -> set[str]:
     return labels
 
 
+def _collect_peer_timeouts(peer_groups) -> set[int]:
+    timeouts: set[int] = set()
+    for p_dict in peer_groups:
+        for p_entry in p_dict.values():
+            if isinstance(p_entry, dict) and 'timeout' in p_entry:
+                tval, tok = _classify_nonneg_int(p_entry.get('timeout'), min_value=1)
+                if tok and tval is not None:
+                    timeouts.add(tval)
+    return timeouts
+
+
+def _collect_a2a_peers(config: dict[str, Any], gw_sec: dict[str, Any]):
+    # a2a: outbound peers from a2a_agents (plugins/platforms/a2a/tools.py:31-32); served agents from
+    # platforms.a2a.extra.agents|served_agents, else top-level a2a_served_agents / a2a.served_agents
+    # (plugins/platforms/a2a/adapter.py:390-400; gateway/config_loader.py:150-170 merges
+    # gateway.platforms). Names and URLs are never emitted.
+    outbound_peers = _section(config, 'a2a_agents')
+    plat_top = _section(config, 'platforms')
+    gw_plat = _section(gw_sec, 'platforms')
+    served: dict[str, Any] = {}
+    for p_source in (gw_plat, plat_top):
+        ext_b = _section(_section(p_source, 'a2a'), 'extra')
+        ag_b = ext_b.get('agents') or ext_b.get('served_agents')
+        if isinstance(ag_b, dict):
+            served.update(ag_b)
+        elif isinstance(ag_b, list):
+            served.update({str(i): v for i, v in enumerate(ag_b)})
+    if not served:
+        fb = config.get('a2a_served_agents') or _section(config, 'a2a').get('served_agents')
+        if isinstance(fb, dict):
+            served.update(fb)
+        elif isinstance(fb, list):
+            served.update({str(i): v for i, v in enumerate(fb)})
+    served = {k: v for k, v in served.items() if isinstance(v, dict)}
+    timeouts = _collect_peer_timeouts((outbound_peers, served))
+    return outbound_peers, plat_top, served, timeouts
+
+
+def _count_platform_peers_or_users(
+    plat_name: str, config: dict[str, Any], plat_top: dict[str, Any], total_peers: int,
+) -> int:
+    if plat_name == 'a2a':
+        return total_peers
+    p_cfg = _section(plat_top, plat_name)
+    allow_from = p_cfg.get('allow_from')
+    cnt = len(allow_from) if isinstance(allow_from, list) else 0
+    top_p = _section(config, plat_name)
+    for k_allow in ('allowed_channels', 'allowed_chats', 'allowed_rooms'):
+        raw_c = top_p.get(k_allow)
+        if isinstance(raw_c, str) and raw_c.strip():
+            cnt += len([x for x in raw_c.split(',') if x.strip()])
+        elif isinstance(raw_c, list):
+            cnt += len(raw_c)
+    return cnt
+
+
+def _evaluate_platform_toolsets(
+    config: dict[str, Any],
+    agent_sec: dict[str, Any],
+    plat_top: dict[str, Any],
+    total_peers: int,
+    unverified_all: bool,
+) -> dict[str, Any]:
+    # platform_toolsets.<platform> (hermes_cli/tools_config.py:571-646), minus agent.disabled_toolsets.
+    pt_sec = _section(config, 'platform_toolsets')
+    disabled_names = _names(agent_sec.get('disabled_toolsets', [])) or []
+    # model_tools.py:300-328: a disabled hermes-* bundle or posture removes only its non-core tools,
+    # so only direct toolset keys and non-bundle composites (debugging) subtract labels here.
+    disabled_labels: set[str] = set()
+    for dname in disabled_names:
+        dkey = dname.strip()
+        if dkey in TOOLSET_KEY_TO_POWERFUL:
+            disabled_labels |= TOOLSET_KEY_TO_POWERFUL[dkey]
+        elif dkey == 'debugging':
+            disabled_labels |= STATIC_COMPOSITE_LABELS['debugging']
+
+    cli_list = _names(pt_sec.get('cli')) if 'cli' in pt_sec else ['hermes-cli']
+    cli_powerful: set[str] = set()
+    if cli_list is not None:
+        cli_explicit = any(n.strip() in CONFIGURABLE_TOOLSET_KEYS for n in cli_list)
+        cli_powerful = _toolset_labels(cli_list, explicit_path=cli_explicit)
+    cli_powerful -= disabled_labels
+
+    non_cli_platforms: dict[str, dict[str, Any]] = {}
+    # Platforms that are not known Hermes platform names: rows without their (user-chosen) name.
+    other_platforms: list[dict[str, Any]] = []
+    if not unverified_all and isinstance(pt_sec, dict):
+        for plat_key, raw_ts_list in sorted(pt_sec.items(), key=lambda kv: str(kv[0])):
+            plat_str = str(plat_key)
+            if plat_str == 'cli':
+                continue
+            ts_list = _names(raw_ts_list)
+            if ts_list is None:
+                continue
+            explicit_path = any(n.strip() in CONFIGURABLE_TOOLSET_KEYS for n in ts_list)
+            p_tools = _toolset_labels(ts_list, explicit_path=explicit_path)
+            p_tools -= disabled_labels
+            default_bundle = BUILTIN_PLATFORM_DEFAULTS.get(plat_str)
+            default_tools = set(STATIC_COMPOSITE_LABELS.get(default_bundle or '', frozenset()))
+            high_risk = p_tools & HIGH_RISK_TOOLSETS
+            beyond = sorted(high_risk - default_tools)
+            if plat_str in KNOWN_PLATFORM_NAMES and _PLATFORM_KEY_RE.fullmatch(plat_str):
+                target = non_cli_platforms.setdefault(plat_str, {})
+            else:
+                target = {}
+                other_platforms.append(target)
+            target.update({
+                'powerful_tools': sorted(p_tools),
+                'high_risk_tools': sorted(high_risk),
+                'beyond_default_high_risk_tools': beyond,
+                'remote': plat_str not in LOCAL_SURFACES,
+                'toolset_count': len(ts_list),
+                'peer_or_user_count': _count_platform_peers_or_users(plat_str, config, plat_top, total_peers),
+            })
+
+    return {
+        'cli_toolset_count': len(cli_list) if (cli_list is not None and 'cli' in pt_sec and not unverified_all) else 0,
+        'cli_powerful_tools': [] if unverified_all else sorted(cli_powerful),
+        'non_cli_platforms': non_cli_platforms,
+        'other_platforms': other_platforms,
+    }
+
+
 def _evaluate_settings_and_sanity(
     config: dict[str, Any],
     *,
@@ -979,35 +1102,7 @@ def _evaluate_settings_and_sanity(
         'disabled_count': 0 if unverified_all else disabled_cnt,
     }
 
-    # a2a: outbound peers from a2a_agents (plugins/platforms/a2a/tools.py:31-32); served agents from
-    # platforms.a2a.extra.agents|served_agents, else top-level a2a_served_agents / a2a.served_agents
-    # (plugins/platforms/a2a/adapter.py:390-400; gateway/config_loader.py:150-170 merges
-    # gateway.platforms). Names and URLs are never emitted.
-    outbound_peers = _section(config, 'a2a_agents')
-    plat_top = _section(config, 'platforms')
-    gw_plat = _section(gw_sec, 'platforms')
-    served: dict[str, Any] = {}
-    for p_source in (gw_plat, plat_top):
-        ext_b = _section(_section(p_source, 'a2a'), 'extra')
-        ag_b = ext_b.get('agents') or ext_b.get('served_agents')
-        if isinstance(ag_b, dict):
-            served.update(ag_b)
-        elif isinstance(ag_b, list):
-            served.update({str(i): v for i, v in enumerate(ag_b)})
-    if not served:
-        fb = config.get('a2a_served_agents') or _section(config, 'a2a').get('served_agents')
-        if isinstance(fb, dict):
-            served.update(fb)
-        elif isinstance(fb, list):
-            served.update({str(i): v for i, v in enumerate(fb)})
-    served = {k: v for k, v in served.items() if isinstance(v, dict)}
-    timeouts: set[int] = set()
-    for p_dict in (outbound_peers, served):
-        for p_entry in p_dict.values():
-            if isinstance(p_entry, dict) and 'timeout' in p_entry:
-                tval, tok = _classify_nonneg_int(p_entry.get('timeout'), min_value=1)
-                if tok and tval is not None:
-                    timeouts.add(tval)
+    outbound_peers, plat_top, served, timeouts = _collect_a2a_peers(config, gw_sec)
     total_peers = len(outbound_peers) + len(served)
     if unverified_all:
         set_row('a2a_agents', None, 'could_not_verify', None)
@@ -1022,79 +1117,9 @@ def _evaluate_settings_and_sanity(
         'peer_timeouts': [] if unverified_all else sorted(timeouts),
     }
 
-    # platform_toolsets.<platform> (hermes_cli/tools_config.py:571-646), minus agent.disabled_toolsets.
-    pt_sec = _section(config, 'platform_toolsets')
-    disabled_names = _names(agent_sec.get('disabled_toolsets', [])) or []
-    # model_tools.py:300-328: a disabled hermes-* bundle or posture removes only its non-core tools,
-    # so only direct toolset keys and non-bundle composites (debugging) subtract labels here.
-    disabled_labels: set[str] = set()
-    for dname in disabled_names:
-        dkey = dname.strip()
-        if dkey in TOOLSET_KEY_TO_POWERFUL:
-            disabled_labels |= TOOLSET_KEY_TO_POWERFUL[dkey]
-        elif dkey == 'debugging':
-            disabled_labels |= STATIC_COMPOSITE_LABELS['debugging']
-
-    cli_list = _names(pt_sec.get('cli')) if 'cli' in pt_sec else ['hermes-cli']
-    cli_powerful: set[str] = set()
-    if cli_list is not None:
-        cli_explicit = any(n.strip() in CONFIGURABLE_TOOLSET_KEYS for n in cli_list)
-        cli_powerful = _toolset_labels(cli_list, explicit_path=cli_explicit)
-    cli_powerful -= disabled_labels
-
-    def count_platform_peers_or_users(plat_name: str) -> int:
-        if plat_name == 'a2a':
-            return total_peers
-        p_cfg = _section(plat_top, plat_name)
-        allow_from = p_cfg.get('allow_from')
-        cnt = len(allow_from) if isinstance(allow_from, list) else 0
-        top_p = _section(config, plat_name)
-        for k_allow in ('allowed_channels', 'allowed_chats', 'allowed_rooms'):
-            raw_c = top_p.get(k_allow)
-            if isinstance(raw_c, str) and raw_c.strip():
-                cnt += len([x for x in raw_c.split(',') if x.strip()])
-            elif isinstance(raw_c, list):
-                cnt += len(raw_c)
-        return cnt
-
-    non_cli_platforms: dict[str, dict[str, Any]] = {}
-    # Platforms that are not known Hermes platform names: rows without their (user-chosen) name.
-    other_platforms: list[dict[str, Any]] = []
-    if not unverified_all and isinstance(pt_sec, dict):
-        for plat_key, raw_ts_list in sorted(pt_sec.items(), key=lambda kv: str(kv[0])):
-            plat_str = str(plat_key)
-            if plat_str == 'cli':
-                continue
-            ts_list = _names(raw_ts_list)
-            if ts_list is None:
-                continue
-            explicit_path = any(n.strip() in CONFIGURABLE_TOOLSET_KEYS for n in ts_list)
-            p_tools = _toolset_labels(ts_list, explicit_path=explicit_path)
-            p_tools -= disabled_labels
-            default_bundle = BUILTIN_PLATFORM_DEFAULTS.get(plat_str)
-            default_tools = set(STATIC_COMPOSITE_LABELS.get(default_bundle or '', frozenset()))
-            high_risk = p_tools & HIGH_RISK_TOOLSETS
-            beyond = sorted(high_risk - default_tools)
-            if plat_str in KNOWN_PLATFORM_NAMES and _PLATFORM_KEY_RE.fullmatch(plat_str):
-                target = non_cli_platforms.setdefault(plat_str, {})
-            else:
-                target = {}
-                other_platforms.append(target)
-            target.update({
-                'powerful_tools': sorted(p_tools),
-                'high_risk_tools': sorted(high_risk),
-                'beyond_default_high_risk_tools': beyond,
-                'remote': plat_str not in LOCAL_SURFACES,
-                'toolset_count': len(ts_list),
-                'peer_or_user_count': count_platform_peers_or_users(plat_str),
-            })
-
-    platform_info = {
-        'cli_toolset_count': len(cli_list) if (cli_list is not None and 'cli' in pt_sec and not unverified_all) else 0,
-        'cli_powerful_tools': [] if unverified_all else sorted(cli_powerful),
-        'non_cli_platforms': non_cli_platforms,
-        'other_platforms': other_platforms,
-    }
+    platform_info = _evaluate_platform_toolsets(
+        config, agent_sec, plat_top, total_peers, unverified_all,
+    )
 
     mem_sec = _section(config, 'memory')
     check_raw_string_sanity('memory.provider', mem_sec.get('provider'), is_provider=True)

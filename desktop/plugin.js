@@ -605,6 +605,75 @@ function mapLintResolution(val) {
   return { lint: 'unknown' }
 }
 
+function normalizeConnectionId(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? trimmed : null
+  }
+  if (value && typeof value === 'object') {
+    if (typeof value.connectionId === 'string') {
+      const trimmed = value.connectionId.trim()
+      return trimmed ? trimmed : null
+    }
+    if (typeof value.id === 'string') {
+      const trimmed = value.id.trim()
+      return trimmed ? trimmed : null
+    }
+  }
+  return null
+}
+
+function extractOwnerRoute(candidate, expectedConnId, fallbackProfile) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return null
+  }
+  const connId = normalizeConnectionId(candidate)
+  if (!connId || (expectedConnId !== null && connId !== expectedConnId)) {
+    return null
+  }
+  if (candidate.mode !== 'remote' || connId === 'local') {
+    return null
+  }
+  const prof =
+    typeof candidate.profile === 'string' && candidate.profile.trim()
+      ? candidate.profile.trim()
+      : typeof fallbackProfile === 'string' && fallbackProfile.trim()
+        ? fallbackProfile.trim()
+        : ''
+  const targetProf =
+    typeof candidate.targetProfile === 'string' && candidate.targetProfile.trim()
+      ? candidate.targetProfile.trim()
+      : prof
+  if (!prof || !targetProf) {
+    return null
+  }
+  return {
+    ...candidate,
+    connectionId: connId,
+    mode: 'remote',
+    profile: prof,
+    targetProfile: targetProf
+  }
+}
+
+function attachSnapshotPromises(target, lintPromise, navPromise) {
+  const cloned = cloneAndFreezeData(target)
+  const snap = { ...cloned }
+  Object.defineProperty(snap, 'lintDone', {
+    value: lintPromise,
+    enumerable: false,
+    configurable: false,
+    writable: false
+  })
+  Object.defineProperty(snap, 'navigationDone', {
+    value: navPromise,
+    enumerable: false,
+    configurable: false,
+    writable: false
+  })
+  return Object.freeze(snap)
+}
+
 /**
  * Create a one-shot session hand-off coordinator for desktop template adaptation.
  *
@@ -697,24 +766,6 @@ export function createHandoff(deps = {}) {
     return opGenerations.get(operationId) === gen
   }
 
-  function normalizeConnectionId(value) {
-    if (typeof value === 'string') {
-      const trimmed = value.trim()
-      return trimmed ? trimmed : null
-    }
-    if (value && typeof value === 'object') {
-      if (typeof value.connectionId === 'string') {
-        const trimmed = value.connectionId.trim()
-        return trimmed ? trimmed : null
-      }
-      if (typeof value.id === 'string') {
-        const trimmed = value.id.trim()
-        return trimmed ? trimmed : null
-      }
-    }
-    return null
-  }
-
   function readActiveConnectionId() {
     if (!hostRef) return null
     const fromFn =
@@ -729,39 +780,6 @@ export function createHandoff(deps = {}) {
       return null
     }
     return fromFn ?? fromState
-  }
-
-  function extractOwnerRoute(candidate, expectedConnId, fallbackProfile) {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
-      return null
-    }
-    const connId = normalizeConnectionId(candidate)
-    if (!connId || (expectedConnId !== null && connId !== expectedConnId)) {
-      return null
-    }
-    if (candidate.mode !== 'remote' || connId === 'local') {
-      return null
-    }
-    const prof =
-      typeof candidate.profile === 'string' && candidate.profile.trim()
-        ? candidate.profile.trim()
-        : typeof fallbackProfile === 'string' && fallbackProfile.trim()
-          ? fallbackProfile.trim()
-          : ''
-    const targetProf =
-      typeof candidate.targetProfile === 'string' && candidate.targetProfile.trim()
-        ? candidate.targetProfile.trim()
-        : prof
-    if (!prof || !targetProf) {
-      return null
-    }
-    return {
-      ...candidate,
-      connectionId: connId,
-      mode: 'remote',
-      profile: prof,
-      targetProfile: targetProf
-    }
   }
 
   async function execute(op, runGen) {
@@ -781,24 +799,6 @@ export function createHandoff(deps = {}) {
 
     function isGenCurrent() {
       return isCurrentGeneration(operationId, runGen)
-    }
-
-    function attachSnapshotPromises(target, lintPromise, navPromise) {
-      const cloned = cloneAndFreezeData(target)
-      const snap = { ...cloned }
-      Object.defineProperty(snap, 'lintDone', {
-        value: lintPromise,
-        enumerable: false,
-        configurable: false,
-        writable: false
-      })
-      Object.defineProperty(snap, 'navigationDone', {
-        value: navPromise,
-        enumerable: false,
-        configurable: false,
-        writable: false
-      })
-      return Object.freeze(snap)
     }
 
     function earlyFailureResult(fields) {
@@ -4319,6 +4319,24 @@ export function CompanionPrefsSection({ ctx, rest, kitsUnavailable = false }) {
   ] })
 }
 
+function clearPreviewTimer(timerDisposeRef) {
+  if (!timerDisposeRef.current) return
+  timerDisposeRef.current()
+  timerDisposeRef.current = null
+}
+
+function mergeToolRules(existingRules, updates) {
+  let nextRules = Array.isArray(existingRules) ? [...existingRules] : []
+  for (const { id, label, enabled } of updates) {
+    if (nextRules.some(r => r.id === id)) {
+      nextRules = nextRules.map(r => r.id === id ? { ...r, enabled } : r)
+    } else {
+      nextRules.push({ id, label, mode: 'both', enabled })
+    }
+  }
+  return nextRules
+}
+
 export function SettingsView({ ctx, model, state, project = '', auditMode = 'full', scopedRest = null, live = null, liveState = null, projectState = null }) {
   const [tab, setTab] = useState('auditor')
   const [guideOpen, setGuideOpen] = useState(false)
@@ -4334,25 +4352,16 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
   const playStepRef = useRef(0)
 
   const stopDryRun = () => {
-    if (timerDisposeRef.current) {
-      timerDisposeRef.current()
-      timerDisposeRef.current = null
-    }
+    clearPreviewTimer(timerDisposeRef)
     setPlaying(false)
   }
 
   useEffect(() => {
     const unregister = ctx?.onDispose?.(() => {
-      if (timerDisposeRef.current) {
-        timerDisposeRef.current()
-        timerDisposeRef.current = null
-      }
+      clearPreviewTimer(timerDisposeRef)
     })
     return () => {
-      if (timerDisposeRef.current) {
-        timerDisposeRef.current()
-        timerDisposeRef.current = null
-      }
+      clearPreviewTimer(timerDisposeRef)
       if (typeof unregister === 'function') unregister()
     }
   }, [ctx])
@@ -4361,10 +4370,7 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
   const prevContextRef = useRef({ projectName, auditMode })
   if (prevContextRef.current.projectName !== projectName || prevContextRef.current.auditMode !== auditMode) {
     prevContextRef.current = { projectName, auditMode }
-    if (timerDisposeRef.current) {
-      timerDisposeRef.current()
-      timerDisposeRef.current = null
-    }
+    clearPreviewTimer(timerDisposeRef)
   }
 
   const liveRules = (model?.get?.()?.settings || state?.settings)?.rules || []
@@ -4373,18 +4379,6 @@ export function SettingsView({ ctx, model, state, project = '', auditMode = 'ful
     const matchingRule = liveRules.find(r => r.id === toolId)
     if (matchingRule) return matchingRule.enabled !== false
     return true
-  }
-
-  const mergeToolRules = (existingRules, updates) => {
-    let nextRules = Array.isArray(existingRules) ? [...existingRules] : []
-    for (const { id, label, enabled } of updates) {
-      if (nextRules.some(r => r.id === id)) {
-        nextRules = nextRules.map(r => r.id === id ? { ...r, enabled } : r)
-      } else {
-        nextRules.push({ id, label, mode: 'both', enabled })
-      }
-    }
-    return nextRules
   }
 
   const setToolEnabled = (toolItem, enabled) => {

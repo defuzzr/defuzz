@@ -1027,45 +1027,31 @@ def _drop_spans_inside(
     return kept
 
 
-def parse_deterministic(sentence: str) -> ParsedPrompt:
-    """Deterministically parse a free-text sentence into questionnaire answers, name, naming forms, and chips.
-
-    Raises PromptTooLongError (a ValueError) when len(sentence) > MAX_PROMPT_CHARS.
-    """
-    if not isinstance(sentence, str):
-        raise ValueError("Prompt sentence must be a string")
-    if len(sentence) > MAX_PROMPT_CHARS:
-        raise PromptTooLongError(len(sentence))
-    raw_prompt = sentence.strip()
-    spans: List[Tuple[int, int]] = []
-
-    from .matcher import KIT_FAMILY_NATIVE_LANGUAGES, kit_families_in, mask_website_subject
-
-    initial_families = kit_families_in(raw_prompt)
-    scan_prompt = mask_website_subject(raw_prompt) if "website" in initial_families else raw_prompt
-
-    # 1. Detect engine and untemplated game/GUI frameworks
-    detected_engine: Optional[str] = None
-    engine_implied_lang: Optional[str] = None
-    for pat, eng_id, imp_lang in _ENGINE_PATTERNS:
-        for m in pat.finditer(scan_prompt):
+def _first_pattern_hit(patterns, text: str, spans: list[tuple[int, int]]) -> tuple[Any, ...] | None:
+    """Record every match span of every pattern; return the payload of the first pattern that matched."""
+    first: tuple[Any, ...] | None = None
+    for pat, *payload in patterns:
+        for m in pat.finditer(text):
             spans.append(m.span())
-            if detected_engine is None:
-                detected_engine = eng_id
-                engine_implied_lang = imp_lang
+            if first is None:
+                first = tuple(payload)
+    return first
 
-    detected_framework: Optional[str] = None
-    framework_implied_lang: Optional[str] = None
-    for pat, fw_id, imp_lang in _UNTEMPLATED_FRAMEWORK_PATTERNS:
-        for m in pat.finditer(scan_prompt):
-            spans.append(m.span())
-            if detected_framework is None:
-                detected_framework = fw_id
-                framework_implied_lang = imp_lang or None
 
-    # 2. Detect explicit languages and library/tool-implied languages ordered by appearance
-    explicit_lang_hits: List[Tuple[int, str]] = []
-    all_lang_hits: List[Tuple[int, str]] = []
+def _distinct_by_position(hits: list[tuple[int, str]]) -> list[str]:
+    """Distinct ids ordered by first appearance position (stable for equal positions)."""
+    return list(dict.fromkeys(item_id for _pos, item_id in sorted(hits, key=lambda item: item[0])))
+
+
+def _detect_languages(
+    scan_prompt: str,
+    spans: list[tuple[int, int]],
+    engine_implied_lang: str | None,
+    framework_implied_lang: str | None,
+) -> tuple[list[str], list[str]]:
+    """Return (explicit languages, all languages incl. library/tool/engine-implied), ordered by appearance."""
+    explicit_lang_hits: list[tuple[int, str]] = []
+    all_lang_hits: list[tuple[int, str]] = []
     for pat, lang_id in _LANGUAGE_PATTERNS:
         for m in pat.finditer(scan_prompt):
             spans.append(m.span())
@@ -1076,18 +1062,8 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
             spans.append(m.span())
             all_lang_hits.append((m.start(), lang_id))
 
-    explicit_lang_hits.sort(key=lambda item: item[0])
-    all_lang_hits.sort(key=lambda item: item[0])
-
-    explicit_languages: List[str] = []
-    for _pos, lang_id in explicit_lang_hits:
-        if lang_id not in explicit_languages:
-            explicit_languages.append(lang_id)
-
-    languages: List[str] = []
-    for _pos, lang_id in all_lang_hits:
-        if lang_id not in languages:
-            languages.append(lang_id)
+    explicit_languages = _distinct_by_position(explicit_lang_hits)
+    languages = _distinct_by_position(all_lang_hits)
     if engine_implied_lang and engine_implied_lang not in languages:
         languages.append(engine_implied_lang)
     if framework_implied_lang and framework_implied_lang not in languages:
@@ -1097,10 +1073,19 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
         real_only = [lang for lang in languages if lang != "other"]
         if real_only:
             languages = real_only
+    return explicit_languages, languages
 
-    # 3. Detect building kind
-    raw_building_spans: List[Tuple[int, int, str]] = []
-    kit_spans: List[Tuple[int, int]] = []
+
+def _detect_building(
+    scan_prompt: str,
+    spans: list[tuple[int, int]],
+    languages: list[str],
+    detected_engine: str | None,
+    detected_framework: str | None,
+) -> tuple[str | None, bool]:
+    """Return (building kind or None, whether several distinct kinds conflicted)."""
+    raw_building_spans: list[tuple[int, int, str]] = []
+    kit_spans: list[tuple[int, int]] = []
     for pat, b_kind in _BUILDING_PATTERNS:
         for m in pat.finditer(scan_prompt):
             raw_building_spans.append((m.start(), m.end(), b_kind))
@@ -1120,7 +1105,7 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
         or bool(_CODE_CONTEXT_RE.search(non_kit_prompt))
     )
 
-    building_hits: List[Tuple[int, str]] = []
+    building_hits: list[tuple[int, str]] = []
     for start, end, b_kind in (
         (
             (s, e, bk)
@@ -1132,11 +1117,7 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
     ):
         spans.append((start, end))
         building_hits.append((start, b_kind))
-    building_hits.sort(key=lambda item: item[0])
-    distinct_buildings: List[str] = []
-    for _pos, b_kind in building_hits:
-        if b_kind not in distinct_buildings:
-            distinct_buildings.append(b_kind)
+    distinct_buildings = _distinct_by_position(building_hits)
 
     # 'studio' naturally includes the word 'game(s)'; treat {'studio', 'game'} as 'studio'
     if "studio" in distinct_buildings and set(distinct_buildings) <= {"studio", "game"}:
@@ -1153,25 +1134,80 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
     ):
         distinct_buildings = [b for b in distinct_buildings if b != "game"]
 
-    building: Optional[str] = None
-    building_conflict = False
-    if len(distinct_buildings) == 1:
-        building = distinct_buildings[0]
-    elif len(distinct_buildings) > 1:
-        building = distinct_buildings[0]
-        building_conflict = True
-    elif detected_engine is not None or (
+    if distinct_buildings:
+        return distinct_buildings[0], len(distinct_buildings) > 1
+    if detected_engine is not None or (
         detected_framework is not None and detected_framework != "qt"
     ):
-        building = "game"
+        return "game", False
+    return None, False
+
+
+def _fill_code_answers(
+    answers: dict[str, Any],
+    eff_building: str,
+    explicit_layout: str | None,
+    languages: list[str],
+    detected_engine: str | None,
+    detected_framework: str | None,
+) -> None:
+    """Fill layout/languages/engine/framework answers for a non-kit (code) project."""
+    eff_layout = explicit_layout or ("poly" if eff_building == "studio" else "mono")
+    eff_languages = list(languages) if languages else ["other"]
+    answers["layout"] = validate_answer("layout", eff_layout)
+    answers["languages"] = validate_answer("languages", eff_languages)
+    takes_framework = answers["building"] not in {"tool", "library", "service"}
+    if answers["building"] in {"game", "studio"}:
+        if detected_engine is not None:
+            eff_engine = detected_engine
+        else:
+            prefilled_eng = prefill("engine", answers)
+            eff_engine = prefilled_eng[0] if prefilled_eng else "none"
+        answers["engine"] = validate_answer("engine", eff_engine)
+    elif detected_engine is not None and takes_framework:
+        answers["framework"] = detected_engine
+    if detected_framework is not None and takes_framework:
+        answers["framework"] = detected_framework
+
+
+def parse_deterministic(sentence: str) -> ParsedPrompt:
+    """Deterministically parse a free-text sentence into questionnaire answers, name, naming forms, and chips.
+
+    Raises PromptTooLongError (a ValueError) when len(sentence) > MAX_PROMPT_CHARS.
+    """
+    if not isinstance(sentence, str):
+        raise ValueError("Prompt sentence must be a string")
+    if len(sentence) > MAX_PROMPT_CHARS:
+        raise PromptTooLongError(len(sentence))
+    raw_prompt = sentence.strip()
+    spans: List[Tuple[int, int]] = []
+
+    from .matcher import KIT_FAMILY_NATIVE_LANGUAGES, kit_families_in, mask_website_subject
+
+    initial_families = kit_families_in(raw_prompt)
+    scan_prompt = mask_website_subject(raw_prompt) if "website" in initial_families else raw_prompt
+
+    # 1. Detect engine and untemplated game/GUI frameworks
+    detected_engine, engine_implied_lang = (
+        _first_pattern_hit(_ENGINE_PATTERNS, scan_prompt, spans) or (None, None)
+    )
+    detected_framework, framework_implied_lang = (
+        _first_pattern_hit(_UNTEMPLATED_FRAMEWORK_PATTERNS, scan_prompt, spans) or (None, None)
+    )
+    framework_implied_lang = framework_implied_lang or None
+
+    # 2. Detect explicit languages and library/tool-implied languages ordered by appearance
+    explicit_languages, languages = _detect_languages(
+        scan_prompt, spans, engine_implied_lang, framework_implied_lang
+    )
+
+    # 3. Detect building kind
+    building, building_conflict = _detect_building(
+        scan_prompt, spans, languages, detected_engine, detected_framework
+    )
 
     # 4. Detect layout
-    explicit_layout: Optional[str] = None
-    for pat, layout_id in _LAYOUT_PATTERNS:
-        for m in pat.finditer(scan_prompt):
-            spans.append(m.span())
-            if explicit_layout is None:
-                explicit_layout = layout_id
+    (explicit_layout,) = _first_pattern_hit(_LAYOUT_PATTERNS, scan_prompt, spans) or (None,)
 
     # 5. Extract project name from remaining tokens
     extracted_name = _extract_name_from_residual(raw_prompt, spans)
@@ -1206,29 +1242,7 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
         "building": validate_answer("building", eff_building),
     }
     if not kit_project:
-        eff_layout = explicit_layout or ("poly" if eff_building == "studio" else "mono")
-        eff_languages = list(languages) if languages else ["other"]
-        answers["layout"] = validate_answer("layout", eff_layout)
-        answers["languages"] = validate_answer("languages", eff_languages)
-        if answers["building"] in {"game", "studio"}:
-            if detected_engine is not None:
-                eff_engine = detected_engine
-            else:
-                prefilled_eng = prefill("engine", answers)
-                eff_engine = prefilled_eng[0] if prefilled_eng else "none"
-            answers["engine"] = validate_answer("engine", eff_engine)
-        elif detected_engine is not None and answers["building"] not in {
-            "tool",
-            "library",
-            "service",
-        }:
-            answers["framework"] = detected_engine
-        if detected_framework is not None and answers["building"] not in {
-            "tool",
-            "library",
-            "service",
-        }:
-            answers["framework"] = detected_framework
+        _fill_code_answers(answers, eff_building, explicit_layout, languages, detected_engine, detected_framework)
 
     final_name, slug, prefix, env, forms = _derive_naming(extracted_name or "New Project")
     chips = build_chips(answers, final_name)

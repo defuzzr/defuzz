@@ -506,6 +506,60 @@ def _normalize_registration_row(r: sqlite3.Row, profile_name: str, target: Path)
     }
 
 
+def _read_registration_snapshot(
+    conn: sqlite3.Connection,
+    pre_id: DbFileIdentity,
+    profile_name: str,
+    target: Path,
+) -> ProfileRegistrationsSnapshot:
+    """Read and stability-check bounded registrations on an already safe connection."""
+    cols = _table_columns(conn, "projects")
+    if not cols or "path" not in cols:
+        post_id = stat_db_identity(target)
+        return ProfileRegistrationsSnapshot(
+            profile_name=profile_name,
+            db_path=str(target),
+            exists=True,
+            coverage=COVERAGE_COULD_NOT_VERIFY,
+            error="Unsupported projects schema",
+            records=[],
+            changed_during_read=_db_or_wal_changed(pre_id, post_id),
+            row_digest=hashlib.sha256(b"[]").hexdigest(),
+            db_identity=post_id.to_dict(),
+        )
+
+    selected = ", ".join('"' + name + '"' for name in sorted(cols & _ALLOWED_REGISTRATION_COLUMNS))
+    query = f"SELECT {selected} FROM projects ORDER BY path ASC LIMIT ?"
+    rows = conn.execute(query, (MAX_REGISTRATION_ROWS + 1,)).fetchall()
+    first_rows = [tuple(row) for row in rows]
+    truncated = len(rows) > MAX_REGISTRATION_ROWS
+
+    records = [
+        rec
+        for r in rows[:MAX_REGISTRATION_ROWS]
+        if (rec := _normalize_registration_row(r, profile_name, target)) is not None
+    ]
+    last_rows = [tuple(row) for row in conn.execute(query, (MAX_REGISTRATION_ROWS + 1,)).fetchall()]
+    post_id = stat_db_identity(target)
+    changed = _db_or_wal_changed(pre_id, post_id) or first_rows != last_rows
+    err = (
+        "Registration row budget exceeded"
+        if truncated
+        else ("Plugin DB changed during read" if changed else None)
+    )
+    return ProfileRegistrationsSnapshot(
+        profile_name=profile_name,
+        db_path=str(target),
+        exists=True,
+        coverage=COVERAGE_COULD_NOT_VERIFY if (changed or truncated) else COVERAGE_VERIFIED,
+        records=records,
+        changed_during_read=changed,
+        error=err,
+        row_digest=_json_sha256(records, sort_keys=True),
+        db_identity=post_id.to_dict(),
+    )
+
+
 def read_profile_registrations_readonly(
     profile_name: str,
     profile_dir: Path | str,
@@ -560,51 +614,7 @@ def read_profile_registrations_readonly(
 
     try:
         with open_readonly_sqlite(target) as (conn, pre_id):
-            cols = _table_columns(conn, "projects")
-            if not cols or "path" not in cols:
-                post_id = stat_db_identity(target)
-                return ProfileRegistrationsSnapshot(
-                    profile_name=profile_name,
-                    db_path=str(target),
-                    exists=True,
-                    coverage=COVERAGE_COULD_NOT_VERIFY,
-                    error="Unsupported projects schema",
-                    records=[],
-                    changed_during_read=_db_or_wal_changed(pre_id, post_id),
-                    row_digest=hashlib.sha256(b"[]").hexdigest(),
-                    db_identity=post_id.to_dict(),
-                )
-
-            selected = ", ".join('"' + name + '"' for name in sorted(cols & _ALLOWED_REGISTRATION_COLUMNS))
-            query = f"SELECT {selected} FROM projects ORDER BY path ASC LIMIT ?"
-            rows = conn.execute(query, (MAX_REGISTRATION_ROWS + 1,)).fetchall()
-            first_rows = [tuple(row) for row in rows]
-            truncated = len(rows) > MAX_REGISTRATION_ROWS
-
-            records = [
-                rec
-                for r in rows[:MAX_REGISTRATION_ROWS]
-                if (rec := _normalize_registration_row(r, profile_name, target)) is not None
-            ]
-            last_rows = [tuple(row) for row in conn.execute(query, (MAX_REGISTRATION_ROWS + 1,)).fetchall()]
-            post_id = stat_db_identity(target)
-            changed = _db_or_wal_changed(pre_id, post_id) or first_rows != last_rows
-            err = (
-                "Registration row budget exceeded"
-                if truncated
-                else ("Plugin DB changed during read" if changed else None)
-            )
-            return ProfileRegistrationsSnapshot(
-                profile_name=profile_name,
-                db_path=str(target),
-                exists=True,
-                coverage=COVERAGE_COULD_NOT_VERIFY if (changed or truncated) else COVERAGE_VERIFIED,
-                records=records,
-                changed_during_read=changed,
-                error=err,
-                row_digest=_json_sha256(records, sort_keys=True),
-                db_identity=post_id.to_dict(),
-            )
+            return _read_registration_snapshot(conn, pre_id, profile_name, target)
     except (ReadOnlyDbError, sqlite3.Error) as exc:
         return ProfileRegistrationsSnapshot(
             profile_name=profile_name, db_path=str(target), exists=True, coverage=COVERAGE_COULD_NOT_VERIFY,

@@ -664,26 +664,46 @@ def resolve_projects_root(
     cwd: Optional[os.PathLike[str] | str] = None,
 ) -> ResolvedRoot:
     """Pure resolution in order: (a) CLI `--root` -> (b) saved `projects_root` -> (c) `HERMES_PROJECTS_ROOT` -> (d) unset."""
-    # (a) Explicit CLI --root / --dest-root argument
-    if cli_root is not None:
+    def resolve_candidate(
+        raw_path: os.PathLike[str] | str,
+        *,
+        source: str,
+        source_label: str,
+        allow_relative: bool = False,
+    ) -> ResolvedRoot:
         try:
             validated = validate_projects_root(
-                cli_root,
-                allow_relative=allow_cli_relative,
-                source_label="--root path",
+                raw_path,
+                allow_relative=allow_relative,
+                source_label=source_label,
                 ctx=ctx,
                 env=env,
                 home=home,
                 hermes_home=hermes_home,
                 cwd=cwd,
             )
+            if source == "cli":
+                origin = "from --root"
+            elif source == "setting":
+                origin = "saved setting"
+            else:
+                origin = f"from {ENV_VAR}"
             return ResolvedRoot(
                 path=validated,
-                source="cli",
-                message=f"Projects folder: {validated} (from --root)",
+                source=source,
+                message=f"Projects folder: {validated} ({origin})",
             )
         except WorkspaceRootError as exc:
-            return ResolvedRoot(path=None, source="cli", message=str(exc))
+            return ResolvedRoot(path=None, source=source, message=str(exc))
+
+    # (a) Explicit CLI --root / --dest-root argument
+    if cli_root is not None:
+        return resolve_candidate(
+            cli_root,
+            source="cli",
+            source_label="--root path",
+            allow_relative=allow_cli_relative,
+        )
 
     # (b) Saved plugin setting `projects_root`
     saved = _read_saved_setting(ctx=ctx, home=home, hermes_home=hermes_home, env=env)
@@ -699,47 +719,17 @@ def resolve_projects_root(
                     "Run `hermes defuzz folder set <path>` to fix it."
                 ),
             )
-        try:
-            validated = validate_projects_root(
-                saved,
-                allow_relative=False,
-                source_label="saved projects folder",
-                ctx=ctx,
-                env=env,
-                home=home,
-                hermes_home=hermes_home,
-                cwd=cwd,
-            )
-            return ResolvedRoot(
-                path=validated,
-                source="setting",
-                message=f"Projects folder: {validated} (saved setting)",
-            )
-        except WorkspaceRootError as exc:
-            return ResolvedRoot(path=None, source="setting", message=str(exc))
+        return resolve_candidate(
+            saved,
+            source="setting",
+            source_label="saved projects folder",
+        )
 
     # (c) Environment variable `HERMES_PROJECTS_ROOT`
     eff_env: Mapping[str, str] = env if env is not None else os.environ
     env_raw = eff_env.get(ENV_VAR)
     if env_raw is not None and env_raw != "":
-        try:
-            validated = validate_projects_root(
-                env_raw,
-                allow_relative=False,
-                source_label=ENV_VAR,
-                ctx=ctx,
-                env=env,
-                home=home,
-                hermes_home=hermes_home,
-                cwd=cwd,
-            )
-            return ResolvedRoot(
-                path=validated,
-                source="env",
-                message=f"Projects folder: {validated} (from {ENV_VAR})",
-            )
-        except WorkspaceRootError as exc:
-            return ResolvedRoot(path=None, source="env", message=str(exc))
+        return resolve_candidate(env_raw, source="env", source_label=ENV_VAR)
 
     # (d) Not chosen yet
     return ResolvedRoot(path=None, source="unset", message=NON_TERMINAL_UNSET_MESSAGE)

@@ -1458,50 +1458,7 @@ def accept_kit(
         keep_staging=True,
     )
 
-    # (b) build rules dict, validate with validate_rules_spec, create _inbox/, write .adopt/rules.json & sync .gitignore
-    rules = _build_kit_rules(
-        proposal.slug,
-        proposal.declared_dirs,
-        proposal.placement_rules,
-        staging_dir=proposal.staging_dir,
-    )
-    try:
-        for folder in ("_inbox", ".adopt", *(d["dir"] for d in rules["declared_dirs"])):
-            safe_mkdirs(proposal.staged, folder)
-        if not os.path.lexists(proposal.staged / "_inbox" / ".gitkeep"):
-            safe_write_text(proposal.staged, "_inbox/.gitkeep", "")
-        safe_write_bytes(
-            proposal.staged,
-            ".adopt/rules.json",
-            (json.dumps(rules, indent=2) + "\n").encode("utf-8"),
-            overwrite=False,
-        )
-        _sync_staged_gitignore(proposal.staged, rules.get("ignore_patterns") or ())
-    except (SafetyError, OSError) as exc:
-        raise ScaffoldError(
-            f"Failed to write rules in staged kit {proposal.staged}: {exc}",
-            staging_dir=proposal.staging_dir,
-            keep_staging=True,
-        ) from exc
-
-    # (c) write_agents_md preserving kit block
-    try:
-        agents_res = write_agents_md(proposal.staged, rules, preserve_kit_blocks=True)
-    except (SafetyError, OSError, ValueError) as exc:
-        raise ScaffoldError(
-            f"Failed to write AGENTS.md in staged kit {proposal.staged}: {exc}",
-            staging_dir=proposal.staging_dir,
-            keep_staging=True,
-        ) from exc
-    dropped_kits = list(agents_res.get("kit_blocks_dropped") or ())
-    preserved_kits = list(agents_res.get("kit_blocks_preserved") or ())
-    if dropped_kits or proposal.kit_id not in preserved_kits:
-        raise ScaffoldError(
-            f"Kit {proposal.kit_id!r} AGENTS.md section is missing or damaged "
-            f"(preserved={preserved_kits}, dropped={dropped_kits})",
-            staging_dir=proposal.staging_dir,
-            keep_staging=True,
-        )
+    _write_staged_kit_rules(proposal)
 
     # (d) fail if destination now exists; move staged to destination
     _check_cancelled(cancel, proposal.staging_dir, step=f"before move {proposal.slug}")
@@ -1560,6 +1517,53 @@ def accept_kit(
     except BaseException as exc:
         _mark_created(exc, proposal.dest)  # the project folder exists: the caller must not report "nothing created"
         raise
+
+
+def _write_staged_kit_rules(proposal: KitProposal) -> None:
+    """Write validated rules and preserve the kit's AGENTS.md block before publication."""
+    rules = _build_kit_rules(
+        proposal.slug,
+        proposal.declared_dirs,
+        proposal.placement_rules,
+        staging_dir=proposal.staging_dir,
+    )
+    try:
+        for folder in ("_inbox", ".adopt", *(d["dir"] for d in rules["declared_dirs"])):
+            safe_mkdirs(proposal.staged, folder)
+        if not os.path.lexists(proposal.staged / "_inbox" / ".gitkeep"):
+            safe_write_text(proposal.staged, "_inbox/.gitkeep", "")
+        safe_write_bytes(
+            proposal.staged,
+            ".adopt/rules.json",
+            (json.dumps(rules, indent=2) + "\n").encode("utf-8"),
+            overwrite=False,
+        )
+        _sync_staged_gitignore(proposal.staged, rules.get("ignore_patterns") or ())
+    except (SafetyError, OSError) as exc:
+        raise ScaffoldError(
+            f"Failed to write rules in staged kit {proposal.staged}: {exc}",
+            staging_dir=proposal.staging_dir,
+            keep_staging=True,
+        ) from exc
+
+    # (c) write_agents_md preserving kit block
+    try:
+        agents_res = write_agents_md(proposal.staged, rules, preserve_kit_blocks=True)
+    except (SafetyError, OSError, ValueError) as exc:
+        raise ScaffoldError(
+            f"Failed to write AGENTS.md in staged kit {proposal.staged}: {exc}",
+            staging_dir=proposal.staging_dir,
+            keep_staging=True,
+        ) from exc
+    dropped_kits = list(agents_res.get("kit_blocks_dropped") or ())
+    preserved_kits = list(agents_res.get("kit_blocks_preserved") or ())
+    if dropped_kits or proposal.kit_id not in preserved_kits:
+        raise ScaffoldError(
+            f"Kit {proposal.kit_id!r} AGENTS.md section is missing or damaged "
+            f"(preserved={preserved_kits}, dropped={dropped_kits})",
+            staging_dir=proposal.staging_dir,
+            keep_staging=True,
+        )
 
 
 def _finish_kit_accept(

@@ -250,6 +250,21 @@ def _reserve(proposal_id: str, home: str) -> tuple[str, _Job]:
         pending.claimed.wait(ACCEPT_INLINE_WAIT_S)
 
 
+def _failed_claim(job: _Job, proposal_id: str) -> None:
+    """Restore the prior answer and release requests waiting for a failed claim."""
+    with _JOBS_LOCK:
+        if _JOBS.get(proposal_id) is job:
+            if job.previous is not None:
+                _JOBS[proposal_id] = job.previous
+            else:
+                del _JOBS[proposal_id]
+        job.state = 'failed'
+        job.retryable = True  # nothing ran: a cancel waiting on it answers like "no job"
+        job.finished_at = time.monotonic()
+        job.claimed.set()
+        job.done.set()
+
+
 def accept_answer(proposal_id: str, home: str, *, claim: Callable[[], Any],
                   work: Callable[[Any, CancelToken], Any],
                   inline_wait_s: float | None = None) -> Any:
@@ -267,17 +282,7 @@ def accept_answer(proposal_id: str, home: str, *, claim: Callable[[], Any],
         try:
             claimed = claim()
         except BaseException:
-            with _JOBS_LOCK:
-                if _JOBS.get(proposal_id) is job:
-                    if job.previous is not None:
-                        _JOBS[proposal_id] = job.previous
-                    else:
-                        del _JOBS[proposal_id]
-                job.state = 'failed'
-                job.retryable = True  # nothing ran: a cancel waiting on it answers like "no job"
-                job.finished_at = time.monotonic()
-                job.claimed.set()
-                job.done.set()
+            _failed_claim(job, proposal_id)
             raise
         with _JOBS_LOCK:
             job.previous = None

@@ -1360,27 +1360,7 @@ def on_transform_tool_result(
         except (SafetyError, OSError):
             pass
 
-        if note_info.get("trust_mode") == TRUST_MODE_DECLARED_ONLY:
-            redirect_notice = _format_redirect_notice(
-                note_info["original_rel"],
-                note_info["placed_rel"],
-                note_info["reason"],
-            )
-            try:
-                parsed_decl = json.loads(result)
-                if isinstance(parsed_decl, dict):
-                    parsed_decl["placed_by_adopt"] = {
-                        "from": note_info["original_rel"],
-                        "to": note_info["placed_rel"],
-                        "kind": note_info["kind"],
-                        "note": redirect_notice,
-                    }
-                    parsed_decl["defuzz_notice"] = redirect_notice
-                    return json.dumps(parsed_decl)
-            except Exception:
-                pass
-            return f"{result}\n{redirect_notice}"
-
+        declared_only = note_info.get("trust_mode") == TRUST_MODE_DECLARED_ONLY
         note_text = _format_redirect_notice(
             note_info["original_rel"],
             note_info["placed_rel"],
@@ -1395,6 +1375,8 @@ def on_transform_tool_result(
                     "kind": note_info["kind"],
                     "note": note_text,
                 }
+                if declared_only:
+                    parsed["defuzz_notice"] = note_text
                 return json.dumps(parsed)
         except Exception:
             pass

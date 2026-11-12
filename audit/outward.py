@@ -939,6 +939,26 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         finally:
             current_path = previous
 
+    def start_directory_tree(path, explicit, parent_fd, referenced, fd):
+        starts_tree = False
+        if not unbounded:
+            if not in_subject(path) and _within_any(path, SYSTEM_ROOTS):
+                unknown('excluded: ' + str(path))
+                return
+            kind = None if explicit else skip_kind(path, fd, parent_fd)
+            if kind == 'skip':
+                prune(path)
+                return
+            if kind == 'venv':
+                prune(path)
+                venv_roots.append(path)
+            starts_tree = (referenced and explicit) or (not explicit and _exists('.git', fd))
+        if starts_tree:
+            tree_stack.append(({'path': str(path), 'entries_walked': 1, 'bytes_read': 0, 'truncated_by': None,
+                                'max_tree_entries': tree_entry_limit, 'max_bytes': tree_byte_limit,
+                                'max_seconds': tree_seconds}, time.monotonic()))
+        return starts_tree
+
     def _visit(path, depth=0, explicit=False, parent_fd=None, referenced=False):
         path = _absolute(path)
         if cancelled and cancelled():
@@ -993,23 +1013,9 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     if _identity(os.fstat(fd)) != _identity(info):
                         unknown('directory_changed_during_inspection: ' + str(path))
                         return
-                    starts_tree = False
-                    if not unbounded:
-                        if not in_subject(path) and _within_any(path, SYSTEM_ROOTS):
-                            unknown('excluded: ' + str(path))
-                            return
-                        kind = None if explicit else skip_kind(path, fd, parent_fd)
-                        if kind == 'skip':
-                            prune(path)
-                            return
-                        if kind == 'venv':
-                            prune(path)
-                            venv_roots.append(path)
-                        starts_tree = (referenced and explicit) or (not explicit and _exists('.git', fd))
-                    if starts_tree:
-                        tree_stack.append(({'path': str(path), 'entries_walked': 1, 'bytes_read': 0, 'truncated_by': None,
-                                            'max_tree_entries': tree_entry_limit, 'max_bytes': tree_byte_limit,
-                                            'max_seconds': tree_seconds}, time.monotonic()))
+                    starts_tree = start_directory_tree(path, explicit, parent_fd, referenced, fd)
+                    if starts_tree is None:
+                        return
                     in_venv = bool(venv_roots) and _within_any(path, venv_roots)
                     try:
                         with os.scandir(fd) as entries:

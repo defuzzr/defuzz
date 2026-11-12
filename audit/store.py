@@ -375,6 +375,30 @@ def _missing_unit_requirements(
     )
 
 
+def _upsert_unit_snapshot(conn: sqlite3.Connection, values: tuple[Any, ...]) -> None:
+    conn.execute(
+        """
+        INSERT INTO audit_units (
+            run_id, unit_kind, unit_id, unit_identity, sort_order, status,
+            coverage, stable, fingerprint_digest, manifest_version,
+            manifest_json, evidence_cache_key, evidence_json, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(run_id, unit_kind, unit_id) DO UPDATE SET
+            unit_identity = excluded.unit_identity,
+            status = excluded.status,
+            coverage = excluded.coverage,
+            stable = excluded.stable,
+            fingerprint_digest = excluded.fingerprint_digest,
+            manifest_version = excluded.manifest_version,
+            manifest_json = excluded.manifest_json,
+            evidence_cache_key = excluded.evidence_cache_key,
+            evidence_json = excluded.evidence_json,
+            updated_at = excluded.updated_at
+        """,
+        values,
+    )
+
+
 def _sync_evidence_cache(
     conn: sqlite3.Connection, unit_kind: str, unit_id: str, ctrl_id: str, unit_identity: Any,
     fp_digest: str, m_version: str, unit_cov: str, stable: bool, ev_key: str | None,
@@ -856,25 +880,8 @@ class AuditStore:
                 unit_status, unit_cov, ev_key = "incomplete", COVERAGE_COULD_NOT_VERIFY, None
 
             with conn:
-                conn.execute(
-                    """
-                    INSERT INTO audit_units (
-                        run_id, unit_kind, unit_id, unit_identity, sort_order, status,
-                        coverage, stable, fingerprint_digest, manifest_version,
-                        manifest_json, evidence_cache_key, evidence_json, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(run_id, unit_kind, unit_id) DO UPDATE SET
-                        unit_identity = excluded.unit_identity,
-                        status = excluded.status,
-                        coverage = excluded.coverage,
-                        stable = excluded.stable,
-                        fingerprint_digest = excluded.fingerprint_digest,
-                        manifest_version = excluded.manifest_version,
-                        manifest_json = excluded.manifest_json,
-                        evidence_cache_key = excluded.evidence_cache_key,
-                        evidence_json = excluded.evidence_json,
-                        updated_at = excluded.updated_at
-                    """,
+                _upsert_unit_snapshot(
+                    conn,
                     (
                         run_id, unit_kind, ctrl_id, unit_identity, sort_order,
                         unit_status, unit_cov, 1 if stable else 0,

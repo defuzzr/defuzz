@@ -970,6 +970,22 @@ def _taint_final(owner: _DeferredOwner | None) -> dict | None:
             'deferred': list(owner.sources) if owner is not None else []}
 
 
+def _rehome_redactions(redactions: dict, deferred: Any, state: Any) -> dict:
+    rehomed: dict = {}
+    for region, items in redactions.items():
+        if isinstance(region, str) and region.startswith(_DEFERRED):
+            try:
+                source = deferred[int(region[len(_DEFERRED):])]
+            except (IndexError, ValueError, TypeError):
+                raise BudgetExceeded('stopped') from None
+            # The region the parent's owner would have assigned in-process.
+            region = state.owner(source) if state.owner else 'shared_infrastructure'
+        if not isinstance(items, (set, frozenset, list, tuple)):
+            raise BudgetExceeded('stopped')
+        rehomed.setdefault(region, set()).update(items)
+    return rehomed
+
+
 def _merge_taint(final: Any) -> None:
     """Replace the parent's taint data with the child's final state, in place."""
     state = _taint_state()
@@ -979,19 +995,7 @@ def _merge_taint(final: Any) -> None:
     redactions = fields.get('redactions')
     if isinstance(redactions, dict):
         deferred = final.get('deferred') or []
-        rehomed: dict = {}
-        for region, items in redactions.items():
-            if isinstance(region, str) and region.startswith(_DEFERRED):
-                try:
-                    source = deferred[int(region[len(_DEFERRED):])]
-                except (IndexError, ValueError, TypeError):
-                    raise BudgetExceeded('stopped') from None
-                # The region the parent's owner would have assigned in-process.
-                region = state.owner(source) if state.owner else 'shared_infrastructure'
-            if not isinstance(items, (set, frozenset, list, tuple)):
-                raise BudgetExceeded('stopped')
-            rehomed.setdefault(region, set()).update(items)
-        fields['redactions'] = rehomed
+        fields['redactions'] = _rehome_redactions(redactions, deferred, state)
     for name, value in fields.items():
         if name.startswith('_') or name in _TAINT_SKIP:
             continue

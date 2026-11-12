@@ -25,6 +25,11 @@ def discover(home, directory_fd, issue, *, unbounded=False):
         except OSError:
             issue('home_startup_discovery_failed: ' + str(root))
 
+    def site_startup_files(site):
+        for name in entries(site):
+            if name in {'sitecustomize.py', 'usercustomize.py'} or name.endswith('.pth'):
+                yield site / name
+
     for name in (*SHELL_STARTUP_FILES, '.npmrc',
                  '.cargo/config.toml', '.pythonrc', '.netrc', '.pgpass',
                  '.git-credentials', '.docker/config.json',
@@ -43,15 +48,11 @@ def discover(home, directory_fd, issue, *, unbounded=False):
         if not re.fullmatch(r'python\d+\.\d+[a-z]*', version):
             continue
         site = lib / version / 'site-packages'
-        for name in entries(site):
-            if name in {'sitecustomize.py', 'usercustomize.py'} or name.endswith('.pth'):
-                yield site / name
+        yield from site_startup_files(site)
     # macOS framework Python keeps the user site in ~/Library/Python/X.Y.
     lib = home / 'Library/Python'
     for version in entries(lib):
         if not re.fullmatch(r'\d+\.\d+', version):
             continue
         site = lib / version / 'lib/python/site-packages'
-        for name in entries(site):
-            if name in {'sitecustomize.py', 'usercustomize.py'} or name.endswith('.pth'):
-                yield site / name
+        yield from site_startup_files(site)

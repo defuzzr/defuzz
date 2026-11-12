@@ -109,6 +109,36 @@ def _row_to_entry(row: sqlite3.Row) -> Dict[str, Any]:
     }
 
 
+def _upsert_entry(
+    conn: sqlite3.Connection,
+    ns: str,
+    k: str,
+    payload: str,
+    s: int,
+    ts: float,
+) -> bool:
+    cur = conn.execute(
+        """
+        INSERT INTO safe_state (namespace, key, value_json, seq, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(namespace, key) DO UPDATE SET
+            value_json = excluded.value_json,
+            seq = excluded.seq,
+            updated_at = excluded.updated_at
+        WHERE excluded.seq > safe_state.seq
+        """,
+        (ns, k, payload, s, ts),
+    )
+    return (cur.rowcount or 0) > 0
+
+
+def _select_entry(conn: sqlite3.Connection, ns: str, k: str) -> Optional[sqlite3.Row]:
+    return conn.execute(
+        "SELECT namespace, key, value_json, seq, updated_at FROM safe_state WHERE namespace = ? AND key = ?",
+        (ns, k),
+    ).fetchone()
+
+
 def save_state(
     db_path: os.PathLike | str,
     namespace: str,
@@ -132,23 +162,8 @@ def save_state(
 
     with closing(_connect(db_path)) as conn:
         with conn:
-            cur = conn.execute(
-                """
-                INSERT INTO safe_state (namespace, key, value_json, seq, updated_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(namespace, key) DO UPDATE SET
-                    value_json = excluded.value_json,
-                    seq = excluded.seq,
-                    updated_at = excluded.updated_at
-                WHERE excluded.seq > safe_state.seq
-                """,
-                (ns, k, payload, s, ts),
-            )
-            applied = (cur.rowcount or 0) > 0
-            row = conn.execute(
-                "SELECT namespace, key, value_json, seq, updated_at FROM safe_state WHERE namespace = ? AND key = ?",
-                (ns, k),
-            ).fetchone()
+            applied = _upsert_entry(conn, ns, k, payload, s, ts)
+            row = _select_entry(conn, ns, k)
 
     if row is None:
         return {
@@ -194,23 +209,8 @@ def save_batch(
     with closing(_connect(db_path)) as conn:
         with conn:
             for ns, k, payload, s, ts in prepared:
-                cur = conn.execute(
-                    """
-                    INSERT INTO safe_state (namespace, key, value_json, seq, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(namespace, key) DO UPDATE SET
-                        value_json = excluded.value_json,
-                        seq = excluded.seq,
-                        updated_at = excluded.updated_at
-                    WHERE excluded.seq > safe_state.seq
-                    """,
-                    (ns, k, payload, s, ts),
-                )
-                applied = (cur.rowcount or 0) > 0
-                row = conn.execute(
-                    "SELECT namespace, key, value_json, seq, updated_at FROM safe_state WHERE namespace = ? AND key = ?",
-                    (ns, k),
-                ).fetchone()
+                applied = _upsert_entry(conn, ns, k, payload, s, ts)
+                row = _select_entry(conn, ns, k)
                 assert row is not None
                 entry = _row_to_entry(row)
                 entry["applied"] = applied
@@ -230,10 +230,7 @@ def get_entry(
     if not target.exists():
         return None
     with closing(_connect(target)) as conn:
-        row = conn.execute(
-            "SELECT namespace, key, value_json, seq, updated_at FROM safe_state WHERE namespace = ? AND key = ?",
-            (ns, k),
-        ).fetchone()
+        row = _select_entry(conn, ns, k)
     if row is None:
         return None
     return _row_to_entry(row)

@@ -156,6 +156,43 @@ def _format_kits_unavailable_message(notice: str) -> str:
     )
 
 
+def _confirm_proposal(
+    confirm_cb: Callable[[Any], bool | None] | None,
+    prop: Any,
+    discard_fn: Callable[[Any], None],
+    remaining_fn: Callable[[], float],
+) -> tuple[float | None, tuple[str, str] | None]:
+    """Confirm a detached proposal and discard staging on any pre-accept failure."""
+    if confirm_cb is None:
+        discard_fn(prop)
+        return None, ("timeout", "New-project flow timed out waiting for confirmation")
+
+    try:
+        decision, err_msg = _invoke_decision_callback(
+            confirm_cb,
+            copy.deepcopy(prop),
+            remaining_fn=remaining_fn,
+            before_msg="New-project flow timed out after staging proposal",
+            wait_msg="New-project flow timed out waiting for confirmation",
+        )
+    except BaseException:
+        discard_fn(prop)
+        raise
+
+    if err_msg is not None:
+        discard_fn(prop)
+        return None, ("timeout", err_msg)
+    if not decision:
+        discard_fn(prop)
+        return None, ("declined", "Scaffold proposal declined; staging removed.")
+
+    rem = remaining_fn()
+    if rem <= 0:
+        discard_fn(prop)
+        return None, ("timeout", "New-project flow timed out before accepting proposal")
+    return rem, None
+
+
 def run_new_project_flow(
     *,
     ask: Optional[Callable[[Question, List[str]], Optional[Any]]] = None,
@@ -284,68 +321,19 @@ def run_new_project_flow(
         kit_proposal_val: Optional[KitProposal] = None,
         options_val: Optional[Mapping[str, str]] = None,
     ) -> Tuple[Optional[float], Optional[FlowResult]]:
-        if confirm_cb is None:
-            discard_fn(prop)
-            return None, _flow_result(
-                "timeout",
-                "New-project flow timed out waiting for confirmation",
-                matches_val=matches,
-                proposal_val=proposal_val,
-                options_val=options_val,
-                catalog_val=catalog_val,
-                kit_proposal_val=kit_proposal_val,
-            )
-
-        try:
-            decision, err_msg = _invoke_decision_callback(
-                confirm_cb,
-                copy.deepcopy(prop),
-                remaining_fn=remaining_fn,
-                before_msg="New-project flow timed out after staging proposal",
-                wait_msg="New-project flow timed out waiting for confirmation",
-            )
-        except BaseException:
-            discard_fn(prop)
-            raise
-
-        if err_msg is not None:
-            discard_fn(prop)
-            return None, _flow_result(
-                "timeout",
-                err_msg,
-                matches_val=matches,
-                proposal_val=proposal_val,
-                options_val=options_val,
-                catalog_val=catalog_val,
-                kit_proposal_val=kit_proposal_val,
-            )
-
-        if not decision:
-            discard_fn(prop)
-            return None, _flow_result(
-                "declined",
-                "Scaffold proposal declined; staging removed.",
-                matches_val=matches,
-                proposal_val=proposal_val,
-                options_val=options_val,
-                catalog_val=catalog_val,
-                kit_proposal_val=kit_proposal_val,
-            )
-
-        rem = remaining_fn()
-        if rem <= 0:
-            discard_fn(prop)
-            return None, _flow_result(
-                "timeout",
-                "New-project flow timed out before accepting proposal",
-                matches_val=matches,
-                proposal_val=proposal_val,
-                options_val=options_val,
-                catalog_val=catalog_val,
-                kit_proposal_val=kit_proposal_val,
-            )
-
-        return rem, None
+        rem, failure = _confirm_proposal(confirm_cb, prop, discard_fn, remaining_fn)
+        if failure is None:
+            return rem, None
+        status, message = failure
+        return None, _flow_result(
+            status,
+            message,
+            matches_val=matches,
+            proposal_val=proposal_val,
+            options_val=options_val,
+            catalog_val=catalog_val,
+            kit_proposal_val=kit_proposal_val,
+        )
 
     if prompt is not None and str(prompt).strip():
         rem = remaining_fn()

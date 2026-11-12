@@ -70,6 +70,36 @@ def _canonical(path: str) -> str:
     return os.path.realpath(os.path.expanduser(path))
 
 
+def _available_folders(record: dict, claimed_paths: set[str]) -> tuple[list[dict], set[str], str | None]:
+    """Validate and deduplicate a core project's folders, retaining the last I/O fault."""
+    folders: list[dict] = []
+    seen: set[str] = set()
+    error = None
+    for folder in record.get("folders") or ():
+        if not isinstance(folder, dict):
+            continue
+        raw = folder.get("path")
+        if not isinstance(raw, str) or not raw or "\x00" in raw:
+            continue
+        try:
+            canonical = _validated_existing_dir(raw)
+        except safety.SafetyError:
+            continue
+        except OSError as exc:
+            error = f"core project folder unavailable: {exc}"
+            continue
+        if canonical in seen or canonical in claimed_paths:
+            continue
+        seen.add(canonical)
+        folders.append({
+            "path": canonical,
+            "label": folder.get("label"),
+            "is_primary": bool(folder.get("is_primary")),
+            "exists": True,
+        })
+    return folders, seen, error
+
+
 def _available_projects() -> tuple[list[dict], str, str | None]:
     records, coverage, error = _read_core_projects()
     if coverage != "verified":
@@ -80,31 +110,10 @@ def _available_projects() -> tuple[list[dict], str, str | None]:
     for record in records:
         if record.get("archived"):
             continue
-        folders: list[dict] = []
-        seen: set[str] = set()
-        for folder in record.get("folders") or ():
-            if not isinstance(folder, dict):
-                continue
-            raw = folder.get("path")
-            if not isinstance(raw, str) or not raw or "\x00" in raw:
-                continue
-            try:
-                canonical = _validated_existing_dir(raw)
-            except safety.SafetyError:
-                continue
-            except OSError as exc:
-                coverage = "could_not_verify"
-                error = f"core project folder unavailable: {exc}"
-                continue
-            if canonical in seen or canonical in claimed_paths:
-                continue
-            seen.add(canonical)
-            folders.append({
-                "path": canonical,
-                "label": folder.get("label"),
-                "is_primary": bool(folder.get("is_primary")),
-                "exists": True,
-            })
+        folders, seen, folder_error = _available_folders(record, claimed_paths)
+        if folder_error is not None:
+            coverage = "could_not_verify"
+            error = folder_error
         if not folders:
             continue
 

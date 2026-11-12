@@ -2154,6 +2154,54 @@ def accept(
         raise out from exc
 
 
+def _prepare_staged_repos(
+    proposal: Proposal,
+    *,
+    now_fn: Callable[[], float],
+    deadline: float,
+    cancel: Any,
+    template_rules: Any,
+    progress: Callable[[str], None] | None,
+) -> list[dict[str, Any]]:
+    """Seed, check, and finalize every staged repository before any destination is moved."""
+    staged_outcomes: List[Dict[str, Any]] = []
+    for plan in proposal.repos:
+        _check_cancelled(cancel, proposal.staging_dir, step=f"before check {plan.name}")
+        _check_deadline(now_fn, deadline, f"before seed {plan.name}", staging_dir=proposal.staging_dir, keep_staging=True)
+        seed_summary = _seed_and_verify_tools(proposal, plan)
+
+        check_status: Optional[str] = None
+        check_returncode: Optional[int] = None
+        check_output: str = ""
+        if plan.check is not None:
+            _report_progress(progress, "check")
+            check_status, check_returncode, check_output = _run_staged_repo_check(
+                proposal,
+                plan,
+                now_fn=now_fn,
+                deadline=deadline,
+                cancel=cancel,
+                template_rules=template_rules,
+            )
+
+        _strip_build_caches(plan.staged)
+        if check_status != "ok":
+            plan.scaffold_rules_hash = _generate_scaffold_context(
+                plan.staged, _ascii_repo_name(proposal, plan), template_rules=template_rules
+            )
+
+        staged_outcomes.append(
+            {
+                "seed_summary": seed_summary,
+                "check_status": check_status,
+                "check_returncode": check_returncode,
+                "check_output": check_output,
+            }
+        )
+
+    return staged_outcomes
+
+
 def _accept_template(
     proposal: Proposal,
     *,
@@ -2197,40 +2245,10 @@ def _accept_template(
     effective_options = _refresh_proposal_options_on_accept(proposal, options, option_specs, locked_globs, db_path)
     template_rules = _resolve_template_rules_for_proposal(proposal)
 
-    staged_outcomes: List[Dict[str, Any]] = []
-    for plan in proposal.repos:
-        _check_cancelled(cancel, proposal.staging_dir, step=f"before check {plan.name}")
-        _check_deadline(now_fn, deadline, f"before seed {plan.name}", staging_dir=proposal.staging_dir, keep_staging=True)
-        seed_summary = _seed_and_verify_tools(proposal, plan)
-
-        check_status: Optional[str] = None
-        check_returncode: Optional[int] = None
-        check_output: str = ""
-        if plan.check is not None:
-            _report_progress(progress, "check")
-            check_status, check_returncode, check_output = _run_staged_repo_check(
-                proposal,
-                plan,
-                now_fn=now_fn,
-                deadline=deadline,
-                cancel=cancel,
-                template_rules=template_rules,
-            )
-
-        _strip_build_caches(plan.staged)
-        if check_status != "ok":
-            plan.scaffold_rules_hash = _generate_scaffold_context(
-                plan.staged, _ascii_repo_name(proposal, plan), template_rules=template_rules
-            )
-
-        staged_outcomes.append(
-            {
-                "seed_summary": seed_summary,
-                "check_status": check_status,
-                "check_returncode": check_returncode,
-                "check_output": check_output,
-            }
-        )
+    staged_outcomes = _prepare_staged_repos(
+        proposal, now_fn=now_fn, deadline=deadline, cancel=cancel,
+        template_rules=template_rules, progress=progress,
+    )
 
     accepted_repos: List[Dict[str, Any]] = []
     multi_repo = len(proposal.repos) > 1

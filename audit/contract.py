@@ -115,6 +115,29 @@ def _preflight_template_dir_declarations(entry_path: Path, repo_root: Path, stat
     done_dirs.add(entry_abs)
 
 
+def _load_golden_manifests(
+    eligible_entries: list[tuple[str, Path, Path]],
+    specs: dict[str, Any],
+    excluded: set[str],
+    invalid: dict[str, str],
+) -> None:
+    # Imported here: fingerprint imports this module at its top.
+    from .fingerprint import CredentialStoreNotOpened, open_checked
+
+    for entry_name, entry_path, yaml_path in eligible_entries:
+        if _credential_path(entry_path) or _credential_path(yaml_path):
+            excluded.add(entry_name)
+            continue
+        try:
+            # The opened template.yaml is checked again before a byte is read.
+            spec = _templates.load_template(entry_path, opener=open_checked)
+            specs[spec.id] = spec
+        except CredentialStoreNotOpened:
+            excluded.add(entry_name)
+        except (_templates.TemplateError, OSError, ValueError) as exc:
+            invalid[entry_name] = type(exc).__name__
+
+
 def resolve_runtime_golden_registry() -> dict[str, Any]:
     """Load and validate the golden template registry at run time after declaration preflight (cached per audit run)."""
     state = _REDACTION_CURRENT.get()
@@ -178,21 +201,7 @@ def resolve_runtime_golden_registry() -> dict[str, Any]:
 
     # Phase B: load template manifests using the finalized credential exclusion set.
     if registry_available:
-        # Imported here: fingerprint imports this module at its top.
-        from .fingerprint import CredentialStoreNotOpened, open_checked
-
-        for entry_name, entry_path, yaml_path in eligible_entries:
-            if _credential_path(entry_path) or _credential_path(yaml_path):
-                excluded.add(entry_name)
-                continue
-            try:
-                # The opened template.yaml is checked again before a byte is read.
-                spec = _templates.load_template(entry_path, opener=open_checked)
-                specs[spec.id] = spec
-            except CredentialStoreNotOpened:
-                excluded.add(entry_name)
-            except (_templates.TemplateError, OSError, ValueError) as exc:
-                invalid[entry_name] = type(exc).__name__
+        _load_golden_manifests(eligible_entries, specs, excluded, invalid)
 
     # Support test overrides of templates.load_templates when custom specs are injected.
     if callable(load_fn) and getattr(load_fn, "__name__", "") != "load_templates":
