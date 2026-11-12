@@ -603,16 +603,28 @@ def _log_stats(directory, root, archived, reference, budget):
     return result
 
 
-def _board_findings(b, source):
+def _merge_logs(total, measured):
+    """Fold one directory's _log_stats into the section total, in place."""
+    for key, value in measured.items():
+        total[key] = max(total[key], value) if key == 'largest_bytes' else total[key] + value
+
+
+def _board_findings(board, source):
+    """Findings for one measured board.
+
+    Precondition: the caller passes only boards that completed measurement
+    (``retry_context`` present) with ``tasks > 0``; several shares below divide
+    by ``board['tasks']`` without a guard.
+    """
     findings = []
-    cov = b['coverage']
-    top = b['retry_context']['growth_example']
+    cov = board['coverage']
+    top = board['retry_context']['growth_example']
     if top:
         # Flat numeric evidence only; a null ratio (zero first figure) is omitted.
         evidence = {k: top[k] for k in RETRY_EVIDENCE_KEYS if top.get(k) is not None}
-        evidence['growth_tasks'] = b['retry_context']['growth_tasks']
+        evidence['growth_tasks'] = board['retry_context']['growth_tasks']
         findings.append(_finding('retry_context_growth', evidence, 'review_suggested', cov, source))
-    loops, auth, mb, logs_b = b['loops'], b['authorship'], b['machine_binding'], b.get('logs', {})
+    loops, auth, mb, logs_b = board['loops'], board['authorship'], board['machine_binding'], board.get('logs', {})
     if loops['four_runs_without_completion'] or loops['repeated_block_threshold']:
         findings.append(_finding('blocked_loops', {
             'four_runs_without_completion': loops['four_runs_without_completion'],
@@ -620,24 +632,24 @@ def _board_findings(b, source):
             'repeated_block_nonzero': loops['repeated_block_nonzero'],
             'max_block_recurrences': loops['max_block_recurrences'],
             'repeated_block_limit': BLOCK_THRESHOLD}, 'review_suggested', cov, source))
-    if (b['tasks'] >= AGENT_MIN_TASKS and auth['coverage'] == 'verified' and
-            auth['tasks']['agent'] / b['tasks'] >= AGENT_SHARE):
+    if (board['tasks'] >= AGENT_MIN_TASKS and auth['coverage'] == 'verified' and
+            auth['tasks']['agent'] / board['tasks'] >= AGENT_SHARE):
         findings.append(_finding('agent_authored_board', {
-            'tasks': b['tasks'], 'agent_tasks': auth['tasks']['agent'], 'user_tasks': auth['tasks']['user'],
+            'tasks': board['tasks'], 'agent_tasks': auth['tasks']['agent'], 'user_tasks': auth['tasks']['user'],
             'unclassified_tasks': auth['tasks']['unclassified']}, 'info', cov, source))
-    aged = b['archived_share'] >= ARCHIVED_SHARE and b['gc_eligible_events'] > 0
+    aged = board['archived_share'] >= ARCHIVED_SHARE and board['gc_eligible_events'] > 0
     archived_logs = logs_b.get('archived_bytes', 0)
     if aged or archived_logs > ARCHIVED_LOG_BYTES:
         findings.append(_finding('archived_never_collected', {
-            'archived_share': b['archived_share'], 'gc_eligible_events': b['gc_eligible_events'],
+            'archived_share': board['archived_share'], 'gc_eligible_events': board['gc_eligible_events'],
             'archived_log_bytes': archived_logs}, 'review_suggested', cov, source))
-    if b['events'] >= HEARTBEAT_MIN_EVENTS and b['heartbeat_share'] > HEARTBEAT_SHARE:
+    if board['events'] >= HEARTBEAT_MIN_EVENTS and board['heartbeat_share'] > HEARTBEAT_SHARE:
         findings.append(_finding('heartbeat_bloat', {
-            'events': b['events'], 'heartbeat_events': b['heartbeat_events'],
-            'heartbeat_share': b['heartbeat_share']}, 'info', cov, source))
-    if loops['never_run_older_than_seven_days'] / b['tasks'] > NEVER_RUN_SHARE:
+            'events': board['events'], 'heartbeat_events': board['heartbeat_events'],
+            'heartbeat_share': board['heartbeat_share']}, 'info', cov, source))
+    if loops['never_run_older_than_seven_days'] / board['tasks'] > NEVER_RUN_SHARE:
         findings.append(_finding('never_run_backlog', {
-            'tasks': b['tasks'], 'never_run': loops['never_run'],
+            'tasks': board['tasks'], 'never_run': loops['never_run'],
             'never_run_older_than_seven_days': loops['never_run_older_than_seven_days']}, 'info', cov, source))
     # Hermes's own scratch root holds every scratch task's path by design,
     # so only paths elsewhere inside the home count toward the trigger.
@@ -647,13 +659,46 @@ def _board_findings(b, source):
             'workspaces_inside_home': mb['workspaces_inside_home'],
             'workspaces_in_kanban_scratch_root': mb['workspaces_in_kanban_scratch_root'],
             'workspaces_outside_kanban_scratch_root': other_ws}, 'review_suggested', cov, source))
-    if (mb['bodies_with_home_paths'] / b['tasks'] > MACHINE_SHARE or
-            mb['comments_with_home_paths'] / max(1, b['comments']) > MACHINE_SHARE):
+    if (mb['bodies_with_home_paths'] / board['tasks'] > MACHINE_SHARE or
+            mb['comments_with_home_paths'] / max(1, board['comments']) > MACHINE_SHARE):
         findings.append(_finding('machine_paths_in_tasks', {
-            'tasks': b['tasks'], 'comments': b['comments'],
+            'tasks': board['tasks'], 'comments': board['comments'],
             'bodies_with_home_paths': mb['bodies_with_home_paths'],
             'comments_with_home_paths': mb['comments_with_home_paths']}, 'info', cov, source))
     return findings
+
+
+def _measure_board(partial, path, log_dir, *, root, home, budget, reference_time, logs):
+    """Measure one board DB into `partial` (already listed) and fold its logs
+    into `logs`. Per-board failures become cuts; _Stop propagates."""
+    before_cuts = budget.cuts
+    try:
+        with _open_user_db(path) as (conn, identity):
+            conn.set_progress_handler(budget.progress, 1000)
+            conn.execute('PRAGMA trusted_schema=OFF')
+            if not _schema(conn):
+                budget.cut('schema_unsupported')
+                return
+            result, archived, reference = _measure(conn, root, home, budget, reference_time, partial)
+            after = stat_db_identity(path)
+            if (_db_or_wal_changed(identity, after) or
+                    os.path.lexists(str(path) + '-journal')):
+                budget.cut('database_changed')
+        partial.update(result, status='completed')
+        measured_logs = _log_stats(log_dir, root, archived, reference, budget)
+        _merge_logs(logs, measured_logs)
+        partial['logs'] = measured_logs
+        partial['coverage'] = 'could_not_verify' if budget.cuts > before_cuts else 'verified'
+    except _BoardStop:
+        pass  # cut already recorded; the remaining boards are still measured
+    except ReadOnlyDbError as exc:
+        if budget.cuts == before_cuts:
+            reason = getattr(exc, 'reason', None)
+            budget.cut(reason if reason in OPENER_REASONS else
+                       'database_in_use' if _busy(exc) else 'database_unreadable')
+    except (sqlite3.Error, OSError, ValueError, TypeError) as exc:
+        if budget.cuts == before_cuts:
+            budget.cut('database_in_use' if _busy(exc) else 'database_unreadable')
 
 
 def audit_kanban_residue(*, profile_path, db_path=None, reference_time=None, home_path=None, clock=None):
@@ -707,50 +752,21 @@ def audit_kanban_residue(*, profile_path, db_path=None, reference_time=None, hom
                 orphan += 1
                 extra_log_dirs.append(folder / 'logs')
         for directory in extra_log_dirs:
-            measured = _log_stats(directory, root, set(), reference_time, budget)
-            for key, value in measured.items():
-                logs[key] = max(logs[key], value) if key == 'largest_bytes' else logs[key] + value
+            _merge_logs(logs, _log_stats(directory, root, set(), reference_time, budget))
         for name, archived_board, path, log_dir in candidates:
             budget.check()
-            before_cuts = budget.cuts
             partial = {'board': 'default' if name == 'default' else 'named_board', 'path': str(path),
                        'archived_board': archived_board, 'coverage': 'could_not_verify', 'status': 'not_measured'}
             sources[id(partial)] = str(path)
             boards.append(partial)
-            try:
-                with _open_user_db(path) as (conn, identity):
-                    conn.set_progress_handler(budget.progress, 1000)
-                    conn.execute('PRAGMA trusted_schema=OFF')
-                    if not _schema(conn):
-                        budget.cut('schema_unsupported')
-                        continue
-                    result, archived, reference = _measure(conn, root, home, budget, reference_time, partial)
-                    after = stat_db_identity(path)
-                    if (_db_or_wal_changed(identity, after) or
-                            os.path.lexists(str(path) + '-journal')):
-                        budget.cut('database_changed')
-                partial.update(result, status='completed')
-                measured_logs = _log_stats(log_dir, root, archived, reference, budget)
-                for key, value in measured_logs.items():
-                    logs[key] = max(logs[key], value) if key == 'largest_bytes' else logs[key] + value
-                partial['logs'] = measured_logs
-                partial['coverage'] = 'could_not_verify' if budget.cuts > before_cuts else 'verified'
-            except _BoardStop:
-                pass  # cut already recorded; the remaining boards are still measured
-            except ReadOnlyDbError as exc:
-                if budget.cuts == before_cuts:
-                    reason = getattr(exc, 'reason', None)
-                    budget.cut(reason if reason in OPENER_REASONS else
-                               'database_in_use' if _busy(exc) else 'database_unreadable')
-            except (sqlite3.Error, OSError, ValueError, TypeError) as exc:
-                if budget.cuts == before_cuts:
-                    budget.cut('database_in_use' if _busy(exc) else 'database_unreadable')
+            _measure_board(partial, path, log_dir, root=root, home=home, budget=budget,
+                           reference_time=reference_time, logs=logs)
     except _Stop:
         pass
-    for b in boards:
-        if 'retry_context' not in b or not b.get('tasks'):
+    for board in boards:
+        if 'retry_context' not in board or not board.get('tasks'):
             continue
-        findings.extend(_board_findings(b, sources.get(id(b), 'kanban.db')))
+        findings.extend(_board_findings(board, sources.get(id(board), 'kanban.db')))
     if orphan:
         findings.append(_finding('orphan_board_folders', {'orphan_board_folders': orphan}, 'info',
                                  source=str(root / 'kanban/boards')))

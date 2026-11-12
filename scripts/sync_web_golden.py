@@ -215,7 +215,7 @@ def main(argv: List[str] | None = None) -> int:
     return 0
 
 
-def _sync_files(want: dict[str, bytes], have: dict[str, bytes]) -> None:
+def _sync_files(want: Dict[str, bytes], have: Dict[str, bytes]) -> None:
     """Apply the expected files and remove obsolete files and empty folders."""
     for name in sorted(set(have) - set(want)):
         (DEST / name).unlink()

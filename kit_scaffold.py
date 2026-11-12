@@ -1408,59 +1408,12 @@ def accept_kit(
             keep_staging=True,
         )
 
-    # (a) bridge.kit_check on staged folder
-    _check_cancelled(cancel, proposal.staging_dir, step=f"check {proposal.slug}")
-    _verify_kit_stage(getattr(proposal, "stage", None), proposal.staged, keep_staging=True)
-    rem_check = _check_deadline(
-        now_fn,
-        deadline,
-        f"before check {proposal.slug}",
-        staging_dir=proposal.staging_dir,
-        keep_staging=True,
+    _check_staged_kit_for_accept(
+        proposal, bridge=eff_bridge, cancel=cancel, now_fn=now_fn, deadline=deadline
     )
-    # A cancel hook reaches the companion run only when kit_check takes one (it stops the run).
-    check_kw: Dict[str, Any] = {"cancel": cancel} if cancel is not None and _accepts_kw(eff_bridge.kit_check, "cancel") else {}
-    if _accepts_timeout(eff_bridge.kit_check):
-        check_res = eff_bridge.kit_check(proposal.kit_id, proposal.staged, timeout=rem_check, **check_kw)
-    else:
-        check_res = eff_bridge.kit_check(proposal.kit_id, proposal.staged, **check_kw)
-    _check_cancelled(cancel, proposal.staging_dir, step=f"check {proposal.slug}")
-    try:
-        _verify_bridge_envelope(
-            "check",
-            proposal.kit_id,
-            check_res,
-            staging_dir=proposal.staging_dir,
-            keep_staging=True,
-        )
-    except KitUnavailable:
-        raise
-    except ScaffoldError as exc:
-        # The shown message is the only check text classified; the note adds constant words only.
-        shown = str(exc)
-        if not looks_like_network_failure(shown):
-            raise
-        untouched = not _same_or_inside(
-            os.path.abspath(proposal.staging_dir), os.path.abspath(proposal.dest.parent)
-        )
-        raise ScaffoldError(
-            f"{shown}\n{network_required_note(projects_untouched=untouched)}",
-            staging_dir=proposal.staging_dir,
-            keep_staging=True,
-            reason=NETWORK_REQUIRED_REASON,
-        ) from exc
-    _check_cancelled(cancel, proposal.staging_dir, step=f"after check {proposal.slug}")
-    _check_deadline(
-        now_fn,
-        deadline,
-        f"after check {proposal.slug}",
-        staging_dir=proposal.staging_dir,
-        keep_staging=True,
-    )
-
     _write_staged_kit_rules(proposal)
 
-    # (d) fail if destination now exists; move staged to destination
+    # fail if destination now exists; move staged to destination
     _check_cancelled(cancel, proposal.staging_dir, step=f"before move {proposal.slug}")
     _check_deadline(
         now_fn,
@@ -1519,6 +1472,66 @@ def accept_kit(
         raise
 
 
+def _check_staged_kit_for_accept(
+    proposal: KitProposal,
+    *,
+    bridge: Any,
+    cancel: Any,
+    now_fn: Callable[[], float],
+    deadline: float,
+) -> None:
+    """Check the staged kit with the companion, preserving cancellation and timeout checks."""
+    _check_cancelled(cancel, proposal.staging_dir, step=f"check {proposal.slug}")
+    _verify_kit_stage(getattr(proposal, "stage", None), proposal.staged, keep_staging=True)
+    rem_check = _check_deadline(
+        now_fn,
+        deadline,
+        f"before check {proposal.slug}",
+        staging_dir=proposal.staging_dir,
+        keep_staging=True,
+    )
+    # A cancel hook reaches the companion run only when kit_check takes one (it stops the run).
+    check_kw: Dict[str, Any] = {"cancel": cancel} if cancel is not None and _accepts_kw(bridge.kit_check, "cancel") else {}
+    if _accepts_timeout(bridge.kit_check):
+        check_res = bridge.kit_check(proposal.kit_id, proposal.staged, timeout=rem_check, **check_kw)
+    else:
+        check_res = bridge.kit_check(proposal.kit_id, proposal.staged, **check_kw)
+    _check_cancelled(cancel, proposal.staging_dir, step=f"check {proposal.slug}")
+    try:
+        _verify_bridge_envelope(
+            "check",
+            proposal.kit_id,
+            check_res,
+            staging_dir=proposal.staging_dir,
+            keep_staging=True,
+        )
+    except KitUnavailable:
+        raise
+    except ScaffoldError as exc:
+        # The shown message is the only check text classified; the note adds constant words only.
+        shown = str(exc)
+        if not looks_like_network_failure(shown):
+            raise
+        untouched = not _same_or_inside(
+            os.path.abspath(proposal.staging_dir), os.path.abspath(proposal.dest.parent)
+        )
+        raise ScaffoldError(
+            f"{shown}\n{network_required_note(projects_untouched=untouched)}",
+            staging_dir=proposal.staging_dir,
+            keep_staging=True,
+            reason=NETWORK_REQUIRED_REASON,
+        ) from exc
+    _check_cancelled(cancel, proposal.staging_dir, step=f"after check {proposal.slug}")
+    _check_deadline(
+        now_fn,
+        deadline,
+        f"after check {proposal.slug}",
+        staging_dir=proposal.staging_dir,
+        keep_staging=True,
+    )
+
+
+
 def _write_staged_kit_rules(proposal: KitProposal) -> None:
     """Write validated rules and preserve the kit's AGENTS.md block before publication."""
     rules = _build_kit_rules(
@@ -1546,7 +1559,7 @@ def _write_staged_kit_rules(proposal: KitProposal) -> None:
             keep_staging=True,
         ) from exc
 
-    # (c) write_agents_md preserving kit block
+    # write_agents_md preserving kit block
     try:
         agents_res = write_agents_md(proposal.staged, rules, preserve_kit_blocks=True)
     except (SafetyError, OSError, ValueError) as exc:
@@ -1586,7 +1599,7 @@ def _finish_kit_accept(
         else resolve_plugin_commit()
     )
 
-    # (e) initialize git repository and create single initial commit
+    # initialize git repository and create single initial commit
     commit_sha = _init_and_commit_dest_repo(
         git,
         proposal.dest,
@@ -1597,7 +1610,7 @@ def _finish_kit_accept(
         accepted_repos=accepted_repos,
     )
 
-    # (f) attempt project registration
+    # attempt project registration
     _check_deadline(now_fn, deadline, f"before register {proposal.slug}", created_dirs=created_dirs)
     reg_name = proposal.display_name or proposal.slug
     reg_status, registration_reason, hermes_project_id = _attempt_project_registration(
@@ -1605,7 +1618,7 @@ def _finish_kit_accept(
     )
     _check_deadline(now_fn, deadline, f"after register {proposal.slug}", created_dirs=created_dirs)
 
-    # (g) record project in state_store with rules_hash so placement trusts it
+    # record project in state_store with rules_hash so placement trusts it
     try:
         rules_hash = compute_rules_hash(proposal.dest)
         record_project(
@@ -1643,7 +1656,7 @@ def _finish_kit_accept(
         repo_entry["registration_reason"] = registration_reason
     accepted_repos.append(repo_entry)
 
-    # (h) save answers
+    # save answers
     try:
         answers_id = save_answers(proposal.answers, project_path=str(proposal.dest), db_path=db_path)
     except Exception as exc:
@@ -1654,7 +1667,7 @@ def _finish_kit_accept(
         )
     _check_deadline(now_fn, deadline, "after save_answers", created_dirs=created_dirs)
 
-    # (i) remove staging directory (the project exists now: a foreign stage name is left alone, not an error)
+    # remove staging directory (the project exists now: a foreign stage name is left alone, not an error)
     stage = getattr(proposal, "stage", None)
     if stage is not None:
         if stage.parent_fd is not None:

@@ -157,11 +157,11 @@ def _format_kits_unavailable_message(notice: str) -> str:
 
 
 def _confirm_proposal(
-    confirm_cb: Callable[[Any], bool | None] | None,
+    confirm_cb: Optional[Callable[[Any], Optional[bool]]],
     prop: Any,
     discard_fn: Callable[[Any], None],
     remaining_fn: Callable[[], float],
-) -> tuple[float | None, tuple[str, str] | None]:
+) -> Tuple[Optional[float], Optional[Tuple[str, str]]]:
     """Confirm a detached proposal and discard staging on any pre-accept failure."""
     if confirm_cb is None:
         discard_fn(prop)

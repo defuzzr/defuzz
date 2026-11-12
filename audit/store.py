@@ -340,15 +340,19 @@ def _build_run_inventory(
     }
 
 
+# Continuation lines are indented to match the f-string placeholder so the SQL text stays byte-identical.
+_AUDIT_UNIT_INSERT_COLUMNS = """run_id, unit_kind, unit_id, unit_identity, sort_order, status,
+            coverage, stable, fingerprint_digest, manifest_version,
+            manifest_json, evidence_cache_key, evidence_json, updated_at"""
+
+
 def _insert_pending_unit(
     conn: sqlite3.Connection, run_id: str, unit_kind: str, unit_id: str, sort_order: int, now: int
 ) -> None:
     conn.execute(
-        """
+        f"""
         INSERT INTO audit_units (
-            run_id, unit_kind, unit_id, unit_identity, sort_order, status,
-            coverage, stable, fingerprint_digest, manifest_version,
-            manifest_json, evidence_cache_key, evidence_json, updated_at
+            {_AUDIT_UNIT_INSERT_COLUMNS}
         ) VALUES (?, ?, ?, ?, ?, 'pending', ?, 1, NULL, ?, NULL, NULL, NULL, ?)
         """,
         (
@@ -376,12 +380,14 @@ def _missing_unit_requirements(
 
 
 def _upsert_unit_snapshot(conn: sqlite3.Connection, values: tuple[Any, ...]) -> None:
+    """Upsert values in audit_units INSERT column order.
+
+    The tuple holds one value per column of _AUDIT_UNIT_INSERT_COLUMNS, in order.
+    """
     conn.execute(
-        """
+        f"""
         INSERT INTO audit_units (
-            run_id, unit_kind, unit_id, unit_identity, sort_order, status,
-            coverage, stable, fingerprint_digest, manifest_version,
-            manifest_json, evidence_cache_key, evidence_json, updated_at
+            {_AUDIT_UNIT_INSERT_COLUMNS}
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(run_id, unit_kind, unit_id) DO UPDATE SET
             unit_identity = excluded.unit_identity,

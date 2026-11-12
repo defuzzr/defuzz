@@ -110,6 +110,7 @@ def _row_to_entry(row: sqlite3.Row) -> Dict[str, Any]:
 
 
 def _upsert_entry(
+    *,
     conn: sqlite3.Connection,
     ns: str,
     k: str,
@@ -117,6 +118,7 @@ def _upsert_entry(
     s: int,
     ts: float,
 ) -> bool:
+    """Return True only if the sequence guard allowed an insert or update."""
     cur = conn.execute(
         """
         INSERT INTO safe_state (namespace, key, value_json, seq, updated_at)
@@ -162,7 +164,7 @@ def save_state(
 
     with closing(_connect(db_path)) as conn:
         with conn:
-            applied = _upsert_entry(conn, ns, k, payload, s, ts)
+            applied = _upsert_entry(conn=conn, ns=ns, k=k, payload=payload, s=s, ts=ts)
             row = _select_entry(conn, ns, k)
 
     if row is None:
@@ -209,7 +211,7 @@ def save_batch(
     with closing(_connect(db_path)) as conn:
         with conn:
             for ns, k, payload, s, ts in prepared:
-                applied = _upsert_entry(conn, ns, k, payload, s, ts)
+                applied = _upsert_entry(conn=conn, ns=ns, k=k, payload=payload, s=s, ts=ts)
                 row = _select_entry(conn, ns, k)
                 assert row is not None
                 entry = _row_to_entry(row)

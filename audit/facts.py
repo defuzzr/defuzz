@@ -1437,11 +1437,40 @@ def _truncate_context_text_facts(
     return rendered, True
 
 
+def _allocate_truncated_shares(
+    active_files: list[dict[str, Any]], total_injected_chars: int
+) -> None:
+    """Allocate a truncated total in four-character shares, with remainder last."""
+    n = len(active_files)
+    per_share = ((total_injected_chars // n) // 4) * 4 if n > 1 else total_injected_chars
+    allocated = 0
+    for idx, d in enumerate(active_files):
+        d["truncated"] = True
+        if idx < n - 1:
+            d["injected_chars"] = per_share
+            allocated += per_share
+        else:
+            d["injected_chars"] = total_injected_chars - allocated
+
+
+def _apply_single_context_accounting(
+    d: dict[str, Any], body: str, filename: str, context_max_chars: int, f_path: Path
+) -> int:
+    """Mutate one file's accounting and return its injected size."""
+    rendered, was_trunc = _truncate_context_text_facts(
+        body, filename, context_max_chars, read_path=str(f_path)
+    )
+    d["truncated"] = was_trunc
+    d["injected_chars"] = len(rendered) if was_trunc else int(d["char_count"])
+    return d["injected_chars"]
+
+
 def _apply_agents_chain_accounting(
     active_files: list[dict[str, Any]],
     context_max_chars: int,
     cwd_abs: Path | None,
 ) -> int:
+    """Mutate active files' truncation accounting and return the injected chain size."""
     cwd_res = (cwd_abs if cwd_abs is not None else Path(active_files[-1]["path"]).parent).resolve()
     sections: list[str] = []
     per_file_trunc: list[bool] = []
@@ -1476,16 +1505,7 @@ def _apply_agents_chain_accounting(
             total_injected_chars = sum(per_file_inj)
         else:
             total_injected_chars = len(chain_rendered)
-            n = len(active_files)
-            per_share = ((total_injected_chars // n) // 4) * 4
-            allocated = 0
-            for idx, d in enumerate(active_files):
-                d["truncated"] = True
-                if idx < n - 1:
-                    d["injected_chars"] = per_share
-                    allocated += per_share
-                else:
-                    d["injected_chars"] = total_injected_chars - allocated
+            _allocate_truncated_shares(active_files, total_injected_chars)
 
     return total_injected_chars
 
@@ -1533,24 +1553,18 @@ def _apply_context_precedence(
         label = str(f_path.relative_to(cwd_res)) if f_path.is_relative_to(cwd_res) else f_path.name
         txt = _strip_yaml_frontmatter_facts(str(d.get("_text") or "")).removeprefix("\ufeff")
         body = f"## {label}\n\n{txt}"
-        rendered, was_trunc = _truncate_context_text_facts(
-            body, ".hermes.md", context_max_chars, read_path=str(f_path)
+        total_injected_chars = _apply_single_context_accounting(
+            d, body, ".hermes.md", context_max_chars, f_path
         )
-        d["truncated"] = was_trunc
-        d["injected_chars"] = len(rendered) if was_trunc else int(d["char_count"])
-        total_injected_chars = d["injected_chars"]
     elif active_files and winning_kind == "claude_md":
         d = active_files[0]
         f_path = Path(d["path"]).resolve()
         name = str(d.get("rel_name") or f_path.name)
         txt = str(d.get("_text") or "").removeprefix("\ufeff")
         body = f"## {name}\n\n{txt}"
-        rendered, was_trunc = _truncate_context_text_facts(
-            body, "CLAUDE.md", context_max_chars, read_path=str(f_path)
+        total_injected_chars = _apply_single_context_accounting(
+            d, body, "CLAUDE.md", context_max_chars, f_path
         )
-        d["truncated"] = was_trunc
-        d["injected_chars"] = len(rendered) if was_trunc else int(d["char_count"])
-        total_injected_chars = d["injected_chars"]
     elif active_files and winning_kind == "cursorrules":
         cwd_res = (cwd_abs if cwd_abs is not None else Path(active_files[0]["path"]).parent).resolve()
         cursorrules_content = "".join(
@@ -1570,16 +1584,7 @@ def _apply_context_precedence(
             total_injected_chars = sum(d["injected_chars"] for d in active_files)
         else:
             total_injected_chars = len(rendered)
-            n = len(active_files)
-            per_share = ((total_injected_chars // n) // 4) * 4 if n > 1 else total_injected_chars
-            allocated = 0
-            for idx, d in enumerate(active_files):
-                d["truncated"] = True
-                if idx < n - 1:
-                    d["injected_chars"] = per_share
-                    allocated += per_share
-                else:
-                    d["injected_chars"] = total_injected_chars - allocated
+            _allocate_truncated_shares(active_files, total_injected_chars)
     elif active_files and winning_kind == "agents_md":
         total_injected_chars = _apply_agents_chain_accounting(active_files, context_max_chars, cwd_abs)
 

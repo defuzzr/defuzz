@@ -974,7 +974,7 @@ def _scope_notes(report: Mapping) -> list[str]:
 
 def _summarize_fixed_sections(rep: Mapping, raw_findings: list, grouped: dict,
                               home: str | None) -> tuple[list, list, set]:
-    """Build the ordered sections and track their measurement status."""
+    """Return ordered sections, unmeasured entries, and measured section names."""
     sections, not_measured, measured_names = [], [], set()
     for name in SECTION_ORDER:
         sec = rep.get(name)
@@ -999,28 +999,8 @@ def _summarize_fixed_sections(rep: Mapping, raw_findings: list, grouped: dict,
     return sections, not_measured, measured_names
 
 
-def summarize(report: Any, home: str | None = None) -> dict:
-    """Build the plain summary of a sealed audit report. Never raises."""
-    rep = report if isinstance(report, Mapping) else {}
-    raw_findings = rep.get('findings') if isinstance(rep.get('findings'), list) else []
-    counts = {c: 0 for c in CLASS_ORDER}
-    other = 0
-    rule_ids: set = set()
-    for f in raw_findings:
-        cls = _classification(f.get('classification')) if isinstance(f, Mapping) else None
-        if cls is not None:
-            counts[cls] += 1
-            if isinstance(f.get('id'), str):
-                rule_ids.add(f['id'])
-            if _section_of(f.get('id')) not in SECTION_TITLES:
-                other += 1
-    try:
-        grouped = _group_findings(raw_findings)
-    except Exception:  # noqa: BLE001 - a summary must never fail
-        grouped = {}
-
-    sections, not_measured, measured_names = _summarize_fixed_sections(
-        rep, raw_findings, grouped, home)
+def _summarize_other_sections(rep: Mapping, raw_findings: list, sections: list,
+                              not_measured: list) -> None:
     # Checks outside the fixed order are never dropped: stored sections first, then checks
     # known only from their findings, each with its status and reason.
     stored = sorted(k for k, v in rep.items() if isinstance(k, str) and _TOKEN_RE.match(k)
@@ -1052,6 +1032,31 @@ def summarize(report: Any, home: str | None = None) -> dict:
             'reason': reason, 'coverage': coverage, 'headline': OTHER_HEADLINE if measured else None,
             'numbers': {}, 'findings': {c: grouped_other.get(name, {}).get(c, []) for c in CLASS_ORDER},
         })
+
+
+def summarize(report: Any, home: str | None = None) -> dict:
+    """Build the plain summary of a sealed audit report. Never raises."""
+    rep = report if isinstance(report, Mapping) else {}
+    raw_findings = rep.get('findings') if isinstance(rep.get('findings'), list) else []
+    counts = {c: 0 for c in CLASS_ORDER}
+    other = 0
+    rule_ids: set = set()
+    for f in raw_findings:
+        cls = _classification(f.get('classification')) if isinstance(f, Mapping) else None
+        if cls is not None:
+            counts[cls] += 1
+            if isinstance(f.get('id'), str):
+                rule_ids.add(f['id'])
+            if _section_of(f.get('id')) not in SECTION_TITLES:
+                other += 1
+    try:
+        grouped = _group_findings(raw_findings)
+    except Exception:  # noqa: BLE001 - a summary must never fail
+        grouped = {}
+
+    sections, not_measured, measured_names = _summarize_fixed_sections(
+        rep, raw_findings, grouped, home)
+    _summarize_other_sections(rep, raw_findings, sections, not_measured)
     try:
         biggest = _biggest_items(rep, measured_names, home)
     except Exception:  # noqa: BLE001

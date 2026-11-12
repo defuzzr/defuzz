@@ -70,8 +70,8 @@ def _canonical(path: str) -> str:
     return os.path.realpath(os.path.expanduser(path))
 
 
-def _available_folders(record: dict, claimed_paths: set[str]) -> tuple[list[dict], set[str], str | None]:
-    """Validate and deduplicate a core project's folders, retaining the last I/O fault."""
+def _available_folders(record: dict, claimed_paths: set[str]) -> tuple[list[dict], str | None]:
+    """Validate and deduplicate a core project's folders."""
     folders: list[dict] = []
     seen: set[str] = set()
     error = None
@@ -97,10 +97,11 @@ def _available_folders(record: dict, claimed_paths: set[str]) -> tuple[list[dict
             "is_primary": bool(folder.get("is_primary")),
             "exists": True,
         })
-    return folders, seen, error
+    return folders, error
 
 
 def _available_projects() -> tuple[list[dict], str, str | None]:
+    """Collect projects; the last folder/primary I/O error in traversal order wins."""
     records, coverage, error = _read_core_projects()
     if coverage != "verified":
         return [], coverage, error
@@ -110,13 +111,14 @@ def _available_projects() -> tuple[list[dict], str, str | None]:
     for record in records:
         if record.get("archived"):
             continue
-        folders, seen, folder_error = _available_folders(record, claimed_paths)
+        folders, folder_error = _available_folders(record, claimed_paths)
         if folder_error is not None:
             coverage = "could_not_verify"
             error = folder_error
         if not folders:
             continue
 
+        seen = {folder["path"] for folder in folders}
         primary = record.get("primary_path")
         primary_canonical = None
         if isinstance(primary, str) and primary:

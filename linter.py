@@ -296,6 +296,16 @@ def _load_json_payload(
     return (parsed, True) if parsed is not None else (None, False)
 
 
+def _items_under_key(key: str, *, allow_list: bool = False) -> Callable[[Any], Any]:
+    """Build a `_parse_json_items` extractor: `data[key]` for a dict, else a bare list if allowed."""
+    def _extract(data: Any) -> Any:
+        if isinstance(data, dict):
+            return data.get(key)
+        return data if allow_list and isinstance(data, list) else None
+
+    return _extract
+
+
 def _parse_json_items(
     inp: ParseInput,
     extract_items: Callable[[Any], Any],
@@ -525,7 +535,7 @@ def _parse_biome_json(inp: ParseInput) -> list[dict[str, Any]]:
 
     return _parse_json_items(
         inp,
-        lambda d: d.get("diagnostics") if isinstance(d, dict) else None,
+        _items_under_key("diagnostics"),
         _build,
         sgr_envelope=True,
     )
@@ -549,7 +559,7 @@ def _parse_oxlint_json(inp: ParseInput) -> list[dict[str, Any]]:
 
     return _parse_json_items(
         inp,
-        lambda d: d.get("diagnostics") if isinstance(d, dict) else (d if isinstance(d, list) else None),
+        _items_under_key("diagnostics", allow_list=True),
         _build,
     )
 
@@ -775,7 +785,7 @@ def _parse_shellcheck_json(inp: ParseInput) -> list[dict[str, Any]]:
 
     return _parse_json_items(
         inp,
-        lambda d: d.get("comments") if isinstance(d, dict) else (d if isinstance(d, list) else None),
+        _items_under_key("comments", allow_list=True),
         _build,
     )
 
@@ -1453,20 +1463,21 @@ def run_lint(
             )
 
     return _lint_result(
-        project_str,
-        mode,
-        all_findings,
-        all_files,
-        max_findings,
-        tools_run,
-        tools_missing,
-        tool_statuses,
-        tool_errors,
-        warnings,
+        project_str=project_str,
+        mode=mode,
+        all_findings=all_findings,
+        all_files=all_files,
+        max_findings=max_findings,
+        tools_run=tools_run,
+        tools_missing=tools_missing,
+        tool_statuses=tool_statuses,
+        tool_errors=tool_errors,
+        warnings=warnings,
     )
 
 
 def _lint_result(
+    *,
     project_str: str,
     mode: str,
     all_findings: list[dict[str, Any]],

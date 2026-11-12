@@ -130,6 +130,7 @@ def _drift_detail(tool_names: list[str], report_tools: dict[str, Any], fallback:
 def _inspect_project(proj: Path, *, timeout: float = 3.0) -> dict[str, Any]:
     proj_path = Path(proj)
     proj_name = proj_path.name or str(proj_path)
+    identity = {"project": str(proj_path), "name": proj_name}
     lock_file = proj_path / "TOOLS.lock"
 
     try:
@@ -139,8 +140,7 @@ def _inspect_project(proj: Path, *, timeout: float = 3.0) -> dict[str, Any]:
 
     if not has_lock:
         return {
-            "project": str(proj_path),
-            "name": proj_name,
+            **identity,
             "status": "missing",
             "line": f"  --     {proj_name}  no TOOLS.lock",
         }
@@ -164,8 +164,7 @@ def _inspect_project(proj: Path, *, timeout: float = 3.0) -> dict[str, Any]:
         ]
         lock_date = max(chosen_dates) if chosen_dates else "-"
         return {
-            "project": str(proj_path),
-            "name": proj_name,
+            **identity,
             "status": "ok",
             "tools": report_tools,
             "tools_count": len(tool_names),
@@ -175,8 +174,7 @@ def _inspect_project(proj: Path, *, timeout: float = 3.0) -> dict[str, Any]:
 
     detail = _drift_detail(tool_names, report_tools, report.get("summary"))
     return {
-        "project": str(proj_path),
-        "name": proj_name,
+        **identity,
         "status": "drift",
         "tools": report_tools,
         "detail": detail,

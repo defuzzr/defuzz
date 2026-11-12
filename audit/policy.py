@@ -353,6 +353,11 @@ def declare_credential(path):
         state.credential_paths.add(os.path.abspath(path))
 
 
+def _declare_credential_target(raw, source, home):
+    target = Path(home) / raw[2:] if raw.startswith('~/') else Path(raw)
+    declare_credential(target if target.is_absolute() else source.parent / target)
+
+
 def _declare_git_includes(text, source, home):
     # Git includes are declarations only; never recursively read targets.
     import re
@@ -369,8 +374,7 @@ def _declare_git_includes(text, source, home):
             if match:
                 raw = _value(match[1])
                 if raw and not any(c in raw for c in '$\x00\n'):
-                    target = Path(home) / raw[2:] if raw.startswith('~/') else Path(raw)
-                    declare_credential(target if target.is_absolute() else source.parent / target)
+                    _declare_credential_target(raw, source, home)
 
 
 def _declare_config_credentials(config, source, home):
@@ -385,8 +389,7 @@ def _declare_config_credentials(config, source, home):
                 if key in {'credential_file', 'credentials_file', 'env_file'}:
                     for raw in item if isinstance(item, list) else [item]:
                         if isinstance(raw, str) and raw and not any(c in raw for c in '$\x00\n*?['):
-                            target = Path(home) / raw[2:] if raw.startswith('~/') else Path(raw)
-                            declare_credential(target if target.is_absolute() else source.parent / target)
+                            _declare_credential_target(raw, source, home)
                 else:
                     walk(item)
         elif isinstance(value, list):

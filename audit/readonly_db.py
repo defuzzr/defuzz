@@ -512,7 +512,11 @@ def _read_registration_snapshot(
     profile_name: str,
     target: Path,
 ) -> ProfileRegistrationsSnapshot:
-    """Read and stability-check bounded registrations on an already safe connection."""
+    """Read and stability-check bounded registrations on an already safe connection.
+
+    ``conn`` and ``pre_id`` must come from ``open_readonly_sqlite``; the caller
+    owns the connection's lifetime.
+    """
     cols = _table_columns(conn, "projects")
     if not cols or "path" not in cols:
         post_id = stat_db_identity(target)

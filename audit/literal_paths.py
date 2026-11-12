@@ -134,16 +134,32 @@ def path_references(path, data, *, credentials=False, strict=False):
     return list(_path_references(path, data, credentials=credentials, strict=strict))
 
 
+def _relative_to_file(raw):
+    """Prefix a bare name with ``./`` so it reads as relative to the declaring file."""
+    if not raw.startswith(('/', '.', '~')):
+        raw = './' + raw
+    return raw
+
+
 def _credential_execution_lines(path, text):
+    """Yield (line number, declared path) for execution-relevant lines of a credential file.
+
+    Contract: ``text`` is the already-captured content of a credential file
+    (e.g. the project ``.env``); this helper never opens or reads a file itself.
+    It yields only the value of an ``ENV_EXEC_KEYS`` assignment (``export``
+    allowed) or, for ``.envrc``, the argument of a two-word
+    ``source``/``.``/``source_env``/``dotenv`` line. Every other line, including
+    secret values under other keys, is skipped and never returned.
+    """
     for n, line in enumerate(text.splitlines(), 1):
-        if '=' in line and line.split('=', 1)[0].strip().removeprefix('export ').strip() in ENV_EXEC_KEYS:
-            raw = line.split('=', 1)[1].strip()
-            if path.name == '.npmrc' and line.split('=', 1)[0].strip() in {'pnpmfile', 'globalconfig', 'userconfig', 'init-module'}:
-                raw = raw.strip('\"\'')
-                if not raw.startswith(('/', '.', '~')):
-                    raw = './' + raw
-            yield n, raw
-            continue
+        if '=' in line:
+            key, value = line.split('=', 1)
+            if key.strip().removeprefix('export ').strip() in ENV_EXEC_KEYS:
+                raw = value.strip()
+                if path.name == '.npmrc' and key.strip() in {'pnpmfile', 'globalconfig', 'userconfig', 'init-module'}:
+                    raw = _relative_to_file(raw.strip('\"\''))
+                yield n, raw
+                continue
         if path.name != '.envrc':
             continue
         try:
@@ -152,10 +168,7 @@ def _credential_execution_lines(path, text):
             continue
         if len(words) != 2 or words[0] not in {'source', '.', 'source_env', 'dotenv'}:
             continue
-        raw = words[1]
-        if not raw.startswith(('/', '.', '~')):
-            raw = './' + raw
-        yield n, raw
+        yield n, _relative_to_file(words[1])
 
 
 def _path_references(path, data, *, credentials=False, strict=False):

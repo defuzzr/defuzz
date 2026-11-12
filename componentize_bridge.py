@@ -403,7 +403,7 @@ def _kit_deadline(timeout: float | None) -> float:
     return time.monotonic() + budget
 
 
-def _kit_timeout_result(call) -> dict:
+def _kit_timeout_result(call: str) -> dict:
     return _kit_result('error', None, f'{TIMEOUT_NOTICE}: componentize kit {call} timed out.', None)
 
 
@@ -457,10 +457,13 @@ def _invoke_kit(
     except (OSError, ValueError) as exc:
         return _kit_result('error', None, f'componentize kit {call} failed: {exc}', None)
 
-    return _interpret_kit_reply(proc, call, kit_id, dest, expected_root)
+    return _interpret_kit_reply(proc, call, kit_id=kit_id, dest=dest, expected_root=expected_root)
 
 
-def _interpret_kit_reply(proc, call, kit_id, dest, expected_root) -> dict:
+def _interpret_kit_reply(
+    proc: subprocess.CompletedProcess, call: str, *, kit_id: str | None,
+    dest: str | None, expected_root: str | None,
+) -> dict:
     """Validate the companion reply against its envelope and original request."""
     try:
         data = _loads(proc.stdout)

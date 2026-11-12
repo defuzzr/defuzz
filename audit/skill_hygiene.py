@@ -416,7 +416,15 @@ def _finding(rule, path, evidence, coverage='verified', classification='review_s
                         evidence=evidence, consequence=FINDING_CONSEQUENCES[rule])
 
 
+_MD5_HEX_RE = re.compile(r'[0-9a-f]{32}')
+_NON_MANIFEST_PROVENANCES = frozenset({'hub', 'external_dir'})
+
+
 def _parse_manifest(manifest_raw):
+    """Return entries and manifest_ok: readable UTF-8, unique names and valid digests.
+
+    Invalid input may still yield entries; manifest_ok describes the entire input.
+    """
     manifest = {}
     manifest_ok = manifest_raw is not None
     if manifest_ok:
@@ -425,7 +433,7 @@ def _parse_manifest(manifest_raw):
                 if not line.strip():
                     continue
                 name, _, origin = line.strip().partition(':')
-                if name in manifest or not re.fullmatch(r'[0-9a-f]{32}', origin.strip()):
+                if name in manifest or not _MD5_HEX_RE.fullmatch(origin.strip()):
                     manifest_ok = False
                 manifest[name.strip()] = origin.strip()
         except UnicodeError:
@@ -444,20 +452,21 @@ def _package_hashes(raw_files):
         legacy.update(relative.encode('utf-8', errors='surrogateescape')); legacy.update(data)
         if not cached:
             current.update(relative.encode('utf-8', errors='surrogateescape')); current.update(data)
-    return current, legacy
+    return current.hexdigest(), legacy.hexdigest()
 
 
 def _resolve_manifest_origins(rows, origins, manifest):
+    """Mutate provenance fields in rows in place; return matched manifest names."""
     # The v2 manifest usually contains names, not category paths (tools/skills_sync.py:113-128,170-185,325).
     # Resolve all claimants together: exact hash wins; without a hash match, a single claimant is
     # that stock skill, while multiple claimants require an exact recorded install path.
     matched_names = set()
     for row in rows:
-        if row['provenance'] not in {'hub', 'external_dir'}:
+        if row['provenance'] not in _NON_MANIFEST_PROVENANCES:
             row.update(bundled=False, provenance='user_authored', modified=False, verified_unmodified=False)
     for key, origin in manifest.items():
         candidates = [(r, rel, hashes) for r, rel, name, hashes in origins
-                      if r['provenance'] not in {'hub', 'external_dir'} and (rel == key or Path(rel).name == key or name == key)]
+                      if r['provenance'] not in _NON_MANIFEST_PROVENANCES and (rel == key or Path(rel).name == key or name == key)]
         verified = [(r, rel, hashes) for r, rel, hashes in candidates
                     if r['coverage'] == 'verified' and origin in hashes]
         exact = [(r, rel, hashes) for r, rel, hashes in candidates if rel == key]
@@ -465,11 +474,72 @@ def _resolve_manifest_origins(rows, origins, manifest):
                   else candidates[0] if len(candidates) == 1 else exact[0] if len(exact) == 1 else None)
         if chosen is not None:
             row = chosen[0]
-            valid = bool(re.fullmatch(r'[0-9a-f]{32}', origin)) and row['coverage'] == 'verified'
+            valid = bool(_MD5_HEX_RE.fullmatch(origin)) and row['coverage'] == 'verified'
             row.update(bundled=True, provenance='stock', verified_unmodified=bool(verified),
                        modified=valid and not verified)
             matched_names.add(key)
     return matched_names
+
+
+def _discover_skill_packages(root, skills_root, discovery_roots):
+    cuts = 0
+    # Discover skill packages without letting one huge skill or non-skill folder empty the whole section.
+    skill_packages, visited_dirs = [], set()
+    entry_budgets = {}
+    discovery_roots_set = set(discovery_roots)
+    pending_dirs = [(path, path) for path in discovery_roots]
+    while pending_dirs:
+        directory, owner = pending_dirs.pop()
+        if directory in visited_dirs:
+            continue
+        visited_dirs.add(directory)
+        try:
+            if credential_path(directory) or _has_symlink_below(directory, root):
+                cuts += 1
+                continue
+            md = directory / 'SKILL.md'
+            has_skill_md = directory not in discovery_roots_set and not md.is_symlink() and md.is_file()
+            if has_skill_md:
+                if len(skill_packages) >= MAX_TREE_ENTRIES:
+                    cuts += 1
+                    continue
+                skill_packages.append(directory)
+                owner = directory
+            with os.scandir(directory) as iterator:
+                batch = []
+                for entry in iterator:
+                    entry_budgets[owner] = entry_budgets.get(owner, 0) + 1
+                    if entry_budgets[owner] > MAX_TREE_ENTRIES:
+                        cuts += 1
+                        batch = None
+                        break
+                    if entry.name == 'SKILL.md' and not entry.is_symlink() and entry.is_file(follow_symlinks=False):
+                        has_skill_md = True
+                    batch.append(entry)
+            if batch is None:
+                continue
+            for entry in sorted(batch, key=lambda e: e.name):
+                if _has_surrogate(entry.name):
+                    cuts += 1
+                    continue
+                path = Path(entry.path)
+                if credential_path(path) or entry.is_symlink():
+                    cuts += 1
+                elif entry.is_dir(follow_symlinks=False):
+                    if entry.name in EXCLUDED_SKILL_DIRS - CACHE_DIRS:
+                        continue
+                    if has_skill_md and directory not in discovery_roots_set and entry.name in SKILL_SUPPORT_DIRS:
+                        continue
+                    pending_dirs.append((path, path if directory in discovery_roots_set else owner))
+                elif not entry.is_file(follow_symlinks=False):
+                    cuts += 1
+        except FileNotFoundError:
+            if directory != skills_root:
+                cuts += 1
+        except OSError:
+            cuts += 1
+
+    return skill_packages, cuts
 
 
 def audit_skill_hygiene(*, profile_path):
@@ -527,61 +597,8 @@ def audit_skill_hygiene(*, profile_path):
     elif config_read.kind != 'missing':
         cuts += 1
 
-    # Discover skill packages without letting one huge skill or non-skill folder empty the whole section.
-    skill_packages, visited_dirs = [], set()
-    entry_budgets = {}
-    discovery_roots_set = set(discovery_roots)
-    pending_dirs = [(path, path) for path in discovery_roots]
-    while pending_dirs:
-        directory, owner = pending_dirs.pop()
-        if directory in visited_dirs:
-            continue
-        visited_dirs.add(directory)
-        try:
-            if credential_path(directory) or _has_symlink_below(directory, root):
-                cuts += 1
-                continue
-            md = directory / 'SKILL.md'
-            has_skill_md = directory not in discovery_roots_set and not md.is_symlink() and md.is_file()
-            if has_skill_md:
-                if len(skill_packages) >= MAX_TREE_ENTRIES:
-                    cuts += 1
-                    continue
-                skill_packages.append(directory)
-                owner = directory
-            with os.scandir(directory) as iterator:
-                batch = []
-                for entry in iterator:
-                    entry_budgets[owner] = entry_budgets.get(owner, 0) + 1
-                    if entry_budgets[owner] > MAX_TREE_ENTRIES:
-                        cuts += 1
-                        batch = None
-                        break
-                    if entry.name == 'SKILL.md' and not entry.is_symlink() and entry.is_file(follow_symlinks=False):
-                        has_skill_md = True
-                    batch.append(entry)
-            if batch is None:
-                continue
-            for entry in sorted(batch, key=lambda e: e.name):
-                if _has_surrogate(entry.name):
-                    cuts += 1
-                    continue
-                path = Path(entry.path)
-                if credential_path(path) or entry.is_symlink():
-                    cuts += 1
-                elif entry.is_dir(follow_symlinks=False):
-                    if entry.name in EXCLUDED_SKILL_DIRS - CACHE_DIRS:
-                        continue
-                    if has_skill_md and directory not in discovery_roots_set and entry.name in SKILL_SUPPORT_DIRS:
-                        continue
-                    pending_dirs.append((path, path if directory in discovery_roots_set else owner))
-                elif not entry.is_file(follow_symlinks=False):
-                    cuts += 1
-        except FileNotFoundError:
-            if directory != skills_root:
-                cuts += 1
-        except OSError:
-            cuts += 1
+    skill_packages, discovery_cuts = _discover_skill_packages(root, skills_root, discovery_roots)
+    cuts += discovery_cuts
 
     manifest_raw = read(root / MANIFEST)
     manifest, manifest_ok = _parse_manifest(manifest_raw)
@@ -682,8 +699,8 @@ def audit_skill_hygiene(*, profile_path):
         )
         tracked = is_local and manifest_key is not None
         complete = before == cuts and not _has_symlink_below(package, root)
-        valid_origin = tracked and re.fullmatch(r'[0-9a-f]{32}', manifest[manifest_key]) is not None
-        verified_unmodified = bool(valid_origin and complete and manifest[manifest_key] in (current.hexdigest(), legacy.hexdigest()))
+        valid_origin = tracked and _MD5_HEX_RE.fullmatch(manifest[manifest_key]) is not None
+        verified_unmodified = bool(valid_origin and complete and manifest[manifest_key] in (current, legacy))
         provenance = 'external_dir' if not is_local else ('stock' if tracked else 'user_authored')
         hub_tracked = rel_pkg in hub
         if hub_tracked:
@@ -696,14 +713,14 @@ def audit_skill_hygiene(*, profile_path):
                 hub_digest.update(data)
             valid_origin = True
             verified_unmodified = complete and hub[rel_pkg] in (
-                'sha256:' + hub_digest.hexdigest()[:16], current.hexdigest())
+                'sha256:' + hub_digest.hexdigest()[:16], current)
         modified = bool(valid_origin and complete and not verified_unmodified)
         row = {'path': str(package), 'skill_md_path': str(md), **total, 'file_count': len(raw_files),
                'body_char_count': len(body), 'residue_score': score, 'bundled': tracked and not hub_tracked,
                'provenance': provenance, 'verified_unmodified': verified_unmodified,
                'modified': modified, 'coverage': 'verified' if complete else 'could_not_verify', 'files': metrics}
         rows.append(row)
-        origins.append((row, rel_pkg, name, (current.hexdigest(), legacy.hexdigest())))
+        origins.append((row, rel_pkg, name, (current, legacy)))
         if complete:
             digest = hashlib.sha256(' '.join(body.split()).encode()).digest()
             normalized.setdefault(digest, []).append(str(md))

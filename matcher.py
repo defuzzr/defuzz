@@ -35,7 +35,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 import re
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, List, NamedTuple, Optional, Sequence, Tuple
 
 from . import componentize_bridge
 from .questionnaire import KIT_BUILDING_KINDS
@@ -1651,10 +1651,18 @@ def _norm_index(words: Iterable[str], *, min_len: int = 3) -> dict[str, str]:
     return out
 
 
+class _KitWordScore(NamedTuple):
+    score: int
+    reasons: List[str]
+    tag_hits: int
+    id_part_hits: int
+    tag_keys: frozenset[str]
+
+
 def _score_kit_words(
-    kit: KitInfo, kit_tokens: list[str], kit_token_pos: dict[str, int],
-) -> tuple[int, list[str], int, int, dict[str, str]]:
-    """Score only indexed kit words, retaining prompt order for reasons."""
+    kit: KitInfo, kit_tokens: List[str], kit_token_pos: dict[str, int],
+) -> _KitWordScore:
+    """Return score, ordered reasons, tag/id-part hit counts and normalized tag keys."""
     score = 0
     reasons: List[str] = []
 
@@ -1695,7 +1703,42 @@ def _score_kit_words(
             score += 1
             reasons.append(f"matches summary word '{norm_summary_words[tok]}'")
 
-    return score, reasons, tag_hits, id_part_hits, norm_tags
+    return _KitWordScore(score, reasons, tag_hits, id_part_hits, frozenset(norm_tags))
+
+
+class _KitPrompt(NamedTuple):
+    tokens: List[str]
+    families: dict[str, str]
+    non_subject_tokens: List[str]
+    web_excluded: bool
+    ui_comp_excluded: bool
+    comp_excluded: bool
+    godot_excluded: bool
+
+
+def _kit_prompt(prompt: str) -> _KitPrompt:
+    """Collect prompt-wide tokens, families and exclusions once before scoring kits."""
+    tokens = _tokenize_prompt(prompt)
+    families = kit_families_in(prompt)
+    non_subject_tokens = (
+        _tokenize_prompt(mask_website_subject(prompt))
+        if "website" in families
+        else tokens
+    )
+    has_prompt = bool(isinstance(prompt, str) and prompt.strip())
+    build_target = prompt[: build_target_end(prompt)] if has_prompt else ""
+    web_excluded = (
+        has_prompt
+        and "website" not in families
+        and bool(_NON_WEB_PLATFORM_RE.search(build_target) or _NOT_A_WEBSITE_RE.search(build_target))
+    )
+    ui_comp_excluded = has_prompt and bool(_UI_COMPONENT_RE.search(prompt))
+    comp_excluded = has_prompt and bool(_NOT_A_COMPONENT_LIBRARY_RE.search(prompt))
+    godot_excluded = has_prompt and bool(_NOT_A_GODOT_GAME_RE.search(prompt))
+    return _KitPrompt(
+        tokens, families, non_subject_tokens, web_excluded,
+        ui_comp_excluded, comp_excluded, godot_excluded,
+    )
 
 
 def match_kits(
@@ -1714,23 +1757,10 @@ def match_kits(
     """
     if isinstance(prompt, str):
         prompt = _bounded_prompt(prompt)
-    tokens = _tokenize_prompt(prompt)
-    families = kit_families_in(prompt)
-    non_subject_tokens = (
-        _tokenize_prompt(mask_website_subject(prompt))
-        if "website" in families
-        else tokens
-    )
-    has_prompt = bool(isinstance(prompt, str) and prompt.strip())
-    build_target = prompt[: build_target_end(prompt)] if has_prompt else ""
-    web_excluded = (
-        has_prompt
-        and "website" not in families
-        and bool(_NON_WEB_PLATFORM_RE.search(build_target) or _NOT_A_WEBSITE_RE.search(build_target))
-    )
-    ui_comp_excluded = has_prompt and bool(_UI_COMPONENT_RE.search(prompt))
-    comp_excluded = has_prompt and bool(_NOT_A_COMPONENT_LIBRARY_RE.search(prompt))
-    godot_excluded = has_prompt and bool(_NOT_A_GODOT_GAME_RE.search(prompt))
+    context = _kit_prompt(prompt)
+    tokens = context.tokens
+    families = context.families
+    non_subject_tokens = context.non_subject_tokens
     building = _str_answer(answers.get("building")) if isinstance(answers, Mapping) else None
     building_tag_targets = _BUILDING_KIT_TAGS.get(building) if building is not None else None
 
@@ -1756,7 +1786,7 @@ def match_kits(
         kit = _coerce_kit(raw_kit)
         if kit is None:
             continue
-        if kit.id == "component-library" and ui_comp_excluded:
+        if kit.id == "component-library" and context.ui_comp_excluded:
             continue
 
         raw_kit_tags = {t.strip().lower() for t in kit.tags}
@@ -1764,9 +1794,8 @@ def match_kits(
         kit_tokens = non_subject_tokens if use_non_subject else tokens
         kit_token_pos = non_subject_pos if use_non_subject else token_pos
 
-        score, reasons, tag_hits, id_part_hits, norm_tags = _score_kit_words(
-            kit, kit_tokens, kit_token_pos
-        )
+        word_score = _score_kit_words(kit, kit_tokens, kit_token_pos)
+        score, reasons = word_score.score, word_score.reasons
         building_boost = False
 
         family_hit = False
@@ -1781,7 +1810,7 @@ def match_kits(
 
         if building is not None and building_tag_targets is not None:
             raw_kit_tags_lower = {t.lower() for t in kit.tags}
-            if (raw_kit_tags_lower & building_tag_targets) or (set(norm_tags.keys()) & norm_target_tags):
+            if (raw_kit_tags_lower & building_tag_targets) or (word_score.tag_keys & norm_target_tags):
                 building_boost = True
                 score += 3
                 reasons.append(f"you said you are making {building}")
@@ -1793,23 +1822,23 @@ def match_kits(
         elif family_hit:
             qualifies = True
         elif building_boost:
-            qualifies = id_part_hits >= 1 or tag_hits >= 1
+            qualifies = word_score.id_part_hits >= 1 or word_score.tag_hits >= 1
         else:
-            qualifies = id_part_hits >= 1 or tag_hits >= 2
+            qualifies = word_score.id_part_hits >= 1 or word_score.tag_hits >= 2
         if score >= min_score and qualifies:
             is_disq = (
-                (kit.id == "web-app" and web_excluded)
-                or (kit.id == "component-library" and comp_excluded)
-                or (kit.id == "godot-game" and godot_excluded)
+                (kit.id == "web-app" and context.web_excluded)
+                or (kit.id == "component-library" and context.comp_excluded)
+                or (kit.id == "godot-game" and context.godot_excluded)
             )
             matches.append(
                 KitMatch(
                     kit=kit,
                     score=score,
                     reasons=reasons,
-                    tag_hits=tag_hits,
+                    tag_hits=word_score.tag_hits,
                     family_hit=family_hit,
-                    id_part_hits=id_part_hits,
+                    id_part_hits=word_score.id_part_hits,
                     disqualified=is_disq,
                 )
             )

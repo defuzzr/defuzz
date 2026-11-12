@@ -4,6 +4,13 @@ import re
 
 from .file_types import SHELL_STARTUP_FILES
 
+# (lib folder under HOME, version folder pattern, site-packages under it).
+# macOS framework Python keeps the user site in ~/Library/Python/X.Y.
+_USER_SITE_LAYOUTS = (
+    ('.local/lib', r'python\d+\.\d+[a-z]*', 'site-packages'),
+    ('Library/Python', r'\d+\.\d+', 'lib/python/site-packages'),
+)
+
 
 def discover(home, directory_fd, issue, *, unbounded=False):
     remaining = None if unbounded else 10000
@@ -43,16 +50,8 @@ def discover(home, directory_fd, issue, *, unbounded=False):
     for name in entries(root):
         if name.endswith('.desktop'):
             yield root / name
-    lib = home / '.local/lib'
-    for version in entries(lib):
-        if not re.fullmatch(r'python\d+\.\d+[a-z]*', version):
-            continue
-        site = lib / version / 'site-packages'
-        yield from site_startup_files(site)
-    # macOS framework Python keeps the user site in ~/Library/Python/X.Y.
-    lib = home / 'Library/Python'
-    for version in entries(lib):
-        if not re.fullmatch(r'\d+\.\d+', version):
-            continue
-        site = lib / version / 'lib/python/site-packages'
-        yield from site_startup_files(site)
+    for lib_name, version_pattern, site_path in _USER_SITE_LAYOUTS:
+        lib = home / lib_name
+        for version in entries(lib):
+            if re.fullmatch(version_pattern, version):
+                yield from site_startup_files(lib / version / site_path)

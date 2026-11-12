@@ -250,8 +250,11 @@ def _reserve(proposal_id: str, home: str) -> tuple[str, _Job]:
         pending.claimed.wait(ACCEPT_INLINE_WAIT_S)
 
 
-def _failed_claim(job: _Job, proposal_id: str) -> None:
-    """Restore the prior answer and release requests waiting for a failed claim."""
+def _undo_failed_claim(job: _Job, proposal_id: str) -> None:
+    """Restore a failed claim before re-raising from the claim() except block.
+
+    Takes the non-reentrant _JOBS_LOCK; call only when it is not held.
+    """
     with _JOBS_LOCK:
         if _JOBS.get(proposal_id) is job:
             if job.previous is not None:
@@ -282,7 +285,7 @@ def accept_answer(proposal_id: str, home: str, *, claim: Callable[[], Any],
         try:
             claimed = claim()
         except BaseException:
-            _failed_claim(job, proposal_id)
+            _undo_failed_claim(job, proposal_id)
             raise
         with _JOBS_LOCK:
             job.previous = None

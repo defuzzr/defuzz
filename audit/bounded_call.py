@@ -89,7 +89,14 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from functools import partial, wraps
 from pathlib import Path, PurePath
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+    from typing import Protocol
+
+    class _RedactionOwnerState(Protocol):
+        owner: Callable[[Any], str] | None
 
 # Chosen from fixture measurements (docs/audit-scope.md): every component on
 # the existing fixtures finishes in well under one second. The per-component
@@ -970,7 +977,14 @@ def _taint_final(owner: _DeferredOwner | None) -> dict | None:
             'deferred': list(owner.sources) if owner is not None else []}
 
 
-def _rehome_redactions(redactions: dict, deferred: Any, state: Any) -> dict:
+def _rehome_redactions(
+    redactions: dict, deferred: Sequence[Any], state: _RedactionOwnerState,
+) -> dict:
+    """Resolve regions before assigning any child fields to the parent's taint.
+
+    Invalid deferred references or item containers fail closed with
+    BudgetExceeded, leaving the parent's taint data unassigned.
+    """
     rehomed: dict = {}
     for region, items in redactions.items():
         if isinstance(region, str) and region.startswith(_DEFERRED):
@@ -1000,10 +1014,8 @@ def _merge_taint(final: Any) -> None:
         if name.startswith('_') or name in _TAINT_SKIP:
             continue
         current = getattr(state, name, None)
-        if isinstance(current, set) and isinstance(value, set):
-            current.clear()
-            current.update(value)
-        elif isinstance(current, dict) and isinstance(value, dict):
+        if (isinstance(current, set) and isinstance(value, set)
+                or isinstance(current, dict) and isinstance(value, dict)):
             current.clear()
             current.update(value)
         else:

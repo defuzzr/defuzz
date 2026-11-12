@@ -929,9 +929,44 @@ def _verify_dir_entries_unchanged(
         manifest.coverage = COVERAGE_COULD_NOT_VERIFY
 
 
+def _record_symlink_in_manifest(
+    manifest: TreeFingerprintManifest,
+    dir_fd: int,
+    *,
+    name: str,
+    rel: str,
+    st: os.stat_result,
+) -> None:
+    try:
+        target_str = os.readlink(name, dir_fd=dir_fd)
+    except OSError as exc:
+        _record_unreadable(manifest, rel, str(exc))
+        return
+    manifest.symlinks[rel] = {
+        "target": target_str,
+        "size": int(st.st_size),
+        "mtime_ns": int(st.st_mtime_ns),
+    }
+
+
+def _record_special_file_in_manifest(
+    manifest: TreeFingerprintManifest,
+    rel: str,
+    mode_kind: str,
+    st: os.stat_result,
+) -> None:
+    manifest.special_files[rel] = {
+        "kind": mode_kind,
+        "size": int(st.st_size),
+        "mtime_ns": int(st.st_mtime_ns),
+    }
+    _record_unreadable(manifest, rel, f"Special file ({mode_kind}) cannot be safely read")
+
+
 def _walk_manifest_subdirectory(
     manifest: TreeFingerprintManifest,
     dir_fd: int,
+    *,
     name: str,
     rel: str,
     st: os.stat_result,
@@ -1066,32 +1101,20 @@ def build_tree_fingerprint_manifest(
                         return
 
                     if mode_kind == "symlink":
-                        try:
-                            target_str = os.readlink(name, dir_fd=dir_fd)
-                        except OSError as exc:
-                            _record_unreadable(manifest, rel, str(exc))
-                            continue
-                        manifest.symlinks[rel] = {
-                            "target": target_str,
-                            "size": int(st.st_size),
-                            "mtime_ns": int(st.st_mtime_ns),
-                        }
+                        _record_symlink_in_manifest(manifest, dir_fd, name=name, rel=rel, st=st)
                         continue
 
                     if mode_kind == "directory":
                         if unit_kind == "project" and name == ".git":
                             manifest.directories[rel] = ["<git_metadata>"]
                             continue
-                        _walk_manifest_subdirectory(manifest, dir_fd, name, rel, st, _walk_dir)
+                        _walk_manifest_subdirectory(
+                            manifest, dir_fd, name=name, rel=rel, st=st, walk_dir=_walk_dir
+                        )
                         continue
 
                     if mode_kind != "regular":
-                        manifest.special_files[rel] = {
-                            "kind": mode_kind,
-                            "size": int(st.st_size),
-                            "mtime_ns": int(st.st_mtime_ns),
-                        }
-                        _record_unreadable(manifest, rel, f"Special file ({mode_kind}) cannot be safely read")
+                        _record_special_file_in_manifest(manifest, rel, mode_kind, st)
                         continue
 
                     _record_regular_file_in_manifest(manifest, root_abs, rel, unit_kind, max_file_bytes)

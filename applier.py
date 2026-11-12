@@ -427,19 +427,20 @@ def _archive_existing_agents_md(copy_path: Path) -> str | None:
     st = os.lstat(existing_agents_path)
     if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode):
         return None
+    archive_rel = "_archive/AGENTS.pre-adopt.md"
     safe_write_bytes(
-        copy_path, "_archive/AGENTS.pre-adopt.md", existing_agents_path.read_bytes(), overwrite=False
+        copy_path, archive_rel, existing_agents_path.read_bytes(), overwrite=False
     )
-    return "_archive/AGENTS.pre-adopt.md"
+    return archive_rel
 
 
 def _write_adoption_rules(
     copy_path: Path,
-    plan: dict[str, Any],
-    validated_rules: dict[str, Any],
-    inventory: dict[str, Any],
+    plan: Dict[str, Any],
+    validated_rules: Dict[str, Any],
+    inventory: Dict[str, Any],
     agents_md_max_lines: int,
-) -> tuple[dict[str, Any], str]:
+) -> tuple[Dict[str, Any], str]:
     rules_payload = {
         "schema": 1,
         "schema_version": 1,
@@ -460,15 +461,13 @@ def _write_adoption_rules(
 
 def _register_adopted_project(
     copy_path: Path,
-    plan: dict[str, Any],
+    plan: Dict[str, Any],
     rules_hash: str,
     db_path: Path | str | None,
     state_store: Any | None,
     record_fn: Callable[..., Any] | None,
 ) -> tuple[bool, str | None]:
     target_db = Path(db_path).expanduser() if db_path is not None else state_db_path()
-    registered = False
-    registration_error: str | None = None
     effective_record_fn = (
         record_fn
         if record_fn is not None
@@ -485,10 +484,30 @@ def _register_adopted_project(
             db_path=target_db,
             rules_hash=rules_hash,
         )
-        registered = True
     except Exception as exc:
-        registration_error = str(exc) or type(exc).__name__
-    return registered, registration_error
+        return False, str(exc) or type(exc).__name__
+    return True, None
+
+
+def _stage_and_commit_adopted_layout(
+    copy_path: Path,
+    plan: Dict[str, Any],
+    agents_md_result: Dict[str, Any],
+    componentize_survey: Dict[str, Any],
+    secret_paths: List[str],
+) -> str:
+    stage_generated = [".adopt/rules.json", *agents_md_result["paths"], "_inbox/.gitkeep"]
+    if componentize_survey["status"] == "ok":
+        stage_generated.append(".adopt/componentize-survey.json")
+    if os.path.lexists(copy_path / "TOOLS.lock") and not os.path.islink(copy_path / "TOOLS.lock"):
+        stage_generated.append("TOOLS.lock")
+    _checked_git(copy_path, ["add", "-f", "--", *stage_generated])
+    for link in plan["links"]:
+        if link["link_class"] in ("internal-relative", "internal-absolute"):
+            _checked_git(copy_path, ["add", "-f", "--", link["dest_path"]])
+    return _commit_snapshot(
+        copy_path, secret_paths, "chore(adopt): apply folder rules and AGENTS.md"
+    )
 
 
 def _apply_rules_to_copy(
@@ -561,17 +580,8 @@ def _apply_rules_to_copy(
     )
     agents_md_text = (copy_path / "AGENTS.md").read_text(encoding="utf-8")
 
-    stage_generated = [".adopt/rules.json", *agents_md_result["paths"], "_inbox/.gitkeep"]
-    if componentize_survey["status"] == "ok":
-        stage_generated.append(".adopt/componentize-survey.json")
-    if os.path.lexists(copy_path / "TOOLS.lock") and not os.path.islink(copy_path / "TOOLS.lock"):
-        stage_generated.append("TOOLS.lock")
-    _checked_git(copy_path, ["add", "-f", "--", *stage_generated])
-    for link in plan["links"]:
-        if link["link_class"] in ("internal-relative", "internal-absolute"):
-            _checked_git(copy_path, ["add", "-f", "--", link["dest_path"]])
-    adopted_commit_sha = _commit_snapshot(
-        copy_path, secret_paths, "chore(adopt): apply folder rules and AGENTS.md"
+    adopted_commit_sha = _stage_and_commit_adopted_layout(
+        copy_path, plan, agents_md_result, componentize_survey, secret_paths
     )
 
     verified_files = _verify_post_apply_integrity(copy_path, plan, archived_agents_md, archived_tools_lock)

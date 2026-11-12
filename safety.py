@@ -497,7 +497,7 @@ def _skip_line_continuation(text: str, idx: int, length: int) -> int:
 def _parse_git_config_section(
     text: str, i: int, n: int,
 ) -> Tuple[int, Tuple[str, Optional[str]]]:
-    """Parse a section header, preserving subsection spelling."""
+    """Parse a section header with text[i] == "[", preserving subsection spelling."""
     i += 1
     sec_start = i
     while i < n and (text[i].isalnum() or text[i] in "-."):
@@ -547,6 +547,73 @@ def _parse_git_config_section(
     return i, current_section
 
 
+def _parse_git_config_key_value(
+    text: str, i: int, n: int,
+) -> Tuple[int, str, Optional[str]]:
+    """Scan a key and optional value starting at an alphabetic text[i]."""
+    key_start = i
+    while i < n and (text[i].isalnum() or text[i] == "-"):
+        i += 1
+    key = text[key_start:i].lower()
+    while i < n:
+        nxt = _skip_line_continuation(text, i, n)
+        if nxt != i:
+            i = nxt
+            continue
+        if text[i] in " \t":
+            i += 1
+            continue
+        break
+
+    if i >= n or text[i] in "\r\n#;":
+        return i, key, None
+    if text[i] != "=":
+        raise _GitConfigParseError(f"expected '=' after key {key!r}")
+    i += 1
+
+    val_chars: List[str] = []
+    pending_ws: List[str] = []
+    quoted = False
+    while i < n:
+        nxt = _skip_line_continuation(text, i, n)
+        if nxt != i:
+            i = nxt
+            continue
+        vc = text[i]
+        if vc == "\\":
+            i += 1
+            if i >= n or text[i] not in _GIT_CONFIG_ESCAPES:
+                raise _GitConfigParseError("invalid escape in config value")
+            val_chars.extend(pending_ws)
+            pending_ws.clear()
+            val_chars.append(_GIT_CONFIG_ESCAPES[text[i]])
+            i += 1
+        elif vc == '"':
+            val_chars.extend(pending_ws)
+            pending_ws.clear()
+            quoted = not quoted
+            i += 1
+        elif not quoted and vc in "#;":
+            break
+        elif vc in "\r\n":
+            if quoted:
+                raise _GitConfigParseError("unterminated quote in config value")
+            i += 1
+            break
+        elif not quoted and vc in " \t":
+            if val_chars:
+                pending_ws.append(vc)
+            i += 1
+        else:
+            val_chars.extend(pending_ws)
+            pending_ws.clear()
+            val_chars.append(vc)
+            i += 1
+    if quoted:
+        raise _GitConfigParseError("unterminated quote at end of config")
+    return i, key, "".join(val_chars)
+
+
 def _parse_git_config_bytes(
     raw: bytes,
 ) -> Tuple[List[Tuple[str, Optional[str]]], List[Tuple[str, Optional[str], str, Optional[str]]]]:
@@ -583,68 +650,8 @@ def _parse_git_config_bytes(
         if ch.isalpha():
             if current_section is None:
                 raise _GitConfigParseError("config variable outside section")
-            key_start = i
-            while i < n and (text[i].isalnum() or text[i] == "-"):
-                i += 1
-            key = text[key_start:i].lower()
-            while i < n:
-                nxt = _skip_line_continuation(text, i, n)
-                if nxt != i:
-                    i = nxt
-                    continue
-                if text[i] in " \t":
-                    i += 1
-                    continue
-                break
-
-            if i >= n or text[i] in "\r\n#;":
-                entries.append((current_section[0], current_section[1], key, None))
-                continue
-            if text[i] != "=":
-                raise _GitConfigParseError(f"expected '=' after key {key!r}")
-            i += 1
-
-            val_chars: List[str] = []
-            pending_ws: List[str] = []
-            quoted = False
-            while i < n:
-                nxt = _skip_line_continuation(text, i, n)
-                if nxt != i:
-                    i = nxt
-                    continue
-                vc = text[i]
-                if vc == "\\":
-                    i += 1
-                    if i >= n or text[i] not in _GIT_CONFIG_ESCAPES:
-                        raise _GitConfigParseError("invalid escape in config value")
-                    val_chars.extend(pending_ws)
-                    pending_ws.clear()
-                    val_chars.append(_GIT_CONFIG_ESCAPES[text[i]])
-                    i += 1
-                elif vc == '"':
-                    val_chars.extend(pending_ws)
-                    pending_ws.clear()
-                    quoted = not quoted
-                    i += 1
-                elif not quoted and vc in "#;":
-                    break
-                elif vc in "\r\n":
-                    if quoted:
-                        raise _GitConfigParseError("unterminated quote in config value")
-                    i += 1
-                    break
-                elif not quoted and vc in " \t":
-                    if val_chars:
-                        pending_ws.append(vc)
-                    i += 1
-                else:
-                    val_chars.extend(pending_ws)
-                    pending_ws.clear()
-                    val_chars.append(vc)
-                    i += 1
-            if quoted:
-                raise _GitConfigParseError("unterminated quote at end of config")
-            entries.append((current_section[0], current_section[1], key, "".join(val_chars)))
+            i, key, value = _parse_git_config_key_value(text, i, n)
+            entries.append((current_section[0], current_section[1], key, value))
             continue
 
         raise _GitConfigParseError(f"unexpected character {ch!r} in git config")

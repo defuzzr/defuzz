@@ -667,12 +667,19 @@ def _expired(scan):
     return bool(expired()) if expired is not None else False
 
 
+def _memory_kind(rel):
+    """'memory' for MEMORY.md, 'user' for USER.md (callers pass only those two names)."""
+    return 'memory' if rel.name == 'MEMORY.md' else 'user'
+
+
 def _unmeasured_row(kind, scope, profile_index, size):
+    """Row for a file whose content could not be read: lstat size only, no metrics."""
     return {'kind': kind, 'scope': scope, 'profile_index': profile_index, 'bytes': size,
             'characters': None, 'entries': None, 'coverage': 'could_not_verify'}
 
 
-def _measured_row(text, kind, scope, profile_index, size, limit, home_os, native, families_known):
+def _measured_row(text, *, kind, scope, profile_index, size, limit, home_os, native, families_known):
+    """(row, entries) for one read memory file: _metrics plus foreign-technology counts."""
     row, entries = _metrics(text, kind, scope, limit, home_os)
     row.update(profile_index=profile_index, bytes=size)
     row['foreign_technology_entries'] = sum(bool(set(technology_counts(e)) - native) for e in entries) if families_known else None
@@ -681,7 +688,12 @@ def _measured_row(text, kind, scope, profile_index, size, limit, home_os, native
 
 
 def _scan_snapshots(scan, limits, home_os, native, families_known):
-    """Root home only; exact convention shape (see SNAPSHOT_* above): (rows, records, groups)."""
+    """Root home only; exact convention shape (see SNAPSHOT_* above): (rows, records, groups).
+
+    Records a 'snapshot_shape' cut on the scan for every entry off that shape: a stamp or
+    id that is not a matching directory, a stamp without ids, an id without memory files,
+    or a memory name that is not a regular file.
+    """
     snapshots, records, groups = [], [], set()
     for stamp_rel, st in scan.children(Path(*SNAPSHOT_PARTS)):
         if not stat.S_ISDIR(st.st_mode) or not SNAPSHOT_STAMP_RE.fullmatch(stamp_rel.name):
@@ -701,12 +713,14 @@ def _scan_snapshots(scan, limits, home_os, native, families_known):
                     continue
                 found = True
                 groups.add(rel.parent)
-                kind = 'memory' if rel.name == 'MEMORY.md' else 'user'
+                kind = _memory_kind(rel)
                 read = scan.read(rel)
                 if read is None:
                     snapshots.append(_unmeasured_row(kind, 'snapshot', 0, file_st.st_size))
                     continue
-                row, entries = _measured_row(read[0], kind, 'snapshot', 0, file_st.st_size, limits[kind], home_os, native, families_known)
+                row, entries = _measured_row(read[0], kind=kind, scope='snapshot', profile_index=0, size=file_st.st_size,
+                                             limit=limits[kind], home_os=home_os, native=native,
+                                             families_known=families_known)
                 snapshots.append(row)
                 records.append((row, entries, read[1], True))
             if not found:
@@ -735,7 +749,8 @@ def _profile_stores(scan, profile, profile_index, children):
     return stores
 
 
-def _count_findings(all_rows, duplicates, stores, pending):
+def _threshold_findings(all_rows, duplicates, stores, pending):
+    """One {'count': n} finding per count-based rule whose count is non-zero, in rule order."""
     findings = []
     for rule, count, classification in (
         ('over_limit', sum(bool(r['over_limit']) for r in all_rows), 'review_suggested'),
@@ -751,6 +766,29 @@ def _count_findings(all_rows, duplicates, stores, pending):
         if count:
             findings.append(_finding(rule, {'count': count}, classification))
     return findings
+
+
+def _scan_profile_memories(scan, profile, *, scope, profile_index, limits, home_os, native, families_known):
+    """MEMORY.md/USER.md of one profile: (rows, records, texts keyed by (profile_index, kind))."""
+    rows, records, texts = [], [], {}
+    # Read ONLY the two builtin filenames, never arbitrary Markdown neighbors.
+    for rel, st in scan.children(profile / 'memories'):
+        if rel.name not in ('MEMORY.md', 'USER.md') or not stat.S_ISREG(st.st_mode):
+            continue
+        kind = _memory_kind(rel)
+        read = scan.read(rel)
+        if read is None:
+            # Preserve lstat-only evidence even when content cannot be measured.
+            rows.append(_unmeasured_row(kind, scope, profile_index, st.st_size))
+            continue
+        text, _ = read
+        row, entries = _measured_row(text, kind=kind, scope=scope, profile_index=profile_index, size=st.st_size,
+                                     limit=limits[kind], home_os=home_os, native=native,
+                                     families_known=families_known)
+        rows.append(row)
+        records.append((row, entries))
+        texts[(profile_index, kind)] = text
+    return rows, records, texts
 
 
 def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char_limit=FROM_PROFILE,
@@ -800,28 +838,18 @@ def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char
     for profile, profile_index in profiles:
         if scan.expired():
             break
-        # Read ONLY the two builtin filenames, never arbitrary Markdown neighbors.
-        for rel, st in scan.children(profile / 'memories'):
-            if rel.name not in ('MEMORY.md', 'USER.md') or not stat.S_ISREG(st.st_mode):
-                continue
-            kind = 'memory' if rel.name == 'MEMORY.md' else 'user'
-            scope = 'main' if profile_index == 0 else 'profile'
-            read = scan.read(rel)
-            if read is None:
-                # Preserve lstat-only evidence even when content cannot be measured.
-                rows.append(_unmeasured_row(kind, scope, profile_index, st.st_size))
-                continue
-            text, _ = read
-            row, entries = _measured_row(text, kind, scope, profile_index, st.st_size, limits[kind], home_os, native, families_known)
-            rows.append(row)
-            records.append((row, entries))
-            texts[(profile_index, kind)] = text
+        scope = 'main' if profile_index == 0 else 'profile'
+        profile_rows, profile_records, profile_texts = _scan_profile_memories(
+            scan, profile, scope=scope, profile_index=profile_index, limits=limits, home_os=home_os,
+            native=native, families_known=families_known)
+        rows.extend(profile_rows)
+        records.extend(profile_records)
+        texts.update(profile_texts)
         for rel, st in scan.children(profile / 'pending' / 'memory'):
             if rel.suffix == '.json' and stat.S_ISREG(st.st_mode):
                 pending_paths.append((rel, profile_index))
         children = root_children if profile_index == 0 else scan.children(profile, names=root_names)
         stores.extend(_profile_stores(scan, profile, profile_index, children))
-    # Root home only; exact convention shape (see SNAPSHOT_* above).
     snapshots, snapshot_records, snapshot_groups = _scan_snapshots(scan, limits, home_os, native, families_known)
     pending = _pending(pending_paths, texts, scan)
     duplicates = _duplicates(records, scan)
@@ -835,7 +863,7 @@ def audit_memory_load(*, profile_path, memory_char_limit=FROM_PROFILE, user_char
                'prompt_injecting_plugins': plugin_count, 'active_mechanisms': active,
                'coverage': 'verified' if plugin_known and provider_known and builtin is not None else 'could_not_verify', 'stores': stores}
     all_rows = [r for r in rows + snapshots if r['coverage'] == 'verified']
-    findings = _count_findings(all_rows, duplicates, stores, pending)
+    findings = _threshold_findings(all_rows, duplicates, stores, pending)
     char_limits = _char_limits(limits, input_sources, rows, scan)
     if (raised := _limit_raised_finding(char_limits)) is not None:
         findings.append(raised)

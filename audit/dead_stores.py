@@ -585,7 +585,7 @@ def _normalize_inputs(
     enabled_norm = _validate_str_list(enabled_plugins)
     disabled_norm = _validate_str_list(disabled_plugins) if disabled_plugins is not None else []
     ext_skills_norm = _validate_str_list(external_skill_dirs)
-    pet_norm = pet_enabled if type(pet_enabled) is bool else None
+    pet_enabled_norm = pet_enabled if type(pet_enabled) is bool else None
     unverified: set[str] = set()
     if enabled_norm is None:
         unverified.add("enabled_plugins")
@@ -593,9 +593,9 @@ def _normalize_inputs(
         unverified.add("enabled_plugins")
     if ext_skills_norm is None:
         unverified.add("external_skill_dirs")
-    if pet_norm is None:
+    if pet_enabled_norm is None:
         unverified.add("pet_enabled")
-    return enabled_norm, disabled_norm, ext_skills_norm, pet_norm, unverified
+    return enabled_norm, disabled_norm, ext_skills_norm, pet_enabled_norm, unverified
 
 
 def _finding(
@@ -792,7 +792,7 @@ def _empty_section(
 
 def _unmeasured_root(
     reason: str,
-    pet_norm: bool | None,
+    pet_enabled_norm: bool | None,
     unverified_checks: set[str],
     *,
     symlinks_skipped: int = 0,
@@ -803,7 +803,7 @@ def _unmeasured_root(
         coverage=COVERAGE_COULD_NOT_VERIFY,
         reason=reason,
         truncated_by=None,
-        pet_enabled_norm=pet_norm,
+        pet_enabled_norm=pet_enabled_norm,
         unverified_checks=sorted(unverified_checks),
         symlinks_skipped=symlinks_skipped,
         cuts=1,
@@ -816,6 +816,45 @@ def _unmeasured_root(
         coverage=COVERAGE_COULD_NOT_VERIFY,
     )
     return _envelope([f], COVERAGE_COULD_NOT_VERIFY, sec)
+
+
+def _verify_installer_binaries(
+    root: Path,
+    installer_candidates: Sequence[tuple[str, int]],
+    metadata_reads: int,
+    unverified_checks: set[str],
+    dead_weight_by_class: dict[str, int],
+    is_expired: Callable[[], bool],
+    note_truncation: Callable[[str], None],
+) -> tuple[int, int, int, int, int]:
+    """Return metadata reads, bytes read, read cuts, binary count and binary bytes."""
+    metadata_bytes_read = 0
+    cuts = 0
+    installer_binaries_count = 0
+    installer_binaries_bytes = 0
+    # Verify top-level hermes-setup* installer binaries by magic (8-byte header read)
+    for cand_name, cand_size in installer_candidates:
+        if is_expired():
+            break
+        cand_path = root / cand_name
+        if credential_path(cand_path) or _is_credential_filename(cand_name):
+            continue
+        if metadata_reads >= MAX_METADATA_READS:
+            note_truncation("metadata_read_budget")
+            break
+        metadata_reads += 1
+        head, err = _read_bounded_regular_bytes(root, (cand_name,), 8)
+        if err is not None or head is None:
+            if err not in ("credential_excluded", None):
+                cuts += 1
+                unverified_checks.add("installer_magic_read")
+            continue
+        metadata_bytes_read += len(head)
+        if any(head.startswith(magic) for magic in _EXECUTABLE_MAGICS):
+            installer_binaries_count += 1
+            installer_binaries_bytes += cand_size
+            dead_weight_by_class["regenerable_caches"] += cand_size
+    return metadata_reads, metadata_bytes_read, cuts, installer_binaries_count, installer_binaries_bytes
 
 
 def audit_dead_stores(
@@ -841,7 +880,7 @@ def audit_dead_stores(
         "pet_enabled": pet_enabled,
     }
     pre = {k: (None if v is _FROM_CONFIG else v) for k, v in supplied.items()}
-    enabled_norm, disabled_norm, ext_skills_norm, pet_norm, unverified_checks = _normalize_inputs(
+    enabled_norm, disabled_norm, ext_skills_norm, pet_enabled_norm, unverified_checks = _normalize_inputs(
         pre["enabled_plugins"], pre["disabled_plugins"], pre["external_skill_dirs"], pre["pet_enabled"],
     )
 
@@ -858,25 +897,25 @@ def audit_dead_stores(
         st_root = os.lstat(root)
     except FileNotFoundError:
         unverified_checks.add("root_missing")
-        return _unmeasured_root("missing", pet_norm, unverified_checks)
+        return _unmeasured_root("missing", pet_enabled_norm, unverified_checks)
     except (OSError, TypeError, ValueError):
         unverified_checks.add("root_unreadable")
-        return _unmeasured_root("unreadable", pet_norm, unverified_checks)
+        return _unmeasured_root("unreadable", pet_enabled_norm, unverified_checks)
 
     if stat.S_ISLNK(st_root.st_mode):
         unverified_checks.add("root_symlink")
-        return _unmeasured_root("symlink_root", pet_norm, unverified_checks, symlinks_skipped=1)
+        return _unmeasured_root("symlink_root", pet_enabled_norm, unverified_checks, symlinks_skipped=1)
 
     if not stat.S_ISDIR(st_root.st_mode):
         unverified_checks.add("root_not_directory")
-        return _unmeasured_root("not_directory", pet_norm, unverified_checks)
+        return _unmeasured_root("not_directory", pet_enabled_norm, unverified_checks)
 
     real_root = os.path.realpath(root)
 
     if any(v is _FROM_CONFIG for v in supplied.values()):
         from_config, config_unverified = _config_inputs(root, managed_dir)
         resolved = {k: (from_config[k] if v is _FROM_CONFIG else v) for k, v in supplied.items()}
-        enabled_norm, disabled_norm, ext_skills_norm, pet_norm, unverified_checks = _normalize_inputs(
+        enabled_norm, disabled_norm, ext_skills_norm, pet_enabled_norm, unverified_checks = _normalize_inputs(
             resolved["enabled_plugins"], resolved["disabled_plugins"],
             resolved["external_skill_dirs"], resolved["pet_enabled"],
         )
@@ -933,8 +972,6 @@ def audit_dead_stores(
     document_cache_bytes = 0
     other_media_cache_bytes = 0
     tool_cache_bytes = 0
-    installer_binaries_count = 0
-    installer_binaries_bytes = 0
     installer_candidates: list[tuple[str, int]] = []
 
     # (e) Growing piles
@@ -1021,7 +1058,7 @@ def audit_dead_stores(
         except OSError:
             if not rel_parts:
                 unverified_checks.add("root_unreadable")
-                return _unmeasured_root("unreadable", pet_norm, unverified_checks)
+                return _unmeasured_root("unreadable", pet_enabled_norm, unverified_checks)
             cuts += 1
             unverified_checks.add("unreadable_subdir")
             continue
@@ -1320,7 +1357,7 @@ def audit_dead_stores(
             coverage=cov,
             reason="empty_home",
             truncated_by=None,
-            pet_enabled_norm=pet_norm,
+            pet_enabled_norm=pet_enabled_norm,
             unverified_checks=sorted(unverified_checks),
         )
         findings_empty: list[dict[str, Any]] = []
@@ -1336,28 +1373,15 @@ def audit_dead_stores(
             )
         return _envelope(findings_empty, cov, sec)
 
-    # Verify top-level hermes-setup* installer binaries by magic (8-byte header read)
-    for cand_name, cand_size in installer_candidates:
-        if is_expired():
-            break
-        cand_path = root / cand_name
-        if credential_path(cand_path) or _is_credential_filename(cand_name):
-            continue
-        if metadata_reads >= MAX_METADATA_READS:
-            note_truncation("metadata_read_budget")
-            break
-        metadata_reads += 1
-        head, err = _read_bounded_regular_bytes(root, (cand_name,), 8)
-        if err is not None or head is None:
-            if err not in ("credential_excluded", None):
-                cuts += 1
-                unverified_checks.add("installer_magic_read")
-            continue
-        metadata_bytes_read += len(head)
-        if any(head.startswith(magic) for magic in _EXECUTABLE_MAGICS):
-            installer_binaries_count += 1
-            installer_binaries_bytes += cand_size
-            dead_weight_by_class["regenerable_caches"] += cand_size
+    (
+        metadata_reads, installer_metadata_bytes, installer_read_cuts,
+        installer_binaries_count, installer_binaries_bytes,
+    ) = _verify_installer_binaries(
+        root, installer_candidates, metadata_reads, unverified_checks,
+        dead_weight_by_class, is_expired, note_truncation,
+    )
+    metadata_bytes_read += installer_metadata_bytes
+    cuts += installer_read_cuts
 
     # Post-process (b) Plugins on disk vs enabled
     parked_copies: list[dict[str, Any]] = []
@@ -1576,7 +1600,7 @@ def audit_dead_stores(
                 })
 
     # Post-process (h) Feature-off leftovers
-    feature_off_bytes = pets_bytes if pet_norm is False else 0
+    feature_off_bytes = pets_bytes if pet_enabled_norm is False else 0
     dead_weight_by_class["feature_off_assets"] += feature_off_bytes
 
     # Post-process (f) Stale locks relative to the newest regular-file mtime in the home.
@@ -1782,7 +1806,7 @@ def audit_dead_stores(
             )
         )
 
-    if pet_norm is False and pets_bytes > 0:
+    if pet_enabled_norm is False and pets_bytes > 0:
         findings.append(
             _finding(
                 "dead_stores.feature_off_assets",
@@ -1963,7 +1987,7 @@ def audit_dead_stores(
         },
         "feature_off_assets": {
             "coverage": feature_cov,
-            "pet_enabled": pet_norm,
+            "pet_enabled": pet_enabled_norm,
             "pets_bytes": pets_bytes,
             "pets_file_count": pets_file_count,
             "total_bytes": feature_off_bytes,

@@ -669,6 +669,7 @@ def resolve_projects_root(
         *,
         source: str,
         source_label: str,
+        origin: str,
         allow_relative: bool = False,
     ) -> ResolvedRoot:
         try:
@@ -682,12 +683,6 @@ def resolve_projects_root(
                 hermes_home=hermes_home,
                 cwd=cwd,
             )
-            if source == "cli":
-                origin = "from --root"
-            elif source == "setting":
-                origin = "saved setting"
-            else:
-                origin = f"from {ENV_VAR}"
             return ResolvedRoot(
                 path=validated,
                 source=source,
@@ -702,6 +697,7 @@ def resolve_projects_root(
             cli_root,
             source="cli",
             source_label="--root path",
+            origin="from --root",
             allow_relative=allow_cli_relative,
         )
 
@@ -723,13 +719,14 @@ def resolve_projects_root(
             saved,
             source="setting",
             source_label="saved projects folder",
+            origin="saved setting",
         )
 
     # (c) Environment variable `HERMES_PROJECTS_ROOT`
     eff_env: Mapping[str, str] = env if env is not None else os.environ
     env_raw = eff_env.get(ENV_VAR)
     if env_raw is not None and env_raw != "":
-        return resolve_candidate(env_raw, source="env", source_label=ENV_VAR)
+        return resolve_candidate(env_raw, source="env", source_label=ENV_VAR, origin=f"from {ENV_VAR}")
 
     # (d) Not chosen yet
     return ResolvedRoot(path=None, source="unset", message=NON_TERMINAL_UNSET_MESSAGE)

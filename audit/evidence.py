@@ -156,10 +156,13 @@ _STRUCTURAL_FIELD_TOKENS = {
     # Unique leaf names: the value is chosen by audit code, never read from the home.
     # limit_source: chosen in memory_load._resolve_inputs, copied by memory_load._char_limits.
     'limit_source': frozenset({'config', 'default', 'could_not_verify', 'caller', 'host'}),
-    # curator_enabled_source: set by skill_ledger.audit_skill_ledger.
+    # curator_enabled_source: skill_ledger.audit_skill_ledger and
+    # skill_ledger._curator_enabled_from_config.
     'curator_enabled_source': frozenset({'caller', 'config', 'default', 'could_not_verify'}),
-    'last_use_source': frozenset({'captured_evidence'}),  # persistence.facts_dto
-    'project_families': frozenset({  # session_contamination._project; _contamination_report emits them
+    # persistence.facts_dto.
+    'last_use_source': frozenset({'captured_evidence'}),
+    # session_contamination._project; session_contamination._contamination_report emits them.
+    'project_families': frozenset({
         'python', 'javascript', 'java', 'cpp', 'csharp', 'rust', 'go', 'php', 'ruby',
         'swift', 'kotlin', 'unreal', 'unity', 'godot', 'blender', 'houdini',
     }),
@@ -173,7 +176,8 @@ _STRUCTURAL_FIELD_TOKENS = {
     # provenance: set by skill_hygiene.audit_skill_hygiene and
     # skill_hygiene._resolve_manifest_origins.
     'provenance': frozenset({'external_dir', 'stock', 'user_authored', 'hub'}),
-    'name_pattern_label': frozenset({'name_pattern_not_in_hermes_source'}),  # dead_stores.NAME_PATTERN_LABEL
+    # dead_stores.NAME_PATTERN_LABEL.
+    'name_pattern_label': frozenset({'name_pattern_not_in_hermes_source'}),
     'parked_name_label': frozenset({'name_pattern_not_in_hermes_source'}),
     'tool_cache_label': frozenset({'cache_in_work_folder'}),
     # secret_kind: secret_file_copies.EXPECTED_SECRET_KINDS, emitted by
@@ -183,30 +187,37 @@ _STRUCTURAL_FIELD_TOKENS = {
         'vault', 'platform_token_stores', 'oauth_stores', 'browser_and_home_stores',
         'os_credential_dirs',
     }),
-    'target_store': frozenset({'memory', 'user'}),  # vendor.profile_context.audit_profile_context
-    'approvals_mode': frozenset({'approval_off', 'manual', 'smart', 'other'}),  # unattended_exposure.audit_unattended_exposure
-    'cli_powerful_tools': frozenset({  # unattended_exposure.POWERFUL_TOOLS; emitted by
-        # unattended_exposure._evaluate_platform_toolsets.
+    # vendor.profile_context.audit_profile_context.
+    'target_store': frozenset({'memory', 'user'}),
+    # unattended_exposure.audit_unattended_exposure.
+    'approvals_mode': frozenset({'approval_off', 'manual', 'smart', 'other'}),
+    # unattended_exposure.POWERFUL_TOOLS; emitted by
+    # unattended_exposure._evaluate_platform_toolsets.
+    'cli_powerful_tools': frozenset({
         'terminal', 'code_execution', 'cronjob', 'delegation', 'memory', 'skill_manage',
         'computer_use', 'browser',
     }),
-    'unmeasured': frozenset({  # context_load.UNMEASURED_DYNAMIC_SOURCES
+    # context_load.UNMEASURED_DYNAMIC_SOURCES.
+    'unmeasured': frozenset({
         'dynamic_plugin_prompt_sections', 'plugin_registered_skills', 'builtin_tool_schemas',
         'mcp_tool_schemas', 'external_memory_provider_prefetch_and_blocks',
         'caller_ephemeral_system_message', 'workspace_git_status_snapshot',
         'runtime_environment_metadata',
     }),
-    'estimator_version': frozenset({'hermes-rough-bytes4-cjk1-v1'}),  # vendor.profile_context.TOKEN_ESTIMATOR_VERSION
+    # vendor.profile_context.TOKEN_ESTIMATOR_VERSION.
+    'estimator_version': frozenset({'hermes-rough-bytes4-cjk1-v1'}),
     'contract_version': frozenset({'2.0.0'}),
     'observation': frozenset({'size_only_not_hashed'}),
     'reference': frozenset({'newest_mtime_in_home'}),
     'reference_clock': frozenset({'newest_event'}),
     'gc_ever_run': frozenset({'could_not_verify', 'verified', 'not_measured'}),
-    'schema': frozenset({'unknown'}),  # outward_db.inspect_database; classified names are not vocabulary words
+    # outward_db.inspect_database; classified names are not vocabulary words.
+    'schema': frozenset({'unknown'}),
     'contract': frozenset({'2.0.0'}),
     'parser_policy': frozenset({'safe-load-json-v2'}),
     'persistence_policy': frozenset({'allowlist-v2'}),
-    'ineligible_reason': frozenset({'last_use_could_not_verify', 'default_profile_never_archived',  # facts.evaluate_profile_age_and_unused
+    # facts.evaluate_profile_age_and_unused.
+    'ineligible_reason': frozenset({'last_use_could_not_verify', 'default_profile_never_archived',
                                     'active_profile_never_archived', 'within_active_threshold'}),
 }
 
@@ -214,6 +225,7 @@ _STRUCTURAL_FIELD_TOKENS = {
 # including a dotted settings key such as 'approvals.mode'). The longest match wins.
 # A value outside that rule's set stays taint-first. Ambiguous leaves are not in
 # _STRUCTURAL_FIELD_TOKENS, so a bare use still seals.
+# Anchors use module.symbol; module.function.inner names a nested local function.
 # String values set_row emits. unattended_exposure._evaluate_settings_and_sanity.set_row.
 # Bools and counts are not strings. Unknown input becomes 'other' or is omitted.
 _SETTING_VALUES = frozenset({
@@ -250,7 +262,7 @@ _STRUCTURAL_PATH_RULES = (
     (('memory_load', 'foreign_technology_reason'), frozenset({'no_projects', 'input_unknown'})),
     # memory_load._resolve_inputs. The leaf name is the input, the value is the provenance token.
     (('input_sources', '*'), frozenset({'config', 'default', 'could_not_verify', 'caller', 'host'})),
-    # Coerced setting labels, not the raw config string. unattended_exposure.py set_row values.
+    # Coerced labels, not raw config: unattended_exposure._evaluate_settings_and_sanity.set_row.
     (('settings', '*', 'value'), _SETTING_VALUES),
     # kanban_residue.audit_kanban_residue maps the slug to a label; the slug itself is not emitted.
     (('boards', 'board'), frozenset({'default', 'named_board'})),
@@ -262,7 +274,8 @@ _STRUCTURAL_PATH_RULES = (
     # secret_file_copies._match_backup_of_expected_secret. Region .scope sentences are
     # fixed sentences, not this set.
     (('copies', 'scope'), frozenset({'home', 'profile', 'backups'})),
-    (('tool_selection', 'surface'), frozenset({'cli'})),  # write_settings.audit_write_settings
+    # write_settings.audit_write_settings.
+    (('tool_selection', 'surface'), frozenset({'cli'})),
     # Finding evidence copies of closed labels. Top-level terminal_backend/size_class stay user data.
     (('evidence', 'terminal_backend'), frozenset({
         'local', 'docker', 'modal', 'daytona', 'vercel_sandbox', 'ssh', 'managed_modal', 'other',
@@ -276,8 +289,10 @@ _STRUCTURAL_PATH_RULES = (
     (('credentials', 'kind'), frozenset({'credential_store', 'credential_store_not_opened'})),
     (('dynamic_invocations', 'kind'), frozenset({'execution_surface', 'program_code'})),
     (('dynamic_invocations', 'kinds'), frozenset({'execution_surface', 'program_code'})),
-    (('evidence', 'kind'), frozenset({'kanban_task_workspace', 'symlink'})),  # outward.collect_outward
-    (('families', 'kind'), frozenset({'alphabetic_prefix', 'digit_series'})),  # profile_duplicates
+    # outward.collect_outward.
+    (('evidence', 'kind'), frozenset({'kanban_task_workspace', 'symlink'})),
+    # profile_duplicates.
+    (('families', 'kind'), frozenset({'alphabetic_prefix', 'digit_series'})),
     # profile_duplicates._summarize_identity_files. The leaf is the identity-file label,
     # not a user filename.
     (('files', 'file'), frozenset({'SOUL.md', 'MEMORY.md', 'USER.md'})),
@@ -518,6 +533,10 @@ class EvidenceSerializer:
             state.add(value)
         return True
 
+    def _credential_path_either(self, first, second):
+        """Check paths in order, retaining credential registration short-circuiting."""
+        return self._credential_path(first) or self._credential_path(second)
+
     def _location(self, location):
         raw = location.get('path')
         path = self._path(raw)
@@ -534,6 +553,8 @@ class EvidenceSerializer:
     def scalar(self, value, field, location, path=()):
         if _is_structural_scalar(field, value, path):
             return value
+        # Credential labels are trusted only in key fields; vocabulary is trusted anywhere.
+        # Both still seal when they overlap credential taint.
         if ((field in {'config_keys', 'key_path'} and value in CREDENTIAL_KEY_LABELS)
                 or value in VOCABULARY):
             return self.token(value, 'credential_overlap', location) if self._tainted(value) else value
@@ -585,7 +606,7 @@ class EvidenceSerializer:
             raw_exe = cleaned.get('executable')
             executable = self._path(raw_exe)
             cleaned['executable'] = None if (
-                self._credential_path(executable) or self._credential_path(raw_exe) or self._tainted(executable)
+                self._credential_path_either(executable, raw_exe) or self._tainted(executable)
             ) else executable
         if self._tainted(cleaned.get('host')):
             cleaned['host'] = None
@@ -602,7 +623,7 @@ class EvidenceSerializer:
             executable = self._path(raw_exe, location['path'])
             if executable is None and '/' not in raw_exe:
                 executable = self._path(shutil.which(raw_exe))
-        if self._credential_path(executable) or self._credential_path(words[0] if words else None) or self._tainted(executable):
+        if self._credential_path_either(executable, words[0] if words else None) or self._tainted(executable):
             executable = None
         return self._seal(
             kind='command', executable=executable, argument_count=max(0, len(words) - 1),
@@ -619,7 +640,7 @@ class EvidenceSerializer:
         if relative_file is not None and (Path(key).is_absolute()
                 or any(part in {'', '.', '..'} for part in key.split('/'))):
             key_path, relative_file = relative_file, None
-        if (self._credential_path(key) or self._credential_path(key_path)
+        if (self._credential_path_either(key, key_path)
                 or self._credential_path(relative_file)):
             return self._seal_key('hmac:' + self._hmac(key))
         if ((relative_file is not None and not self._tainted(relative_file))
@@ -630,6 +651,7 @@ class EvidenceSerializer:
         return key_path if key_path is not None and not self._tainted(key_path) else self._seal_key('hmac:' + self._hmac(key))
 
     def _update_dict_location(self, value, location):
+        """Update source coordinates and register an untainted project unit's root."""
         for key in ('path', 'source', 'database', 'root_path'):
             resolved = self._path(value.get(key))
             if not resolved:

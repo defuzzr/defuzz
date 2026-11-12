@@ -58,16 +58,16 @@ def build_handoff(
         )
         request = (
             f"Please adapt '{tmpl.id}' into a new template folder under templates/ "
-            f"({root_path}) "
+            f"({root_path})"
         )
     else:
         lines.append("No template is close to these answers.")
-        request = f"Please draft a new template folder under templates/ ({root_path}) "
+        request = f"Please draft a new template folder under templates/ ({root_path})"
 
     lines.extend(
         [
             "",
-            request + "following the strict template.yaml contract "
+            f"{request} following the strict template.yaml contract "
             "(id matching the folder name, name, summary, kind, layout, languages, "
             "placeholder, substitute_in, and repos).",
             "",

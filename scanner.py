@@ -659,13 +659,16 @@ def _discover_left_behind_secret_files(src_lex: Path, copy_root: Path) -> List[s
 
 def _flag_absent_secret_files(
     copy_root: Path,
-    src_lex: Path | None,
-    secret_files_left_behind: Sequence[str] | None,
-    tracked_set: set[str],
-    secrets_flagged: list[dict[str, Any]],
-    secret_counter: int,
-) -> list[str]:
-    """Append placeholders for absent secrets, preserving scan numbering and order."""
+    src_lex: Optional[Path],
+    secret_files_left_behind: Optional[Sequence[str]],
+    tracked_set: Set[str],
+    secrets_flagged: List[Dict[str, Any]],
+) -> List[str]:
+    """Append absent-secret placeholders and return the sorted left-behind paths.
+
+    Placeholder numbering continues from the existing secrets_flagged entries.
+    """
+    secret_counter = len(secrets_flagged)
     if secret_files_left_behind is not None:
         left_behind_list = sorted(
             {str(p).replace("\\", "/").strip("/") for p in secret_files_left_behind if str(p).strip("/")}
@@ -693,6 +696,86 @@ def _flag_absent_secret_files(
         })
         flagged_paths.add(absent_rel)
     return left_behind_list
+
+
+def _record_regular_file(
+    f_full: Path,
+    f_rel: str,
+    fname: str,
+    st: os.stat_result,
+    tracked_set: Set[str],
+    ext_histogram: Dict[str, int],
+    dir_stats: Dict[str, Dict[str, Any]],
+    secrets_flagged: List[Dict[str, Any]],
+    hash_buckets: Dict[str, List[str]],
+    lfs_candidates: List[Dict[str, Any]],
+    plan_docs: List[str],
+    files: List[Dict[str, Any]],
+    secret_counter: int,
+) -> int:
+    """Record one regular file and return the updated secret placeholder counter."""
+    size = st.st_size
+    mode_oct = oct(stat.S_IMODE(st.st_mode))
+    is_tracked = f_rel in tracked_set
+    _, ext = os.path.splitext(fname.lower())
+    ext_key = ext or "<no_ext>"
+    ext_histogram[ext_key] = ext_histogram.get(ext_key, 0) + 1
+
+    top_bucket = f_rel.split("/", 1)[0] if "/" in f_rel else "."
+    d_entry = dir_stats.setdefault(
+        top_bucket,
+        {"file_count": 0, "total_bytes": 0, "tracked_count": 0, "extensions": set()},
+    )
+    d_entry["file_count"] += 1
+    d_entry["total_bytes"] += size
+    if is_tracked:
+        d_entry["tracked_count"] += 1
+    d_entry["extensions"].add(ext_key)
+
+    # A file that is secret by NAME is never opened: not sniffed, not hashed.
+    secret_by_name = _is_secret_filename(f_rel)
+    secret_reasons = ["secret_filename"] if secret_by_name else []
+    if secret_by_name:
+        is_binary = False
+    else:
+        is_binary, content_reasons, _complete = _sniff_file_for_secrets(f_full)
+        secret_reasons.extend(content_reasons)
+
+    placeholder: Optional[str] = None
+    if secret_reasons:
+        secret_counter += 1
+        placeholder = f"<secret-{secret_counter}>"
+        secrets_flagged.append({
+            "path": f_rel,
+            "placeholder": placeholder,
+            "reasons": sorted(set(secret_reasons)),
+            "git_policy": "ignore",
+        })
+
+    sha256 = None if secret_by_name else _sha256_nofollow(f_full)
+    if sha256 and size > 0:
+        hash_buckets.setdefault(sha256, []).append(f_rel)
+
+    if ext in LFS_EXTENSIONS or (is_binary and size >= 100 * 1024):
+        lfs_candidates.append({
+            "path": f_rel,
+            "size": size,
+            "ext": ext_key,
+            "tracked": is_tracked,
+        })
+    if _PLAN_DOC_RE.search(f_rel):
+        plan_docs.append(f_rel)
+
+    files.append({
+        "path": f_rel,
+        "size": size,
+        "mode": mode_oct,
+        "tracked": is_tracked,
+        "is_binary": is_binary,
+        "sha256": sha256,
+        "secret_placeholder": placeholder,
+    })
+    return secret_counter
 
 
 def scan_folder(
@@ -762,70 +845,14 @@ def scan_folder(
             if not stat.S_ISREG(st.st_mode):
                 continue
 
-            size = st.st_size
-            mode_oct = oct(stat.S_IMODE(st.st_mode))
-            is_tracked = f_rel in tracked_set
-            _, ext = os.path.splitext(fname.lower())
-            ext_key = ext or "<no_ext>"
-            ext_histogram[ext_key] = ext_histogram.get(ext_key, 0) + 1
-
-            top_bucket = f_rel.split("/", 1)[0] if "/" in f_rel else "."
-            d_entry = dir_stats.setdefault(
-                top_bucket,
-                {"file_count": 0, "total_bytes": 0, "tracked_count": 0, "extensions": set()},
+            secret_counter = _record_regular_file(
+                f_full, f_rel, fname, st, tracked_set, ext_histogram, dir_stats,
+                secrets_flagged, hash_buckets, lfs_candidates, plan_docs, files,
+                secret_counter,
             )
-            d_entry["file_count"] += 1
-            d_entry["total_bytes"] += size
-            if is_tracked:
-                d_entry["tracked_count"] += 1
-            d_entry["extensions"].add(ext_key)
-
-            # A file that is secret by NAME is never opened: not sniffed, not hashed.
-            secret_by_name = _is_secret_filename(f_rel)
-            secret_reasons = ["secret_filename"] if secret_by_name else []
-            if secret_by_name:
-                is_binary = False
-            else:
-                is_binary, content_reasons, _complete = _sniff_file_for_secrets(f_full)
-                secret_reasons.extend(content_reasons)
-
-            placeholder: Optional[str] = None
-            if secret_reasons:
-                secret_counter += 1
-                placeholder = f"<secret-{secret_counter}>"
-                secrets_flagged.append({
-                    "path": f_rel,
-                    "placeholder": placeholder,
-                    "reasons": sorted(set(secret_reasons)),
-                    "git_policy": "ignore",
-                })
-
-            sha256 = None if secret_by_name else _sha256_nofollow(f_full)
-            if sha256 and size > 0:
-                hash_buckets.setdefault(sha256, []).append(f_rel)
-
-            if ext in LFS_EXTENSIONS or (is_binary and size >= 100 * 1024):
-                lfs_candidates.append({
-                    "path": f_rel,
-                    "size": size,
-                    "ext": ext_key,
-                    "tracked": is_tracked,
-                })
-            if _PLAN_DOC_RE.search(f_rel):
-                plan_docs.append(f_rel)
-
-            files.append({
-                "path": f_rel,
-                "size": size,
-                "mode": mode_oct,
-                "tracked": is_tracked,
-                "is_binary": is_binary,
-                "sha256": sha256,
-                "secret_placeholder": placeholder,
-            })
 
     left_behind_list = _flag_absent_secret_files(
-        copy_root, src_lex, secret_files_left_behind, tracked_set, secrets_flagged, secret_counter,
+        copy_root, src_lex, secret_files_left_behind, tracked_set, secrets_flagged,
     )
 
     duplicate_hashes = [

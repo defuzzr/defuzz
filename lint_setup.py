@@ -1939,6 +1939,45 @@ def _finalize_item_install(
     return notes
 
 
+def _download_setup_artifact(
+    item: SetupItem,
+    dl: Download,
+    idx: int,
+    *,
+    c_dir: Path,
+    item_install_dir: Path,
+    inst_root: Path,
+    r_home: Path,
+    env: Mapping[str, str] | None,
+    cancel: threading.Event | None,
+    fetcher: Callable[[str, Path, Callable[[int, int], None]], None],
+    emit: Callable[[SetupItem, int, str, int, int, float, str], None],
+) -> Path:
+    """Download one main artifact and report its byte-level progress."""
+    basename = PurePosixPath(urlparse(dl.url).path).name or item.name
+    dest_file = c_dir / f"{item.name}-{item.version}-{basename}"
+    _assert_managed_path(item_install_dir, inst_root, r_home=r_home, env=env)
+    c_dir.mkdir(parents=True, exist_ok=True)
+    emit(item, idx, "download", 0, 0, 0.05, f"Downloading {item.name} {item.version}")
+
+    def _on_bytes(done: int, total: int, _item: SetupItem = item, _idx: int = idx) -> None:
+        _check_cancel(cancel)
+        frac = 0.7 * (done / total) if total > 0 else 0.35
+        emit(
+            _item,
+            _idx,
+            "download",
+            done,
+            total,
+            min(0.7, max(0.05, frac)),
+            f"Downloading {_item.name} {_item.version}",
+        )
+
+    fetcher(dl.url, dest_file, _on_bytes)
+    _check_cancel(cancel)
+    return dest_file
+
+
 def run_setup(
     progress: Callable[[Progress], None] | None = None,
     *,
@@ -2058,27 +2097,11 @@ def run_setup(
                     completed_mb += max(item.size_mb, 1)
                     continue
 
-                basename = PurePosixPath(urlparse(dl.url).path).name or item.name
-                dest_file = c_dir / f"{item.name}-{item.version}-{basename}"
-                _assert_managed_path(item_install_dir, inst_root, r_home=r_home, env=env)
-                c_dir.mkdir(parents=True, exist_ok=True)
-                _emit(item, idx, "download", 0, 0, 0.05, f"Downloading {item.name} {item.version}")
-
-                def _on_bytes(done: int, total: int, _item: SetupItem = item, _idx: int = idx) -> None:
-                    _check_cancel(cancel)
-                    frac = 0.7 * (done / total) if total > 0 else 0.35
-                    _emit(
-                        _item,
-                        _idx,
-                        "download",
-                        done,
-                        total,
-                        min(0.7, max(0.05, frac)),
-                        f"Downloading {_item.name} {_item.version}",
-                    )
-
-                fetcher(dl.url, dest_file, _on_bytes)
-                _check_cancel(cancel)
+                dest_file = _download_setup_artifact(
+                    item, dl, idx, c_dir=c_dir, item_install_dir=item_install_dir,
+                    inst_root=inst_root, r_home=r_home, env=env, cancel=cancel,
+                    fetcher=fetcher, emit=_emit,
+                )
 
                 file_size = _stage_verify_and_extract(
                     dest_file,
@@ -2189,17 +2212,49 @@ def download_sources(
     return rows
 
 
+def _plan_row(
+    *,
+    name: str,
+    kind: str,
+    version: str,
+    size_mb: int,
+    url: str,
+    hash_value: str,
+    hash_algo: str,
+    sources: list[dict[str, Any]],
+    install_dir: str,
+    post_install: list[str],
+    post_install_argv: list[list[str]],
+) -> dict[str, Any]:
+    """Keep the consent-screen row schema common to both installation plans."""
+    return {
+        "name": name,
+        "kind": kind,
+        "version": version,
+        "size_mb": size_mb,
+        "url": url,
+        "hash": hash_value,
+        "hash_algo": hash_algo,
+        "verification": VERIFIED_BY_CHECKSUM,
+        "sources": sources,
+        "install_dir": install_dir,
+        "post_install": post_install,
+        "post_install_argv": post_install_argv,
+    }
+
+
 def _csharpier_plan_row(
     item: SetupItem,
     dl: Download,
     plat: tuple[str, str],
+    *,
     inst_root: Path,
-    item_install_dir: Path,
     b_dir: Path,
     r_home: Path,
     ext_dotnet: str | None,
 ) -> dict[str, Any]:
     """Disclose the versioned CSharpier install and its atomic published link."""
+    item_install_dir = inst_root / item.name
     csharpier_target_pattern = inst_root / "csharpier" / f"{_CSHARPIER_VERSION}-<random>"
     csharpier_exe = exe_name("csharpier", plat)
     published_link = b_dir / csharpier_exe
@@ -2217,29 +2272,29 @@ def _csharpier_plan_row(
     ]
     tool_sources = _item_sources(item, dl, include_main=False)
     first = tool_sources[0] if tool_sources else {}
-    return {
-        "name": item.name,
-        "kind": item.kind,
-        "version": _CSHARPIER_VERSION,
-        "size_mb": sum(p.size_mb for p in item.packages),
-        "url": first.get("url", ""),
-        "hash": first.get("hash", ""),
-        "hash_algo": first.get("hash_algo", ""),
-        "verification": VERIFIED_BY_CHECKSUM,
-        "sources": tool_sources,
-        "install_dir": str(csharpier_target_pattern),
-        "post_install": [
+    return _plan_row(
+        name=item.name,
+        kind=item.kind,
+        version=_CSHARPIER_VERSION,
+        size_mb=sum(p.size_mb for p in item.packages),
+        url=first.get("url", ""),
+        hash_value=first.get("hash", ""),
+        hash_algo=first.get("hash_algo", ""),
+        sources=tool_sources,
+        install_dir=str(csharpier_target_pattern),
+        post_install=[
             f"{' '.join(argv)} (symlink {published_link} -> {versioned_binary})"
             for argv in tool_only_substituted
         ],
-        "post_install_argv": tool_only_substituted,
-    }
+        post_install_argv=tool_only_substituted,
+    )
 
 
 def _artifact_plan_row(
     item: SetupItem,
     dl: Download,
     plat: tuple[str, str],
+    *,
     item_install_dir: Path,
     b_dir: Path,
     r_home: Path,
@@ -2259,20 +2314,19 @@ def _artifact_plan_row(
                 f"extract {pkg.filename} ({VERIFIED_BY_CHECKSUM}) into "
                 f"{pwsh_modules_root(plat, r_home) / pkg.name / pkg.version}"
             )
-    return {
-        "name": item.name,
-        "kind": item.kind,
-        "version": item.version,
-        "size_mb": item.size_mb,
-        "url": dl.url,
-        "hash": dl.hash,
-        "hash_algo": dl.hash_algo,
-        "verification": VERIFIED_BY_CHECKSUM,
-        "sources": _item_sources(item, dl),
-        "install_dir": str(item_install_dir),
-        "post_install": post_lines,
-        "post_install_argv": substituted,
-    }
+    return _plan_row(
+        name=item.name,
+        kind=item.kind,
+        version=item.version,
+        size_mb=item.size_mb,
+        url=dl.url,
+        hash_value=dl.hash,
+        hash_algo=dl.hash_algo,
+        sources=_item_sources(item, dl),
+        install_dir=str(item_install_dir),
+        post_install=post_lines,
+        post_install_argv=substituted,
+    )
 
 
 def describe_plan(
@@ -2297,7 +2351,12 @@ def describe_plan(
             plat, eff_env, b_dir
         )
         if tool_only:
-            plan.append(_csharpier_plan_row(item, dl, plat, inst_root, item_install_dir, b_dir, r_home, ext_dotnet))
+            plan.append(_csharpier_plan_row(
+                item, dl, plat, inst_root=inst_root, b_dir=b_dir, r_home=r_home, ext_dotnet=ext_dotnet
+            ))
         else:
-            plan.append(_artifact_plan_row(item, dl, plat, item_install_dir, b_dir, r_home, ext_dotnet))
+            plan.append(_artifact_plan_row(
+                item, dl, plat, item_install_dir=item_install_dir,
+                b_dir=b_dir, r_home=r_home, ext_dotnet=ext_dotnet,
+            ))
     return plan

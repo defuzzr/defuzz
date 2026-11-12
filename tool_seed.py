@@ -93,22 +93,18 @@ def _probe_seed_entry(
     name: str,
     entry: dict[str, Any],
     root: Path,
-    probe_failed: dict[str, str],
-) -> None:
+) -> tuple[str, str | None]:
+    """Return the probed version and an optional sanitized failure message."""
     try:
         installed_ver, _where = toolchk.probe(name, entry, root)
-        entry["version"] = installed_ver
     except FileNotFoundError:
         err_str = toolchk.missing_tool_line(name, entry.get("minimum"))
-        entry["version"] = "unknown"
-        entry["reason"] = f"{entry['reason']} Probe failed at seeding: {err_str}"
-        probe_failed[name] = err_str
     except Exception:  # noqa: BLE001
         # Plain words only: the raw error can carry paths and command output the user never gave.
         err_str = f"{name}: found, but its version could not be read. Check that {name} runs, {toolchk.SETUP_HINT}"
-        entry["version"] = "unknown"
-        entry["reason"] = f"{entry['reason']} Probe failed at seeding: {err_str}"
-        probe_failed[name] = err_str
+    else:
+        return installed_ver, None
+    return "unknown", err_str
 
 
 def seed_lock(
@@ -172,7 +168,11 @@ def seed_lock(
             entry["source"] = "auto"
         else:
             entry = dict(detected[name])
-        _probe_seed_entry(name, entry, root, probe_failed)
+        installed_ver, probe_error = _probe_seed_entry(name, entry, root)
+        entry["version"] = installed_ver
+        if probe_error is not None:
+            entry["reason"] = f"{entry['reason']} Probe failed at seeding: {probe_error}"
+            probe_failed[name] = probe_error
 
         merged_tools[name] = entry
         if prev is None:

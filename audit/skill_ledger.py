@@ -331,6 +331,7 @@ def audit_skill_ledger(
         _cut('time_budget', 'time_budget')
         return True
 
+    # Called only before config lookup, so the captured curator values reflect caller input.
     def _unmeasured_profile(reason: str) -> dict[str, Any]:
         finding = make_finding(
             rule_id='skill_ledger.could_not_verify',

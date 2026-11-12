@@ -2141,9 +2141,18 @@ def accept(
     created_dirs: List[Path] = []
     try:
         return _accept_template(
-            proposal, register=register, git=git, db_path=db_path, timeout_s=timeout_s, clock=clock,
-            plugin_root=plugin_root, options=options, cancel=cancel, remember_options=remember_options,
-            created_dirs=created_dirs, progress=progress,
+            proposal,
+            register=register,
+            git=git,
+            db_path=db_path,
+            timeout_s=timeout_s,
+            clock=clock,
+            plugin_root=plugin_root,
+            options=options,
+            cancel=cancel,
+            remember_options=remember_options,
+            created_dirs=created_dirs,
+            progress=progress,
         )
     except BaseException as exc:
         if not created_dirs:
@@ -2154,24 +2163,38 @@ def accept(
         raise out from exc
 
 
+@dataclass(frozen=True)
+class _StagedOutcome:
+    """What staging found for one repo, carried into its move and record step."""
+
+    seed_summary: dict[str, Any]
+    check_status: str | None
+    check_returncode: int | None
+    check_output: str
+
+
 def _prepare_staged_repos(
     proposal: Proposal,
     *,
     now_fn: Callable[[], float],
     deadline: float,
     cancel: Any,
-    template_rules: Any,
+    template_rules: dict[str, Any] | None,
     progress: Callable[[str], None] | None,
-) -> list[dict[str, Any]]:
-    """Seed, check, and finalize every staged repository before any destination is moved."""
-    staged_outcomes: List[Dict[str, Any]] = []
+) -> list[_StagedOutcome]:
+    """Seed, check, and finalize every staged repository before any destination is moved.
+
+    Mutates each `plan.scaffold_rules_hash` in place: when a repo's check is absent or did not
+    pass, the scaffold context is regenerated in staging and the plan's hash is replaced.
+    """
+    staged_outcomes: list[_StagedOutcome] = []
     for plan in proposal.repos:
         _check_cancelled(cancel, proposal.staging_dir, step=f"before check {plan.name}")
         _check_deadline(now_fn, deadline, f"before seed {plan.name}", staging_dir=proposal.staging_dir, keep_staging=True)
         seed_summary = _seed_and_verify_tools(proposal, plan)
 
-        check_status: Optional[str] = None
-        check_returncode: Optional[int] = None
+        check_status: str | None = None
+        check_returncode: int | None = None
         check_output: str = ""
         if plan.check is not None:
             _report_progress(progress, "check")
@@ -2191,15 +2214,45 @@ def _prepare_staged_repos(
             )
 
         staged_outcomes.append(
-            {
-                "seed_summary": seed_summary,
-                "check_status": check_status,
-                "check_returncode": check_returncode,
-                "check_output": check_output,
-            }
+            _StagedOutcome(
+                seed_summary=seed_summary,
+                check_status=check_status,
+                check_returncode=check_returncode,
+                check_output=check_output,
+            )
         )
 
     return staged_outcomes
+
+
+def _publish_into_place(
+    plan: RepoPlan,
+    *,
+    created_dirs: list[Path],
+    accepted_repos: list[dict[str, Any]],
+) -> None:
+    """Move one staged repo to its destination and append every folder now in place to `created_dirs`."""
+    if os.path.lexists(plan.dest):
+        _raise_scaffold_error(f"Destination already exists: {plan.dest}", accepted_repos)
+
+    try:
+        _publish_staged_repo(plan)
+    except ScaffoldError as exc:
+        # Folders the publish made above the destination and could not remove stay listed.
+        created_dirs.extend(Path(p) for p in (getattr(exc, "created_dirs", None) or []))
+        if getattr(exc, "after_rename", False) or not os.path.lexists(plan.staged):
+            # it left staging (or a copy landed): it may be in place, or wherever the folder went
+            landed = _landed_path(plan)
+            check_dir = getattr(exc, "check_dir", None)
+            if check_dir is not None and not os.path.lexists(landed):
+                # Not where it was expected: the message names the folder to check, and so
+                # does created_dirs (no "created and kept" claim about a path that is empty).
+                moved = ScaffoldError(f"{exc}{_format_completed_note(accepted_repos)}", completed=list(accepted_repos))
+                moved.created_dirs = [Path(check_dir)]  # type: ignore[attr-defined]
+                raise moved from exc
+            created_dirs.append(landed)
+        _raise_scaffold_error(str(exc), accepted_repos, cause=exc)
+    created_dirs.append(plan.dest)
 
 
 def _accept_template(
@@ -2246,8 +2299,12 @@ def _accept_template(
     template_rules = _resolve_template_rules_for_proposal(proposal)
 
     staged_outcomes = _prepare_staged_repos(
-        proposal, now_fn=now_fn, deadline=deadline, cancel=cancel,
-        template_rules=template_rules, progress=progress,
+        proposal,
+        now_fn=now_fn,
+        deadline=deadline,
+        cancel=cancel,
+        template_rules=template_rules,
+        progress=progress,
     )
 
     accepted_repos: List[Dict[str, Any]] = []
@@ -2267,34 +2324,14 @@ def _accept_template(
     _report_progress(progress, "move")  # from here on a cancel is too late
     for plan, outcome in zip(proposal.repos, staged_outcomes):
         _check_deadline(now_fn, deadline, f"before move {plan.name}", created_dirs=created_dirs)
-        if os.path.lexists(plan.dest):
-            _raise_scaffold_error(f"Destination already exists: {plan.dest}", accepted_repos)
+        _publish_into_place(plan, created_dirs=created_dirs, accepted_repos=accepted_repos)
 
-        try:
-            _publish_staged_repo(plan)
-        except ScaffoldError as exc:
-            # Folders the publish made above the destination and could not remove stay listed.
-            created_dirs.extend(Path(p) for p in (getattr(exc, "created_dirs", None) or []))
-            if getattr(exc, "after_rename", False) or not os.path.lexists(plan.staged):
-                # it left staging (or a copy landed): it may be in place, or wherever the folder went
-                landed = _landed_path(plan)
-                check_dir = getattr(exc, "check_dir", None)
-                if check_dir is not None and not os.path.lexists(landed):
-                    # Not where it was expected: the message names the folder to check, and so
-                    # does created_dirs (no "created and kept" claim about a path that is empty).
-                    moved = ScaffoldError(f"{exc}{_format_completed_note(accepted_repos)}", completed=list(accepted_repos))
-                    moved.created_dirs = [Path(check_dir)]  # type: ignore[attr-defined]
-                    raise moved from exc
-                created_dirs.append(landed)
-            _raise_scaffold_error(str(exc), accepted_repos, cause=exc)
-        created_dirs.append(plan.dest)
-
-        seed_summary = outcome["seed_summary"]
+        seed_summary = outcome.seed_summary
         if isinstance(seed_summary, dict):
             seed_summary = {**seed_summary, "written": str(plan.dest / "TOOLS.lock")}
-        check_status = outcome["check_status"]
-        check_returncode = outcome["check_returncode"]
-        check_output = outcome["check_output"]
+        check_status = outcome.check_status
+        check_returncode = outcome.check_returncode
+        check_output = outcome.check_output
 
         commit_sha = _init_and_commit_dest_repo(
             git, plan.dest, proposal.template_id,

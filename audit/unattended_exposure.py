@@ -588,7 +588,12 @@ def _toolset_labels(names: list[str], *, explicit_path: bool) -> set[str]:
     return labels
 
 
-def _collect_peer_timeouts(peer_groups) -> set[int]:
+def _saved_toolset_labels(names: list[str]) -> set[str]:
+    explicit_path = any(n.strip() in CONFIGURABLE_TOOLSET_KEYS for n in names)
+    return _toolset_labels(names, explicit_path=explicit_path)
+
+
+def _collect_peer_timeouts(peer_groups: tuple[dict[str, Any], ...]) -> set[int]:
     timeouts: set[int] = set()
     for p_dict in peer_groups:
         for p_entry in p_dict.values():
@@ -599,7 +604,9 @@ def _collect_peer_timeouts(peer_groups) -> set[int]:
     return timeouts
 
 
-def _collect_a2a_peers(config: dict[str, Any], gw_sec: dict[str, Any]):
+def _collect_a2a_peers(
+    config: dict[str, Any], gw_sec: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], set[int]]:
     # a2a: outbound peers from a2a_agents (plugins/platforms/a2a/tools.py:31-32); served agents from
     # platforms.a2a.extra.agents|served_agents, else top-level a2a_served_agents / a2a.served_agents
     # (plugins/platforms/a2a/adapter.py:390-400; gateway/config_loader.py:150-170 merges
@@ -623,11 +630,11 @@ def _collect_a2a_peers(config: dict[str, Any], gw_sec: dict[str, Any]):
             served.update({str(i): v for i, v in enumerate(fb)})
     served = {k: v for k, v in served.items() if isinstance(v, dict)}
     timeouts = _collect_peer_timeouts((outbound_peers, served))
-    return outbound_peers, plat_top, served, timeouts
+    return outbound_peers, served, timeouts
 
 
 def _count_platform_peers_or_users(
-    plat_name: str, config: dict[str, Any], plat_top: dict[str, Any], total_peers: int,
+    plat_name: str, config: dict[str, Any], *, plat_top: dict[str, Any], total_peers: int,
 ) -> int:
     if plat_name == 'a2a':
         return total_peers
@@ -649,6 +656,7 @@ def _evaluate_platform_toolsets(
     agent_sec: dict[str, Any],
     plat_top: dict[str, Any],
     total_peers: int,
+    *,
     unverified_all: bool,
 ) -> dict[str, Any]:
     # platform_toolsets.<platform> (hermes_cli/tools_config.py:571-646), minus agent.disabled_toolsets.
@@ -667,8 +675,7 @@ def _evaluate_platform_toolsets(
     cli_list = _names(pt_sec.get('cli')) if 'cli' in pt_sec else ['hermes-cli']
     cli_powerful: set[str] = set()
     if cli_list is not None:
-        cli_explicit = any(n.strip() in CONFIGURABLE_TOOLSET_KEYS for n in cli_list)
-        cli_powerful = _toolset_labels(cli_list, explicit_path=cli_explicit)
+        cli_powerful = _saved_toolset_labels(cli_list)
     cli_powerful -= disabled_labels
 
     non_cli_platforms: dict[str, dict[str, Any]] = {}
@@ -682,8 +689,7 @@ def _evaluate_platform_toolsets(
             ts_list = _names(raw_ts_list)
             if ts_list is None:
                 continue
-            explicit_path = any(n.strip() in CONFIGURABLE_TOOLSET_KEYS for n in ts_list)
-            p_tools = _toolset_labels(ts_list, explicit_path=explicit_path)
+            p_tools = _saved_toolset_labels(ts_list)
             p_tools -= disabled_labels
             default_bundle = BUILTIN_PLATFORM_DEFAULTS.get(plat_str)
             default_tools = set(STATIC_COMPOSITE_LABELS.get(default_bundle or '', frozenset()))
@@ -700,7 +706,9 @@ def _evaluate_platform_toolsets(
                 'beyond_default_high_risk_tools': beyond,
                 'remote': plat_str not in LOCAL_SURFACES,
                 'toolset_count': len(ts_list),
-                'peer_or_user_count': _count_platform_peers_or_users(plat_str, config, plat_top, total_peers),
+                'peer_or_user_count': _count_platform_peers_or_users(
+                    plat_str, config, plat_top=plat_top, total_peers=total_peers,
+                ),
             })
 
     return {
@@ -708,6 +716,46 @@ def _evaluate_platform_toolsets(
         'cli_powerful_tools': [] if unverified_all else sorted(cli_powerful),
         'non_cli_platforms': non_cli_platforms,
         'other_platforms': other_platforms,
+    }
+
+
+def _evaluate_mcp_servers(
+    config: dict[str, Any],
+    *,
+    unverified_all: bool,
+    set_row: Callable[[str, Any, str, bool | None], None],
+) -> dict[str, int]:
+    # mcp_servers: count of dict entries enabled per tools/mcp_tool_common.py:124-144 (absent/null/
+    # unparseable = on) as used by hermes_cli/tools_config.py:402-412. Server NAMES are never emitted.
+    mcp_servers_raw = config.get('mcp_servers')
+    configured_cnt = len(mcp_servers_raw) if isinstance(mcp_servers_raw, dict) else 0
+    enabled_cnt = 0
+    disabled_cnt = 0
+    if isinstance(mcp_servers_raw, dict):
+        for scfg in mcp_servers_raw.values():
+            if not isinstance(scfg, dict):
+                continue
+            en = scfg.get('enabled', True)
+            off = (
+                (isinstance(en, (bool, int, float)) and not bool(en))
+                or (isinstance(en, str) and en.strip().lower() in MCP_FALSE_WORDS)
+            )
+            if off:
+                disabled_cnt += 1
+            else:
+                enabled_cnt += 1
+    if unverified_all:
+        set_row('mcp_servers', None, 'could_not_verify', None)
+    elif 'mcp_servers' not in config or mcp_servers_raw is None:
+        set_row('mcp_servers', 0, 'default', False)
+    elif isinstance(mcp_servers_raw, dict):
+        set_row('mcp_servers', enabled_cnt, 'config', enabled_cnt > 0)
+    else:
+        set_row('mcp_servers', None, 'could_not_verify', None)
+    return {
+        'configured_count': 0 if unverified_all else configured_cnt,
+        'enabled_count': 0 if unverified_all else enabled_cnt,
+        'disabled_count': 0 if unverified_all else disabled_cnt,
     }
 
 
@@ -1069,40 +1117,10 @@ def _evaluate_settings_and_sanity(
         else:
             set_row('plugins.enabled', None, 'could_not_verify', None)
 
-    # mcp_servers: count of dict entries enabled per tools/mcp_tool_common.py:124-144 (absent/null/
-    # unparseable = on) as used by hermes_cli/tools_config.py:402-412. Server NAMES are never emitted.
-    mcp_servers_raw = config.get('mcp_servers')
-    configured_cnt = len(mcp_servers_raw) if isinstance(mcp_servers_raw, dict) else 0
-    enabled_cnt = 0
-    disabled_cnt = 0
-    if isinstance(mcp_servers_raw, dict):
-        for scfg in mcp_servers_raw.values():
-            if not isinstance(scfg, dict):
-                continue
-            en = scfg.get('enabled', True)
-            off = (
-                (isinstance(en, (bool, int, float)) and not bool(en))
-                or (isinstance(en, str) and en.strip().lower() in MCP_FALSE_WORDS)
-            )
-            if off:
-                disabled_cnt += 1
-            else:
-                enabled_cnt += 1
-    if unverified_all:
-        set_row('mcp_servers', None, 'could_not_verify', None)
-    elif 'mcp_servers' not in config or mcp_servers_raw is None:
-        set_row('mcp_servers', 0, 'default', False)
-    elif isinstance(mcp_servers_raw, dict):
-        set_row('mcp_servers', enabled_cnt, 'config', enabled_cnt > 0)
-    else:
-        set_row('mcp_servers', None, 'could_not_verify', None)
-    mcp_info = {
-        'configured_count': 0 if unverified_all else configured_cnt,
-        'enabled_count': 0 if unverified_all else enabled_cnt,
-        'disabled_count': 0 if unverified_all else disabled_cnt,
-    }
+    mcp_info = _evaluate_mcp_servers(config, unverified_all=unverified_all, set_row=set_row)
 
-    outbound_peers, plat_top, served, timeouts = _collect_a2a_peers(config, gw_sec)
+    outbound_peers, served, timeouts = _collect_a2a_peers(config, gw_sec)
+    plat_top = _section(config, 'platforms')
     total_peers = len(outbound_peers) + len(served)
     if unverified_all:
         set_row('a2a_agents', None, 'could_not_verify', None)
@@ -1118,7 +1136,7 @@ def _evaluate_settings_and_sanity(
     }
 
     platform_info = _evaluate_platform_toolsets(
-        config, agent_sec, plat_top, total_peers, unverified_all,
+        config, agent_sec, plat_top, total_peers, unverified_all=unverified_all,
     )
 
     mem_sec = _section(config, 'memory')

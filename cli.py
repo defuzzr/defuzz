@@ -1435,15 +1435,6 @@ def _handle_tools_subcommand(ns: argparse.Namespace) -> int:
     return 2
 
 
-def _handle_check_subcommand(ns: argparse.Namespace) -> int:
-    # Report-only: an agent home or home folder is a finding here, never a refusal.
-    from .structure_check import check_structure, exit_code, format_text
-
-    result = check_structure(ns.path)
-    print(json.dumps(result, indent=2) if ns.as_json else format_text(result))
-    return exit_code(result)
-
-
 def _audit_home() -> Optional[str]:
     """Audited profile path, used only to shorten paths in `audit --summary`; None hides all paths."""
     try:
@@ -1572,7 +1563,18 @@ def _missing_yaml_message(ns: argparse.Namespace) -> Optional[str]:
     return None
 
 
+def _handle_check_subcommand(ns: argparse.Namespace) -> int:
+    """Report structural findings and return the corresponding exit code."""
+    # Report-only: an agent home or home folder is a finding here, never a refusal.
+    from .structure_check import check_structure, exit_code, format_text
+
+    result = check_structure(ns.path)
+    print(json.dumps(result, indent=2) if ns.as_json else format_text(result))
+    return exit_code(result)
+
+
 def _handle_audit_subcommand(ns: argparse.Namespace) -> int:
+    """Execute an audit action and print its JSON result or text summary."""
     from .audit_surface import AUDIT_SCOPE_DISCLOSURE, execute_audit
     if ns.audit_action in ("run", "resume"):
         print(AUDIT_SCOPE_DISCLOSURE, file=sys.stderr)
@@ -1604,6 +1606,7 @@ def _handle_audit_subcommand(ns: argparse.Namespace) -> int:
 
 
 def _handle_copy_subcommand(ns: argparse.Namespace) -> int:
+    """Copy a project and report any secret files left behind."""
     include_secret_files = bool(getattr(ns, "include_secret_files", False))
     left_behind: List[str] = []
     dst = copy_tree_nofollow(
@@ -1635,6 +1638,7 @@ def _handle_copy_subcommand(ns: argparse.Namespace) -> int:
 
 
 def _handle_place_subcommand(ns: argparse.Namespace) -> int:
+    """Execute the requested placement action and print its JSON result."""
     if ns.rule:
         place_args: Dict[str, Any] = {
             "action": "add_rule",
@@ -1652,6 +1656,31 @@ def _handle_place_subcommand(ns: argparse.Namespace) -> int:
     else:
         place_args = {"action": "status", "project_root": ns.project_root}
     print(json.dumps(execute_defuzz_place(place_args), indent=2))
+    return 0
+
+
+def _handle_project_subcommand(ns: argparse.Namespace, subcmd: str, ctx: Any = None) -> int:
+    """Run a scan, rules proposal, apply, or combined project operation."""
+    action_map = {"scan": "scan", "rules": "propose_rules", "apply": "apply", "run": "run"}
+    if subcmd in ("apply", "run"):
+        state_db_path()  # fail before copying when the state folder is not writable
+    res = execute_defuzz_project(
+        {
+            "action": action_map[subcmd],
+            "copy_path": ns.folder,
+            "source_path": getattr(ns, "source_path", None),
+            "staging_path": getattr(ns, "staging_path", None),
+            "inventory_path": getattr(ns, "inventory_path", None),
+            "rules_path": getattr(ns, "rules_path", None),
+            "report_path": getattr(ns, "report_path", None),
+            "use_fallback_rules": getattr(ns, "use_fallback_rules", False),
+            "include_secret_files": getattr(ns, "include_secret_files", False),
+        },
+        ctx=ctx,
+    )
+    if subcmd == "run" and res.get("secret_files_notice"):
+        print(res["secret_files_notice"], file=sys.stderr)
+    print(json.dumps(res, indent=2))
     return 0
 
 
@@ -1686,27 +1715,7 @@ def handle_defuzz_cli(ns: argparse.Namespace, ctx: Any = None) -> int:
         if subcmd == "copy":
             return _handle_copy_subcommand(ns)
         if subcmd in ("scan", "rules", "apply", "run"):
-            action_map = {"scan": "scan", "rules": "propose_rules", "apply": "apply", "run": "run"}
-            if subcmd in ("apply", "run"):
-                state_db_path()  # fail before copying when the state folder is not writable
-            res = execute_defuzz_project(
-                {
-                    "action": action_map[subcmd],
-                    "copy_path": ns.folder,
-                    "source_path": getattr(ns, "source_path", None),
-                    "staging_path": getattr(ns, "staging_path", None),
-                    "inventory_path": getattr(ns, "inventory_path", None),
-                    "rules_path": getattr(ns, "rules_path", None),
-                    "report_path": getattr(ns, "report_path", None),
-                    "use_fallback_rules": getattr(ns, "use_fallback_rules", False),
-                    "include_secret_files": getattr(ns, "include_secret_files", False),
-                },
-                ctx=ctx,
-            )
-            if subcmd == "run" and res.get("secret_files_notice"):
-                print(res["secret_files_notice"], file=sys.stderr)
-            print(json.dumps(res, indent=2))
-            return 0
+            return _handle_project_subcommand(ns, subcmd, ctx=ctx)
         if subcmd == "trust":
             print(json.dumps(_handle_trust_subcommand(ns.folder, declared_only=bool(getattr(ns, "declared_only", False))), indent=2))
             return 0

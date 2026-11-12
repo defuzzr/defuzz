@@ -850,7 +850,10 @@ def _check_artifact_hash(label: str, hash_val: str, hash_algo: str, hash_source:
     if exp_len is None:
         problems.append(f"{label}: unsupported hash_algo {hash_algo!r}")
     elif len(hash_val) != exp_len or not _HEX_RE.match(hash_val):
-        problems.append(f"{label}: invalid {hash_algo} hash (len={len(hash_val)}, expected {exp_len} lowercase hex)")
+        problems.append(
+            f"{label}: invalid {hash_algo} hash "
+            f"(len={len(hash_val)}, expected {exp_len} lowercase hex)"
+        )
     if hash_source not in ("published", "computed"):
         problems.append(f"{label}: invalid hash_source {hash_source!r}")
     return problems

@@ -939,7 +939,8 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
         finally:
             current_path = previous
 
-    def start_directory_tree(path, explicit, parent_fd, referenced, fd):
+    def admit_directory(path, explicit, parent_fd, referenced, fd):
+        """Return None to stop traversal, or a bool to continue (True starts a tree)."""
         starts_tree = False
         if not unbounded:
             if not in_subject(path) and _within_any(path, SYSTEM_ROOTS):
@@ -1013,7 +1014,7 @@ def collect_outward(profile_dir: Path, selected_projects: list[str], *, excluded
                     if _identity(os.fstat(fd)) != _identity(info):
                         unknown('directory_changed_during_inspection: ' + str(path))
                         return
-                    starts_tree = start_directory_tree(path, explicit, parent_fd, referenced, fd)
+                    starts_tree = admit_directory(path, explicit, parent_fd, referenced, fd)
                     if starts_tree is None:
                         return
                     in_venv = bool(venv_roots) and _within_any(path, venv_roots)

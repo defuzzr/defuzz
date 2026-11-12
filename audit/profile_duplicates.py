@@ -389,10 +389,25 @@ def _envelope(
     }
 
 
+def _shared_line_share(pname: str, lhashes: list[bytes], n_other: int, line_sets_by_prof: dict[str, set[bytes]]) -> float:
+    if not lhashes or n_other <= 0:
+        return 0.0
+    shared_count = 0
+    for lh in lhashes:
+        other_occurrences = sum(
+            1 for other_p, other_set in line_sets_by_prof.items()
+            if other_p != pname and lh in other_set
+        )
+        if other_occurrences * 2 >= n_other:
+            shared_count += 1
+    return round(shared_count / len(lhashes), 4)
+
+
 def _summarize_identity_files(
     identity_raw_by_kind: dict[str, list[tuple[str, bytes, list[bytes]]]],
     profile_folder: Callable[[str], str | None],
 ) -> dict[str, Any]:
+    """Summarize exact and line-level identity similarity across profiles."""
     identical_profiles_union: set[str] = set()
     by_kind_summary: dict[str, dict[str, Any]] = {}
     all_file_shares: list[float] = []
@@ -417,18 +432,7 @@ def _summarize_identity_files(
         line_sets_by_prof = {pname: set(lhashes) for pname, _, lhashes in entries_k}
         kind_shares: list[float] = []
         for pname, _, lhashes in entries_k:
-            if not lhashes or n_other <= 0:
-                share = 0.0
-            else:
-                shared_count = 0
-                for lh in lhashes:
-                    other_occurrences = sum(
-                        1 for other_p, other_set in line_sets_by_prof.items()
-                        if other_p != pname and lh in other_set
-                    )
-                    if other_occurrences * 2 >= n_other:
-                        shared_count += 1
-                share = round(shared_count / len(lhashes), 4)
+            share = _shared_line_share(pname, lhashes, n_other, line_sets_by_prof)
             kind_shares.append(share)
             if counts_for_finding:
                 all_file_shares.append(share)
@@ -465,6 +469,18 @@ def _summarize_identity_files(
         "by_kind": by_kind_summary,
         "files_count": len(identity_file_rows),
         "files": [row for row in identity_file_rows if row["path"] is not None][:MAX_IDENTITY_ROWS_LISTED],
+    }
+
+
+def _profile_families_section(profile_rows: list[dict[str, Any]], folder_paths: Callable[[list[str]], list[str]]) -> dict[str, Any]:
+    # Families are computed from safe names only, so a label never carries an unsafe name's characters.
+    families = _compute_profile_families([r["name"] for r in profile_rows if _is_safe_name(r["name"])])
+    return {
+        "family_count": len(families),
+        "families": [
+            {"kind": kind, "member_count": len(members), "paths": folder_paths(members)}
+            for kind, members in families[:MAX_NAMES_LISTED]
+        ],
     }
 
 
@@ -1052,15 +1068,7 @@ def audit_profile_duplicates(
     }
 
     # (e) Profile families
-    # Families are computed from safe names only, so a label never carries an unsafe name's characters.
-    families = _compute_profile_families([r["name"] for r in profile_rows if _is_safe_name(r["name"])])
-    profile_families_section = {
-        "family_count": len(families),
-        "families": [
-            {"kind": kind, "member_count": len(members), "paths": folder_paths(members)}
-            for kind, members in families[:MAX_NAMES_LISTED]
-        ],
-    }
+    profile_families_section = _profile_families_section(profile_rows, folder_paths)
 
     # Findings evaluation (DO NOT FLAG homes with < 3 profiles)
     findings: list[dict[str, Any]] = []

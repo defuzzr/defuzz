@@ -517,6 +517,7 @@ def save_answers(
             return int(cur.lastrowid or 0)
 
 
+# Shared by the single and batch writers so both apply identical conflict semantics.
 _UPSERT_TEMPLATE_OPTION_SQL = """
 INSERT INTO template_options (template_id, option_id, choice, chosen_at)
 VALUES (?, ?, ?, ?)
@@ -526,7 +527,12 @@ ON CONFLICT(template_id, option_id) DO UPDATE SET
 """
 
 
-def _require_nonempty(value: Any, label: str) -> None:
+_SELECT_TEMPLATE_OPTION_ROWS = (
+    "SELECT template_id, option_id, choice, chosen_at FROM template_options"
+)
+
+
+def _require_nonempty_str(value: Any, label: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a non-empty string")
 
@@ -540,8 +546,12 @@ def _template_option_dict(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-def _state_db_missing(db_path: Path | str | None) -> bool:
-    """Readers return empty results instead of creating a DB that does not exist yet."""
+def _state_db_missing(db_path: Optional[Path | str]) -> bool:
+    """Readers return empty results instead of creating a DB that does not exist yet.
+
+    With no ``db_path`` this resolves ``state_db_path()``, which may still create the
+    plugin data folder and publish a migrated legacy DB; no empty schema DB is created.
+    """
     target = Path(db_path).expanduser() if db_path is not None else state_db_path()
     return not target.is_file()
 
@@ -555,9 +565,9 @@ def record_template_option(
     chosen_at: Optional[int] = None,
 ) -> None:
     """Record or update a chosen template option in the template_options table."""
-    _require_nonempty(template_id, "template_id")
-    _require_nonempty(option_id, "option_id")
-    _require_nonempty(choice, "choice")
+    _require_nonempty_str(template_id, "template_id")
+    _require_nonempty_str(option_id, "option_id")
+    _require_nonempty_str(choice, "choice")
     ts = int(chosen_at) if chosen_at is not None else int(time.time())
     with closing(_connect(db_path)) as conn:
         with conn:
@@ -581,12 +591,12 @@ def record_template_options(
     """Record multiple option choices for a template in a single transaction."""
     if not options:
         return
-    _require_nonempty(template_id, "template_id")
+    _require_nonempty_str(template_id, "template_id")
     ts = int(chosen_at) if chosen_at is not None else int(time.time())
     rows: list[tuple[str, str, str, int]] = []
     for opt_id, choice in options.items():
-        _require_nonempty(opt_id, "option_id")
-        _require_nonempty(choice, "choice")
+        _require_nonempty_str(opt_id, "option_id")
+        _require_nonempty_str(choice, "choice")
         rows.append((template_id.strip(), opt_id.strip(), choice.strip(), ts))
     with closing(_connect(db_path)) as conn:
         with conn:
@@ -609,11 +619,7 @@ def get_template_option(
         return None
     with closing(_connect(db_path)) as conn:
         row = conn.execute(
-            """
-            SELECT template_id, option_id, choice, chosen_at
-            FROM template_options
-            WHERE template_id = ? AND option_id = ?
-            """,
+            _SELECT_TEMPLATE_OPTION_ROWS + " WHERE template_id = ? AND option_id = ?",
             (template_id, option_id),
         ).fetchone()
     if row is None:
@@ -648,29 +654,17 @@ def list_template_options(
     """Return recorded template_options rows ordered by template_id, option_id."""
     if _state_db_missing(db_path):
         return []
+    sql = _SELECT_TEMPLATE_OPTION_ROWS
+    params: tuple[str, ...] = ()
+    if template_id is not None:
+        sql += " WHERE template_id = ?"
+        params = (template_id,)
     with closing(_connect(db_path)) as conn:
-        if template_id is not None:
-            rows = conn.execute(
-                """
-                SELECT template_id, option_id, choice, chosen_at
-                FROM template_options
-                WHERE template_id = ?
-                ORDER BY template_id ASC, option_id ASC
-                """,
-                (template_id,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """
-                SELECT template_id, option_id, choice, chosen_at
-                FROM template_options
-                ORDER BY template_id ASC, option_id ASC
-                """
-            ).fetchall()
+        rows = conn.execute(sql + " ORDER BY template_id ASC, option_id ASC", params).fetchall()
     return [_template_option_dict(r) for r in rows]
 
 
-def _optional_str(value: Any) -> str | None:
+def _optional_str(value: Any) -> Optional[str]:
     return str(value) if value is not None else None
 
 

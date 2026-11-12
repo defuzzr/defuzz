@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from bisect import bisect_left, bisect_right
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -1027,31 +1027,44 @@ def _drop_spans_inside(
     return kept
 
 
-def _first_pattern_hit(patterns, text: str, spans: list[tuple[int, int]]) -> tuple[Any, ...] | None:
-    """Record every match span of every pattern; return the payload of the first pattern that matched."""
-    first: tuple[Any, ...] | None = None
+def _first_pattern_hit(
+    patterns: Sequence[Tuple[Any, ...]],
+    text: str,
+    spans: List[Tuple[int, int]],
+) -> Tuple[Optional[str], ...]:
+    """Record every match span of every pattern in ``spans``; return the payload of the first
+    pattern that matched, or a tuple of None as wide as one payload when none matched.
+
+    Each row of ``patterns`` is ``(regex, *payload_strings)``; all rows have the same width.
+    """
+    first: Optional[Tuple[str, ...]] = None
     for pat, *payload in patterns:
         for m in pat.finditer(text):
             spans.append(m.span())
             if first is None:
                 first = tuple(payload)
-    return first
+    if first is not None:
+        return first
+    return (None,) * (len(patterns[0]) - 1) if patterns else ()
 
 
-def _distinct_by_position(hits: list[tuple[int, str]]) -> list[str]:
+def _distinct_by_position(hits: List[Tuple[int, str]]) -> List[str]:
     """Distinct ids ordered by first appearance position (stable for equal positions)."""
     return list(dict.fromkeys(item_id for _pos, item_id in sorted(hits, key=lambda item: item[0])))
 
 
 def _detect_languages(
     scan_prompt: str,
-    spans: list[tuple[int, int]],
-    engine_implied_lang: str | None,
-    framework_implied_lang: str | None,
-) -> tuple[list[str], list[str]]:
-    """Return (explicit languages, all languages incl. library/tool/engine-implied), ordered by appearance."""
-    explicit_lang_hits: list[tuple[int, str]] = []
-    all_lang_hits: list[tuple[int, str]] = []
+    spans: List[Tuple[int, int]],
+    engine_implied_lang: Optional[str],
+    framework_implied_lang: Optional[str],
+) -> Tuple[List[str], List[str]]:
+    """Return (explicit languages, all languages incl. library/tool/engine-implied), ordered by appearance.
+
+    Side effect: appends every explicit and implied language match span to ``spans``.
+    """
+    explicit_lang_hits: List[Tuple[int, str]] = []
+    all_lang_hits: List[Tuple[int, str]] = []
     for pat, lang_id in _LANGUAGE_PATTERNS:
         for m in pat.finditer(scan_prompt):
             spans.append(m.span())
@@ -1078,14 +1091,18 @@ def _detect_languages(
 
 def _detect_building(
     scan_prompt: str,
-    spans: list[tuple[int, int]],
-    languages: list[str],
-    detected_engine: str | None,
-    detected_framework: str | None,
-) -> tuple[str | None, bool]:
-    """Return (building kind or None, whether several distinct kinds conflicted)."""
-    raw_building_spans: list[tuple[int, int, str]] = []
-    kit_spans: list[tuple[int, int]] = []
+    spans: List[Tuple[int, int]],
+    languages: List[str],
+    detected_engine: Optional[str],
+    detected_framework: Optional[str],
+) -> Tuple[Optional[str], bool]:
+    """Return (building kind or None, whether several distinct kinds conflicted).
+
+    Side effect: appends the span of every building match that counted toward the result to
+    ``spans`` (kit matches are dropped from it when the prompt carries a code signal).
+    """
+    raw_building_spans: List[Tuple[int, int, str]] = []
+    kit_spans: List[Tuple[int, int]] = []
     for pat, b_kind in _BUILDING_PATTERNS:
         for m in pat.finditer(scan_prompt):
             raw_building_spans.append((m.start(), m.end(), b_kind))
@@ -1105,7 +1122,7 @@ def _detect_building(
         or bool(_CODE_CONTEXT_RE.search(non_kit_prompt))
     )
 
-    building_hits: list[tuple[int, str]] = []
+    building_hits: List[Tuple[int, str]] = []
     for start, end, b_kind in (
         (
             (s, e, bk)
@@ -1144,12 +1161,13 @@ def _detect_building(
 
 
 def _fill_code_answers(
-    answers: dict[str, Any],
+    answers: Dict[str, Any],
+    *,
     eff_building: str,
-    explicit_layout: str | None,
-    languages: list[str],
-    detected_engine: str | None,
-    detected_framework: str | None,
+    explicit_layout: Optional[str],
+    languages: List[str],
+    detected_engine: Optional[str],
+    detected_framework: Optional[str],
 ) -> None:
     """Fill layout/languages/engine/framework answers for a non-kit (code) project."""
     eff_layout = explicit_layout or ("poly" if eff_building == "studio" else "mono")
@@ -1170,6 +1188,44 @@ def _fill_code_answers(
         answers["framework"] = detected_framework
 
 
+def _non_native_explicit_languages(
+    raw_prompt: str, building: Optional[str], explicit_languages: List[str]
+) -> List[str]:
+    """Explicit languages not native to any kit family the prompt names (kit_families_in runs
+    only when a language was named)."""
+    if not explicit_languages:
+        return []
+    from .matcher import KIT_FAMILY_NATIVE_LANGUAGES, kit_families_in
+
+    native_kit_langs: set[str] = set()
+    for fam_tag in kit_families_in(raw_prompt, _explicit_building=building or ""):
+        native_kit_langs.update(KIT_FAMILY_NATIVE_LANGUAGES.get(fam_tag, ()))
+    return [lang for lang in explicit_languages if lang not in native_kit_langs]
+
+
+def _detected_answer_keys(
+    answers: Dict[str, Any],
+    *,
+    building: Optional[str],
+    kit_project: bool,
+    explicit_layout: Optional[str],
+    explicit_code: bool,
+    detected_engine: Optional[str],
+) -> frozenset[str]:
+    """Answer keys the prompt stated explicitly (not filled from defaults)."""
+    detected_keys: set[str] = set()
+    if building is not None:
+        detected_keys.add("building")
+    if not kit_project:
+        if explicit_layout is not None:
+            detected_keys.add("layout")
+        if explicit_code:
+            detected_keys.add("languages")
+        if detected_engine is not None and answers.get("building") in {"game", "studio"}:
+            detected_keys.add("engine")
+    return frozenset(detected_keys)
+
+
 def parse_deterministic(sentence: str) -> ParsedPrompt:
     """Deterministically parse a free-text sentence into questionnaire answers, name, naming forms, and chips.
 
@@ -1182,18 +1238,18 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
     raw_prompt = sentence.strip()
     spans: List[Tuple[int, int]] = []
 
-    from .matcher import KIT_FAMILY_NATIVE_LANGUAGES, kit_families_in, mask_website_subject
+    from .matcher import kit_families_in, mask_website_subject
 
     initial_families = kit_families_in(raw_prompt)
     scan_prompt = mask_website_subject(raw_prompt) if "website" in initial_families else raw_prompt
 
     # 1. Detect engine and untemplated game/GUI frameworks
-    detected_engine, engine_implied_lang = (
-        _first_pattern_hit(_ENGINE_PATTERNS, scan_prompt, spans) or (None, None)
+    detected_engine, engine_implied_lang = _first_pattern_hit(_ENGINE_PATTERNS, scan_prompt, spans)
+    detected_framework, framework_implied_lang = _first_pattern_hit(
+        _UNTEMPLATED_FRAMEWORK_PATTERNS, scan_prompt, spans
     )
-    detected_framework, framework_implied_lang = (
-        _first_pattern_hit(_UNTEMPLATED_FRAMEWORK_PATTERNS, scan_prompt, spans) or (None, None)
-    )
+    # raylib's table row implies no language (""): it has bindings for many, so treat it as
+    # "no implied language" rather than adding an empty language id.
     framework_implied_lang = framework_implied_lang or None
 
     # 2. Detect explicit languages and library/tool-implied languages ordered by appearance
@@ -1207,7 +1263,7 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
     )
 
     # 4. Detect layout
-    (explicit_layout,) = _first_pattern_hit(_LAYOUT_PATTERNS, scan_prompt, spans) or (None,)
+    (explicit_layout,) = _first_pattern_hit(_LAYOUT_PATTERNS, scan_prompt, spans)
 
     # 5. Extract project name from remaining tokens
     extracted_name = _extract_name_from_residual(raw_prompt, spans)
@@ -1217,16 +1273,7 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
     eff_building = building if building is not None else "other"
     kit_project = is_kit_kind({"building": eff_building})
 
-    matched_families = (
-        kit_families_in(raw_prompt, _explicit_building=building or "")
-        if explicit_languages
-        else {}
-    )
-    native_kit_langs: set[str] = set()
-    for fam_tag in matched_families:
-        native_kit_langs.update(KIT_FAMILY_NATIVE_LANGUAGES.get(fam_tag, ()))
-    non_native_explicit = [lang for lang in explicit_languages if lang not in native_kit_langs]
-    explicit_code = bool(non_native_explicit)
+    explicit_code = bool(_non_native_explicit_languages(raw_prompt, building, explicit_languages))
     not_a_project_request = _is_non_project_request(raw_prompt)
 
     # Determine ambiguity before filling defaults
@@ -1242,20 +1289,25 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
         "building": validate_answer("building", eff_building),
     }
     if not kit_project:
-        _fill_code_answers(answers, eff_building, explicit_layout, languages, detected_engine, detected_framework)
+        _fill_code_answers(
+            answers,
+            eff_building=eff_building,
+            explicit_layout=explicit_layout,
+            languages=languages,
+            detected_engine=detected_engine,
+            detected_framework=detected_framework,
+        )
 
     final_name, slug, prefix, env, forms = _derive_naming(extracted_name or "New Project")
     chips = build_chips(answers, final_name)
-    detected_keys: set[str] = set()
-    if building is not None:
-        detected_keys.add("building")
-    if not kit_project:
-        if explicit_layout is not None:
-            detected_keys.add("layout")
-        if explicit_code:
-            detected_keys.add("languages")
-        if detected_engine is not None and answers.get("building") in {"game", "studio"}:
-            detected_keys.add("engine")
+    detected_keys = _detected_answer_keys(
+        answers,
+        building=building,
+        kit_project=kit_project,
+        explicit_layout=explicit_layout,
+        explicit_code=explicit_code,
+        detected_engine=detected_engine,
+    )
     return ParsedPrompt(
         prompt=raw_prompt,
         name=final_name,
@@ -1270,7 +1322,7 @@ def parse_deterministic(sentence: str) -> ParsedPrompt:
         used_llm=False,
         explicit_code=explicit_code,
         not_a_project_request=not_a_project_request,
-        explicit_keys=frozenset(detected_keys),
+        explicit_keys=detected_keys,
     )
 
 

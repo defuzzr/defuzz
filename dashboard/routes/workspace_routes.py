@@ -111,6 +111,12 @@ def _reserve(kind: str) -> str:
     return proposal_id
 
 
+def _release(proposal_id: str) -> None:
+    """Remove a proposal reservation while holding the proposal registry lock."""
+    with _LOCK:
+        _PROPOSALS.pop(proposal_id, None)
+
+
 def _object(body):
     if not isinstance(body, dict):
         raise HTTPException(400, 'Request body must be an object')
@@ -366,7 +372,9 @@ def get_projects_root(candidate: str | None = None):
     return payload
 
 
-def _propose_kit_project(body, name, answers, resolved_dest):
+def _propose_kit_project(body: dict[str, Any], name: str, answers: dict[str, Any],
+                         resolved_dest: Path) -> dict[str, Any]:
+    """Stage a kit project and retain its proposal for acceptance or discard."""
     kit_id = _text(body, 'kit_id')
     variables = body.get('variables')
     proposal_id = _reserve('kit')
@@ -380,12 +388,10 @@ def _propose_kit_project(body, name, answers, resolved_dest):
             bridge=componentize_bridge,
         )
     except kit_scaffold.KitUnavailable as exc:
-        with _LOCK:
-            _PROPOSALS.pop(proposal_id, None)
+        _release(proposal_id)
         raise HTTPException(503, str(exc)) from exc
     except Exception as exc:
-        with _LOCK:
-            _PROPOSALS.pop(proposal_id, None)
+        _release(proposal_id)
         raise HTTPException(400, _error_text(exc)) from exc
     with _LOCK:
         _PROPOSALS[proposal_id].update(state='ready', kind='kit', proposal=proposal, created=time.monotonic())
@@ -399,6 +405,37 @@ def _propose_kit_project(body, name, answers, resolved_dest):
         'placement_rules': _json(proposal.placement_rules),
         'folder_note': getattr(proposal, 'folder_note', ''),
     }
+
+
+def _propose_template_project(body: dict[str, Any], name: str, answers: dict[str, Any],
+                              resolved_dest: Path) -> dict[str, Any]:
+    """Stage a template project and retain its proposal for acceptance or discard."""
+    template_id = _text(body, 'template_id')
+    options = body.get('options', {})
+    remember = body.get('remember_options', True)
+    if not isinstance(remember, bool):
+        raise HTTPException(400, 'remember_options must be a boolean')
+    if not isinstance(options, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in options.items()):
+        raise HTTPException(400, 'options must map keys to choices')
+    spec = next((s for s in templates.load_templates() if s.id == template_id), None)
+    if spec is None:
+        raise HTTPException(404, 'Unknown template_id')
+    # Reserve a slot before staging, bounding abandoned proposals without deleting
+    # user-inspectable failed checks automatically.
+    proposal_id = _reserve('template')
+    try:
+        from ...state_store import state_db_path
+        proposal = scaffolder.propose(spec, name, answers, options=options,
+                                      db_path=state_db_path(), dest_root=str(resolved_dest))
+    except Exception as exc:
+        _release(proposal_id)
+        raise HTTPException(400, _error_text(exc)) from exc
+    with _LOCK:
+        _PROPOSALS[proposal_id].update(state='ready', kind='template', proposal=proposal, remember_options=remember,
+                                       created=time.monotonic())
+    payload = _json(proposal)
+    payload.update(proposal_id=proposal_id, tree=[{'name': r.name, 'dest': str(r.dest), 'files': r.tree} for r in proposal.repos])
+    return payload
 
 
 @router.post('/scaffold/propose')
@@ -432,33 +469,8 @@ def propose_project(body: Any = Body(default_factory=dict)):
     if has_kit:
         return _propose_kit_project(body, name, answers, resolved_dest)
 
-    template_id = _text(body, 'template_id')
-    options = body.get('options', {})
-    remember = body.get('remember_options', True)
-    if not isinstance(remember, bool):
-        raise HTTPException(400, 'remember_options must be a boolean')
-    if not isinstance(options, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in options.items()):
-        raise HTTPException(400, 'options must map keys to choices')
-    spec = next((s for s in templates.load_templates() if s.id == template_id), None)
-    if spec is None:
-        raise HTTPException(404, 'Unknown template_id')
-    # Reserve a slot before staging, bounding abandoned proposals without deleting
-    # user-inspectable failed checks automatically.
-    proposal_id = _reserve('template')
-    try:
-        from ...state_store import state_db_path
-        proposal = scaffolder.propose(spec, name, answers, options=options,
-                                      db_path=state_db_path(), dest_root=str(resolved_dest))
-    except Exception as exc:
-        with _LOCK:
-            _PROPOSALS.pop(proposal_id, None)
-        raise HTTPException(400, _error_text(exc)) from exc
-    with _LOCK:
-        _PROPOSALS[proposal_id].update(state='ready', kind='template', proposal=proposal, remember_options=remember,
-                                       created=time.monotonic())
-    payload = _json(proposal)
-    payload.update(proposal_id=proposal_id, tree=[{'name': r.name, 'dest': str(r.dest), 'files': r.tree} for r in proposal.repos])
-    return payload
+    return _propose_template_project(body, name, answers, resolved_dest)
+
 
 
 def _claim(body, state) -> tuple[str, Any]:

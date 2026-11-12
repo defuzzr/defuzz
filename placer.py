@@ -24,7 +24,7 @@ import time
 import tomllib
 from collections import OrderedDict
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from .agents_md import write_agents_md
 from .catalog_list import escape_text
@@ -1171,6 +1171,31 @@ def _write_succeeded(result: str, placed_path: str) -> bool:
     return os.path.isfile(placed_path) and not os.path.islink(placed_path)
 
 
+def _record_nested_manifest_skip(
+    proj_root: Path, rel_path: str, rules_data: Dict[str, Any], trust_mode: str,
+    tool_call_id: str, target_lex: Path,
+) -> None:
+    nested_rules = (
+        {
+            **rules_data,
+            "declared_dirs": [
+                d for d in (rules_data.get("declared_dirs") or [])
+                if isinstance(d, dict) and d.get("source") != "fallback"
+            ],
+            "placement_rules": [
+                r for r in (rules_data.get("placement_rules") or [])
+                if isinstance(r, dict) and r.get("source") != "fallback"
+            ],
+        }
+        if trust_mode == TRUST_MODE_DECLARED_ONLY
+        else rules_data
+    )
+    nested = check_nested_project_manifest(proj_root, rel_path, nested_rules)
+    if nested is not None:
+        with _PENDING_NOTES_LOCK:
+            _stash_pending_skip_notice(tool_call_id, target_lex, _format_nested_manifest_notice(nested))
+
+
 def on_pre_tool_call(
     tool_name: str = "",
     args: Optional[Dict[str, Any]] = None,
@@ -1236,25 +1261,9 @@ def on_pre_tool_call(
     try:
         decision = resolve_placement_for_new_path(proj_root, rel_path, rules_data, mode=trust_mode)
         if decision is None:
-            nested_rules = (
-                {
-                    **rules_data,
-                    "declared_dirs": [
-                        d for d in (rules_data.get("declared_dirs") or [])
-                        if isinstance(d, dict) and d.get("source") != "fallback"
-                    ],
-                    "placement_rules": [
-                        r for r in (rules_data.get("placement_rules") or [])
-                        if isinstance(r, dict) and r.get("source") != "fallback"
-                    ],
-                }
-                if trust_mode == TRUST_MODE_DECLARED_ONLY
-                else rules_data
+            _record_nested_manifest_skip(
+                proj_root, rel_path, rules_data, trust_mode, tool_call_id, target_lex,
             )
-            nested = check_nested_project_manifest(proj_root, rel_path, nested_rules)
-            if nested is not None:
-                with _PENDING_NOTES_LOCK:
-                    _stash_pending_skip_notice(tool_call_id, target_lex, _format_nested_manifest_notice(nested))
             return None
 
         placed_rel = decision["placed_rel"]
@@ -1316,6 +1325,19 @@ def _pop_pending_note(tool_call_id: str, args: Optional[Dict[str, Any]]) -> Opti
     return note_info
 
 
+def _attach_to_result(
+    result: str, notice: str, fields: Callable[[], Dict[str, Any]],
+) -> str:
+    try:
+        parsed = json.loads(result)
+        if isinstance(parsed, dict):
+            parsed.update(fields())
+            return json.dumps(parsed)
+    except Exception:
+        pass
+    return f"{result}\n{notice}"
+
+
 def on_transform_tool_result(
     tool_name: str = "",
     args: Optional[Dict[str, Any]] = None,
@@ -1333,14 +1355,7 @@ def on_transform_tool_result(
         if note_info is None:
             if skip_notice is None:
                 return None
-            try:
-                parsed_skip = json.loads(result)
-                if isinstance(parsed_skip, dict):
-                    parsed_skip["defuzz_notice"] = skip_notice
-                    return json.dumps(parsed_skip)
-            except Exception:
-                pass
-            return f"{result}\n{skip_notice}"
+            return _attach_to_result(result, skip_notice, lambda: {"defuzz_notice": skip_notice})
 
         if not _write_succeeded(result, note_info["placed_path"]):
             return None
@@ -1366,21 +1381,16 @@ def on_transform_tool_result(
             note_info["placed_rel"],
             note_info["reason"],
         )
-        try:
-            parsed = json.loads(result)
-            if isinstance(parsed, dict):
-                parsed["placed_by_adopt"] = {
-                    "from": note_info["original_rel"],
-                    "to": note_info["placed_rel"],
-                    "kind": note_info["kind"],
-                    "note": note_text,
-                }
-                if declared_only:
-                    parsed["defuzz_notice"] = note_text
-                return json.dumps(parsed)
-        except Exception:
-            pass
-        return f"{result}\n{note_text}"
+        # Only declared-only redirects add defuzz_notice; tests pin the full-mode JSON shape.
+        return _attach_to_result(result, note_text, lambda: {
+            "placed_by_adopt": {
+                "from": note_info["original_rel"],
+                "to": note_info["placed_rel"],
+                "kind": note_info["kind"],
+                "note": note_text,
+            },
+            **({"defuzz_notice": note_text} if declared_only else {}),
+        })
     except Exception:
         return None
 

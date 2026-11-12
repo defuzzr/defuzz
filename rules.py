@@ -282,6 +282,9 @@ _CMAKE_TARGET_RE = re.compile(
     r"\badd_(?:executable|library)\s*\(\s*[^\s)]+\s+([^)]+)\)",
     re.IGNORECASE | re.MULTILINE,
 )
+_CMAKE_TARGET_KEYWORDS = frozenset({
+    "STATIC", "SHARED", "MODULE", "OBJECT", "INTERFACE", "WIN32", "MACOSX_BUNDLE", "EXCLUDE_FROM_ALL",
+})
 
 
 def _read_manifest_nofollow(proj_root: Path, filename: str) -> Optional[str]:
@@ -309,6 +312,18 @@ def _read_manifest_nofollow(proj_root: Path, filename: str) -> Optional[str]:
         return None
 
 
+def _load_manifest_dict(root: Path, filename: str, loads: Any) -> Optional[Dict[str, Any]]:
+    """Read a root manifest and parse it with ``loads``; None unless it parses to a dict."""
+    raw = _read_manifest_nofollow(root, filename)
+    if raw is None:
+        return None
+    try:
+        data = loads(raw)
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _clean_manifest_rel_path(raw: Any) -> Optional[str]:
     if not isinstance(raw, str):
         return None
@@ -324,7 +339,7 @@ def _clean_manifest_rel_path(raw: Any) -> Optional[str]:
     return "/".join(parts)
 
 
-def _collect_package_json_exports(node: Any, out: Set[str], depth: int = 0) -> None:
+def _collect_package_json_exports(out: Set[str], node: Any, depth: int = 0) -> None:
     if depth > 6:
         return
     if isinstance(node, str):
@@ -333,19 +348,19 @@ def _collect_package_json_exports(node: Any, out: Set[str], depth: int = 0) -> N
             out.add(cleaned)
     elif isinstance(node, dict):
         for val in node.values():
-            _collect_package_json_exports(val, out, depth + 1)
+            _collect_package_json_exports(out, val, depth + 1)
     elif isinstance(node, list):
         for item in node:
-            _collect_package_json_exports(item, out, depth + 1)
+            _collect_package_json_exports(out, item, depth + 1)
 
 
-def _add_clean_entry(entries: set[str], raw: Any) -> None:
+def _add_clean_entry(entries: Set[str], raw: Any) -> None:
     cleaned = _clean_manifest_rel_path(raw)
     if cleaned:
         entries.add(cleaned)
 
 
-def _add_py_module_entry(entries: set[str], mod: str) -> None:
+def _add_py_module_entry(entries: Set[str], mod: str) -> None:
     rel_mod = mod.replace(".", "/") + ".py"
     entries.add(rel_mod)
     entries.add(f"src/{rel_mod}")
@@ -355,16 +370,10 @@ def _dict_or_empty(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _add_package_json_entries(root: Path, entries: set[str]) -> None:
-    """package.json: main, module, types, typings, bin, exports."""
-    pkg_raw = _read_manifest_nofollow(root, "package.json")
-    if pkg_raw is None:
-        return
-    try:
-        pkg = json.loads(pkg_raw)
-    except Exception:
-        return
-    if not isinstance(pkg, dict):
+def _add_package_json_entries(entries: Set[str], root: Path) -> None:
+    """package.json: main, module, types, typings, unpkg, jsdelivr, browser, bin, exports."""
+    pkg = _load_manifest_dict(root, "package.json", json.loads)
+    if pkg is None:
         return
     for key in ("main", "module", "types", "typings", "unpkg", "jsdelivr", "browser"):
         _add_clean_entry(entries, pkg.get(key))
@@ -375,10 +384,10 @@ def _add_package_json_entries(root: Path, entries: set[str]) -> None:
         for bval in bin_field.values():
             _add_clean_entry(entries, bval)
     if "exports" in pkg:
-        _collect_package_json_exports(pkg["exports"], entries)
+        _collect_package_json_exports(entries, pkg["exports"])
 
 
-def _add_script_map_entries(entries: set[str], script_map: Any) -> None:
+def _add_script_map_entries(entries: Set[str], script_map: Any) -> None:
     if not isinstance(script_map, dict):
         return
     for spec in script_map.values():
@@ -388,16 +397,10 @@ def _add_script_map_entries(entries: set[str], script_map: Any) -> None:
                 _add_py_module_entry(entries, mod)
 
 
-def _add_pyproject_entries(root: Path, entries: set[str]) -> None:
+def _add_pyproject_entries(entries: Set[str], root: Path) -> None:
     """pyproject.toml: project.scripts, project.gui-scripts, tool.poetry.scripts, tool.setuptools.py-modules."""
-    pyproj_raw = _read_manifest_nofollow(root, "pyproject.toml")
-    if pyproj_raw is None:
-        return
-    try:
-        pyproj = tomllib.loads(pyproj_raw)
-    except Exception:
-        return
-    if not isinstance(pyproj, dict):
+    pyproj = _load_manifest_dict(root, "pyproject.toml", tomllib.loads)
+    if pyproj is None:
         return
     proj_tbl = _dict_or_empty(pyproj.get("project"))
     tool_tbl = _dict_or_empty(pyproj.get("tool"))
@@ -416,16 +419,10 @@ def _add_pyproject_entries(root: Path, entries: set[str]) -> None:
                 _add_py_module_entry(entries, mod.strip())
 
 
-def _add_cargo_entries(root: Path, entries: set[str]) -> None:
+def _add_cargo_entries(entries: Set[str], root: Path) -> None:
     """Cargo.toml: package.build, lib.path, [[bin]]/[[example]]/[[bench]]/[[test]].path."""
-    cargo_raw = _read_manifest_nofollow(root, "Cargo.toml")
-    if cargo_raw is None:
-        return
-    try:
-        cargo = tomllib.loads(cargo_raw)
-    except Exception:
-        return
-    if not isinstance(cargo, dict):
+    cargo = _load_manifest_dict(root, "Cargo.toml", tomllib.loads)
+    if cargo is None:
         return
     _add_clean_entry(entries, _dict_or_empty(cargo.get("package")).get("build"))
     _add_clean_entry(entries, _dict_or_empty(cargo.get("lib")).get("path"))
@@ -437,12 +434,7 @@ def _add_cargo_entries(root: Path, entries: set[str]) -> None:
                     _add_clean_entry(entries, item.get("path"))
 
 
-_CMAKE_TARGET_KEYWORDS = frozenset({
-    "STATIC", "SHARED", "MODULE", "OBJECT", "INTERFACE", "WIN32", "MACOSX_BUNDLE", "EXCLUDE_FROM_ALL",
-})
-
-
-def _add_cmake_entries(root: Path, entries: set[str]) -> None:
+def _add_cmake_entries(entries: Set[str], root: Path) -> None:
     """CMakeLists.txt: source files named directly in add_executable / add_library."""
     cmake_raw = _read_manifest_nofollow(root, "CMakeLists.txt")
     if cmake_raw is None:
@@ -466,10 +458,10 @@ def extract_manifest_entry_files(proj_root: Optional[Path]) -> Set[str]:
     except Exception:
         return entries
 
-    _add_package_json_entries(root, entries)
-    _add_pyproject_entries(root, entries)
-    _add_cargo_entries(root, entries)
-    _add_cmake_entries(root, entries)
+    _add_package_json_entries(entries, root)
+    _add_pyproject_entries(entries, root)
+    _add_cargo_entries(entries, root)
+    _add_cmake_entries(entries, root)
     return entries
 
 
@@ -635,6 +627,25 @@ def _validate_placement_rule(idx: int, pr: dict[str, Any]) -> dict[str, Any]:
     return clean_pr
 
 
+def _register_folder_rule_specificity(
+    seen_specificity: Dict[Tuple[str, Tuple[str, ...]], Dict[str, Any]], clean_rule: Dict[str, Any]
+) -> None:
+    """Record clean_rule by (match, ext); refuse an equal-specificity rule with a different outcome."""
+    match_prefix = clean_rule["match"]
+    exts = clean_rule["ext"]
+    spec_key = (match_prefix, tuple(exts))
+    prev = seen_specificity.get(spec_key)
+    if prev is not None and (
+        prev["disposition"] != clean_rule["disposition"]
+        or prev["to"] != clean_rule["to"]
+        or prev["git_policy"] != clean_rule["git_policy"]
+    ):
+        raise SafetyError(
+            f"Conflicting equal-specificity folder_rules for match={match_prefix!r} ext={exts!r}"
+        )
+    seen_specificity[spec_key] = clean_rule
+
+
 def validate_rules_spec(raw_spec: Dict[str, Any], inventory: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Validate untrusted model/user rules spec against fixed allowlists."""
     if not isinstance(raw_spec, dict):
@@ -656,20 +667,7 @@ def validate_rules_spec(raw_spec: Dict[str, Any], inventory: Optional[Dict[str, 
         if not isinstance(r, dict):
             raise SafetyError(f"folder_rules[{idx}] must be an object")
         clean_rule = _validate_folder_rule(idx, r)
-        match_prefix = clean_rule["match"]
-        exts = clean_rule["ext"]
-
-        spec_key = (match_prefix, tuple(exts))
-        prev = seen_specificity.get(spec_key)
-        if prev is not None and (
-            prev["disposition"] != clean_rule["disposition"]
-            or prev["to"] != clean_rule["to"]
-            or prev["git_policy"] != clean_rule["git_policy"]
-        ):
-            raise SafetyError(
-                f"Conflicting equal-specificity folder_rules for match={match_prefix!r} ext={exts!r}"
-            )
-        seen_specificity[spec_key] = clean_rule
+        _register_folder_rule_specificity(seen_specificity, clean_rule)
         validated_folder_rules.append(clean_rule)
 
     # Validate placement_rules

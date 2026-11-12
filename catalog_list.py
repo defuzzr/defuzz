@@ -304,7 +304,7 @@ def build_catalog(templates: Sequence[Any], kits: Sequence[Any], *, picker: Opti
     return build_catalog_counted(templates, kits, picker=picker)[0]
 
 
-def _catalog_row(kind: str, item_id: str, item: Any, picker_entries: Any,
+def _catalog_row(kind: str, item_id: str, item: Any, *, picker_entries: Any,
                  group_rank: Mapping[str, int], group_title: Mapping[str, str]) -> tuple:
     """Render one validated catalog item and its display ordering key."""
     key = f"{kind}:{item_id}"
@@ -372,7 +372,10 @@ def build_catalog_counted(
             if key in seen:
                 continue
             seen.add(key)
-            rows.append(_catalog_row(kind, item_id, item, picker_entries, group_rank, group_title))
+            rows.append(_catalog_row(
+                kind, item_id, item, picker_entries=picker_entries,
+                group_rank=group_rank, group_title=group_title,
+            ))
     rows.sort(key=lambda r: r[0])
     shown = {"template": 0, "kit": 0}
     out: List[dict] = []

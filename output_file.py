@@ -203,8 +203,14 @@ def _open_child_dir(parent_fd: int, name: str, role: str, shown: str) -> int:
 
 
 def _replace_output_file(fd: int, lex: Path, data: bytes, role: str) -> None:
-    """Write a temporary sibling and replace the checked leaf through its parent handle."""
+    """Write a temporary sibling and replace the checked leaf through its parent handle.
+
+    ``fd`` is borrowed; the caller retains responsibility for closing it. After
+    the temporary file is opened, any BaseException triggers best-effort removal.
+    """
     leaf = lex.name
+    # The earlier path check can race: re-check the leaf through the pinned parent
+    # handle so a swapped-in symlink or non-regular file is refused before writing.
     try:
         st: Optional[os.stat_result] = os.stat(leaf, dir_fd=fd, follow_symlinks=False)
     except FileNotFoundError:

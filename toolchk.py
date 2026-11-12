@@ -1015,6 +1015,7 @@ def _parse_structured_manifest(text: str, suffix: str) -> Any:
 
 
 def _resolve_probe_file_path(rel_file: str, project_root: Path) -> Path:
+    """Resolve an allowed, non-secret relative probe path outside live Hermes home."""
     if os.path.isabs(rel_file) or rel_file.startswith(("~", "/", "\\")):
         raise ValueError("probe_file_not_relative")
     _refuse_secret_path(rel_file, root=project_root)

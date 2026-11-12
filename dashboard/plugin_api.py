@@ -204,6 +204,26 @@ def _prune_lint_jobs(now: float | None = None, *, max_jobs: int = _MAX_LINT_JOBS
         _LINT_JOBS.pop(finished[0][1], None)
 
 
+def _lint_tools_preflight(proj_path: Path) -> None:
+    lock_file = proj_path / "TOOLS.lock"
+    if not lock_file.is_symlink() and lock_file.is_file():
+        toolchk_mod = _load("toolchk")
+        try:
+            loaded_lock = toolchk_mod.load_lock(lock_file)
+            all_lock_tools = list(loaded_lock["tools"].keys())
+            toolchk_mod.require(
+                all_lock_tools,
+                proj_path,
+                record_dir=proj_path / ".adopt",
+                lock=loaded_lock,
+            )
+        except toolchk_mod.PreflightError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={"reason": "tools_drift", "report": exc.report},
+            ) from exc
+
+
 @router.post("/lint")
 def post_lint(body: Any = Body(default_factory=dict)) -> Any:
     """Run whole-project lint on project root, returning 200 or 202 with a pollable job_id."""
@@ -226,23 +246,7 @@ def post_lint(body: Any = Body(default_factory=dict)) -> Any:
     # project-specific tools_missing rather than gating on global setup.
     linter_mod = _load("linter")
 
-    lock_file = proj_path / "TOOLS.lock"
-    if not lock_file.is_symlink() and lock_file.is_file():
-        toolchk_mod = _load("toolchk")
-        try:
-            loaded_lock = toolchk_mod.load_lock(lock_file)
-            all_lock_tools = list(loaded_lock["tools"].keys())
-            toolchk_mod.require(
-                all_lock_tools,
-                proj_path,
-                record_dir=proj_path / ".adopt",
-                lock=loaded_lock,
-            )
-        except toolchk_mod.PreflightError as exc:
-            raise HTTPException(
-                status_code=409,
-                detail={"reason": "tools_drift", "report": exc.report},
-            ) from exc
+    _lint_tools_preflight(proj_path)
 
     done_event = threading.Event()
     job_id = uuid.uuid4().hex[:12]
@@ -383,6 +387,7 @@ def get_tools_status() -> dict[str, Any]:
 
 
 def _setup_progress(prog: Any) -> None:
+    """Update setup progress on the worker thread under _SETUP_LOCK."""
     with _SETUP_LOCK:
         _SETUP_STATE.update(
             {
@@ -395,6 +400,7 @@ def _setup_progress(prog: Any) -> None:
 
 
 def _run_setup(setup_mod: Any, cancel_event: threading.Event) -> None:
+    """Run setup on a worker thread; guard shared state updates with _SETUP_LOCK."""
     try:
         res = setup_mod.run_setup(_setup_progress, cancel=cancel_event)
         res_dict: dict[str, Any] = (

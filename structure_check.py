@@ -663,35 +663,13 @@ def _empty_result(given: str, limits: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _resolve_candidate_findings(roots, root_markers, candidates, findings) -> None:
-    """Resolve undeclared roots after their complete subtrees have been counted."""
-    known_kinds = set(_ecosystems(root_markers or []))
-    for r in roots:
-        if r["kind"] in ("declared_member", "declared_submodule"):
-            known_kinds |= _ecosystems(r["markers"])
-    many = _resolve_embedded(candidates, frozenset(known_kinds))
-    for ancestor, count in many:
-        findings.append(_finding(
-            "many_embedded_subprojects", ancestor,
-            f"This folder holds {count} separate packages noted as templates or fixtures, more than "
-            f"{EMBEDDED_CROWD_CAP}; that many is unusual, so check that they are all templates or fixtures.",
-            count=count, cap=EMBEDDED_CROWD_CAP))
-    for c in candidates:
-        if c["reason"]:
-            c["root"]["kind"] = "embedded"
-            detail = {"depth": c["depth"], "markers": c["markers"], "reason": c["reason"]}
-            if c["rule"]:
-                detail["rule"] = c["rule"]
-            findings.append(_finding(
-                "embedded_subproject", c["rel"],
-                f"This folder is a separate package inside this project; this layout is common for "
-                f"{EMBEDDED_REASONS[c['reason']]}, and declaring it silences this note.", **detail))
-        else:
-            findings.append(_root_finding("nested_project", c["rel"], c["depth"], c["markers"]))
+def _read_declarations(
+    lexical: str, res: Dict[str, Any],
+) -> Tuple[List[Tuple[str, List[str], List[str]]], bool, List[str], bool]:
+    """Read root-only declarations, mutating res declarations and findings in place.
 
-
-def _read_declarations(lexical: str, res: dict[str, Any]):
-    """Read root-only member and submodule declarations, recording uncertainty."""
+    Return workspace globs, workspace uncertainty, submodules and submodule uncertainty.
+    """
     findings = res["findings"]
     ws_globs: List[Tuple[str, List[str], List[str]]] = []
     ws_unknown = False
@@ -735,6 +713,72 @@ def _read_declarations(lexical: str, res: dict[str, Any]):
                 "This declaration file could not be read, so it is unknown which inner projects it declares.",
                 reason=str(err)))
     return ws_globs, ws_unknown, submodules, gitmodules_unknown
+
+
+def _directory_markers(
+    entries: List[os.DirEntry], rel: str, skipped: Dict[str, int],
+) -> Tuple[set, List[os.DirEntry], bool, List[str]]:
+    """Classify listed entries and markers, updating symlink counts in place."""
+    names_nondir = set()
+    subdirs: List[os.DirEntry] = []
+    has_git = False
+    for entry in entries:
+        name = entry.name
+        try:
+            is_link = entry.is_symlink()
+            is_dir = (not is_link) and entry.is_dir(follow_symlinks=False)
+        except OSError:
+            is_link, is_dir = False, False
+        if name == ".git":
+            has_git = True
+        if is_link:
+            skipped["symlinks"] += 1
+        if is_dir:
+            subdirs.append(entry)
+        else:
+            names_nondir.add(name)
+    dir_names = {e.name for e in subdirs}
+    markers = _markers_for(names_nondir, dir_names, has_git, rel == "")
+    if not _has_manifest(markers) and "index.html" in names_nondir:
+        own_name = os.path.basename(rel) if rel else ""
+        asset = next((d for d in INDEX_ASSET_DIRS if d in dir_names), None)
+        if asset and own_name not in STATIC_CONTAINER_NAMES:
+            markers.append("index.html+" + asset)
+    markers.sort()
+    return names_nondir, subdirs, has_git, markers
+
+
+def _resolve_candidate_findings(
+    roots: List[Dict[str, Any]], root_markers: Optional[List[str]],
+    candidates: List[Dict[str, Any]], findings: List[Dict[str, Any]],
+) -> None:
+    """Resolve counted candidates, mutating candidate state and roots[].kind in place.
+
+    Append the resulting embedded or nested project findings to findings.
+    """
+    known_kinds = set(_ecosystems(root_markers or []))
+    for r in roots:
+        if r["kind"] in ("declared_member", "declared_submodule"):
+            known_kinds |= _ecosystems(r["markers"])
+    many = _resolve_embedded(candidates, frozenset(known_kinds))
+    for ancestor, count in many:
+        findings.append(_finding(
+            "many_embedded_subprojects", ancestor,
+            f"This folder holds {count} separate packages noted as templates or fixtures, more than "
+            f"{EMBEDDED_CROWD_CAP}; that many is unusual, so check that they are all templates or fixtures.",
+            count=count, cap=EMBEDDED_CROWD_CAP))
+    for c in candidates:
+        if c["reason"]:
+            c["root"]["kind"] = "embedded"
+            detail = {"depth": c["depth"], "markers": c["markers"], "reason": c["reason"]}
+            if c["rule"]:
+                detail["rule"] = c["rule"]
+            findings.append(_finding(
+                "embedded_subproject", c["rel"],
+                f"This folder is a separate package inside this project; this layout is common for "
+                f"{EMBEDDED_REASONS[c['reason']]}, and declaring it silences this note.", **detail))
+        else:
+            findings.append(_root_finding("nested_project", c["rel"], c["depth"], c["markers"]))
 
 
 def check_structure(
@@ -839,32 +883,7 @@ def check_structure(
         for oc in open_cands:
             oc["entries"] += len(entries)
         entries.sort(key=lambda e: e.name)
-        names_nondir = set()
-        subdirs: List[os.DirEntry] = []
-        has_git = False
-        for entry in entries:
-            name = entry.name
-            try:
-                is_link = entry.is_symlink()
-                is_dir = (not is_link) and entry.is_dir(follow_symlinks=False)
-            except OSError:
-                is_link, is_dir = False, False
-            if name == ".git":
-                has_git = True
-            if is_link:
-                skipped["symlinks"] += 1
-            if is_dir:
-                subdirs.append(entry)
-            else:
-                names_nondir.add(name)
-        dir_names = {e.name for e in subdirs}
-        markers = _markers_for(names_nondir, dir_names, has_git, rel == "")
-        if not _has_manifest(markers) and "index.html" in names_nondir:
-            own_name = os.path.basename(rel) if rel else ""
-            asset = next((d for d in INDEX_ASSET_DIRS if d in dir_names), None)
-            if asset and own_name not in STATIC_CONTAINER_NAMES:
-                markers.append("index.html+" + asset)
-        markers.sort()
+        names_nondir, subdirs, has_git, markers = _directory_markers(entries, rel, skipped)
         descend = True
         parent_enclosing = enclosing_kinds
         if markers:

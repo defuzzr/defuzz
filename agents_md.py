@@ -257,7 +257,7 @@ def render_agents_md(**kwargs: Any) -> str:
     return files["AGENTS.md"]
 
 
-def _layout_bullets(
+def _layout_bullets_and_allowed_dirs(
     declared_dirs: Dict[str, Tuple[str, str]], omit_layout_dirs: Collection[str]
 ) -> Tuple[List[str], Set[str]]:
     """Build optional layout bullets and all directories allowed by the validator."""
@@ -295,6 +295,41 @@ def _placement_bullets(placement_rules: Sequence[Dict[str, Any]]) -> List[str]:
         reason = _sanitize_token(rule.get("reason") or "placement rule")
         bullets.append(f"- {exts} files go in `{dest}/` ({reason}).")
     return bullets
+
+
+def _assemble_guide_sections(
+    *, slug: str, max_lines: int, clean_kit_ids: Sequence[str],
+    purpose: List[str], layout: List[str], conv: List[str], build: List[str],
+    blank_before_headings: bool,
+) -> List[str]:
+    """Assemble guide sections, wrapping readable guides without splitting kit purpose text."""
+    out = [f"# {slug}", SCHEMA_MARKER, GENERATED_NOTE]
+    readable = max_lines >= DEFAULT_MAX_LINES
+    if readable:
+        out.insert(1, "")
+    for heading, body in (
+        ("Purpose", purpose),
+        ("Layout", layout),
+        ("Conventions & constraints", conv),
+        ("Build & test", build),
+    ):
+        if blank_before_headings:
+            out.append("")
+        out.append(f"## {heading}")
+        if readable:
+            out.append("")
+            if heading == "Purpose" and clean_kit_ids:
+                out.extend(body)
+            else:
+                for line in body:
+                    out.extend(textwrap.wrap(
+                        line, width=80,
+                        subsequent_indent="  " if line.startswith("- ") else "",
+                        break_long_words=False, break_on_hyphens=False,
+                    ))
+        else:
+            out.extend(body)
+    return out
 
 
 def render_agents_md_files(
@@ -341,7 +376,7 @@ def render_agents_md_files(
             "It is a copy, and the original folder was never modified."
         ]
 
-    layout_optional, allowed_dir_set = _layout_bullets(declared_dirs, omit_layout_dirs)
+    layout_optional, allowed_dir_set = _layout_bullets_and_allowed_dirs(declared_dirs, omit_layout_dirs)
     if clean_kit_ids:
         layout_fixed = [
             "- `_inbox/` — files with no placement rule are moved here; ask where they belong, then move them",
@@ -390,33 +425,11 @@ def render_agents_md_files(
             layout.append(pointer)
         if n_conv < len(conv_optional) or not include_fixed_conv:
             conv.append(pointer)
-        out = [f"# {slug}", SCHEMA_MARKER, GENERATED_NOTE]
-        readable = max_lines >= DEFAULT_MAX_LINES
-        if readable:
-            out.insert(1, "")
-        for heading, body in (
-            ("Purpose", purpose),
-            ("Layout", layout),
-            ("Conventions & constraints", conv),
-            ("Build & test", build),
-        ):
-            if blank_before_headings:
-                out.append("")
-            out.append(f"## {heading}")
-            if readable:
-                out.append("")
-                if heading == "Purpose" and clean_kit_ids:
-                    out.extend(body)
-                else:
-                    for line in body:
-                        out.extend(textwrap.wrap(
-                            line, width=80,
-                            subsequent_indent="  " if line.startswith("- ") else "",
-                            break_long_words=False, break_on_hyphens=False,
-                        ))
-            else:
-                out.extend(body)
-        return out
+        return _assemble_guide_sections(
+            slug=slug, max_lines=max_lines, clean_kit_ids=clean_kit_ids,
+            purpose=purpose, layout=layout, conv=conv, build=build,
+            blank_before_headings=blank_before_headings,
+        )
 
     n_layout, n_conv = len(layout_optional), len(conv_optional)
     inc_fixed_layout = True

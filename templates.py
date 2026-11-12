@@ -738,18 +738,19 @@ def _parse_file_version_probe(
     probe_raw: dict, tool_raw: str, folder: str,
 ) -> Mapping[str, Any]:
     """Validate a file probe without opening its target file."""
+    key_base = f"version_probes.{tool_raw}"
     if "file" not in probe_raw:
         raise _err(
             folder,
-            f"version_probes.{tool_raw}.file",
+            f"{key_base}.file",
             "file probe requires 'file'",
         )
     rel_file = _validate_rel_subpath(
         _require_non_empty_str(
-            probe_raw["file"], folder, f"version_probes.{tool_raw}.file"
+            probe_raw["file"], folder, f"{key_base}.file"
         ),
         folder,
-        f"version_probes.{tool_raw}.file",
+        f"{key_base}.file",
         allow_dot=False,
     )
     has_key = "key" in probe_raw and probe_raw["key"] is not None
@@ -757,23 +758,23 @@ def _parse_file_version_probe(
     if has_key == has_regex:
         raise _err(
             folder,
-            f"version_probes.{tool_raw}",
+            key_base,
             "file probe requires exactly one of 'key' or 'regex'",
         )
     if "argv" in probe_raw:
         raise _err(
             folder,
-            f"version_probes.{tool_raw}.argv",
+            f"{key_base}.argv",
             "file probe cannot specify 'argv'",
         )
     spec_dict: Dict[str, Any] = {"probe": "file", "file": rel_file}
     if has_key:
         spec_dict["key"] = _require_non_empty_str(
-            probe_raw["key"], folder, f"version_probes.{tool_raw}.key"
+            probe_raw["key"], folder, f"{key_base}.key"
         )
     else:
         regex_str = _require_non_empty_str(
-            probe_raw["regex"], folder, f"version_probes.{tool_raw}.regex"
+            probe_raw["regex"], folder, f"{key_base}.regex"
         )
         from .toolchk import _compile_safe_file_regex
 
@@ -782,22 +783,37 @@ def _parse_file_version_probe(
         except ValueError as exc:
             raise _err(
                 folder,
-                f"version_probes.{tool_raw}.regex",
+                f"{key_base}.regex",
                 str(exc),
             ) from exc
         spec_dict["regex"] = regex_str
     return MappingProxyType(spec_dict)
 
 
+def _reject_extra_probe_keys(
+    probe_raw: dict, allowed: set, probe_kind: str, folder: str, key_base: str,
+) -> None:
+    """Fail on the alphabetically first key not allowed for this probe kind."""
+    extra_keys = set(probe_raw.keys()) - allowed
+    if extra_keys:
+        bad_k = sorted(extra_keys)[0]
+        raise _err(
+            folder,
+            f"{key_base}.{bad_k}",
+            f"unexpected key {bad_k!r} for {probe_kind} probe",
+        )
+
+
 def _parse_version_probe_mapping(
     probe_raw: dict, tool_raw: str, folder: str,
-) -> Any:
+) -> Tuple[str, ...] | Mapping[str, Any]:
     """Validate one typed or argv-only version probe mapping."""
+    key_base = f"version_probes.{tool_raw}"
     for k in probe_raw:
         if not isinstance(k, str) or k not in ALLOWED_VERSION_PROBE_KEYS:
             raise _err(
                 folder,
-                f"version_probes.{tool_raw}.{k}",
+                f"{key_base}.{k}",
                 f"unknown key {k!r} in version_probes entry",
             )
     probe_kind = probe_raw.get("probe")
@@ -807,7 +823,7 @@ def _parse_version_probe_mapping(
                 probe_raw["argv"],
                 tool_raw,
                 folder,
-                f"version_probes.{tool_raw}",
+                key_base,
             )
         if "file" in probe_raw:
             probe_kind = "file"
@@ -816,47 +832,32 @@ def _parse_version_probe_mapping(
         else:
             raise _err(
                 folder,
-                f"version_probes.{tool_raw}.argv",
+                f"{key_base}.argv",
                 "missing required key 'argv' (or 'probe')",
             )
     if not isinstance(probe_kind, str) or probe_kind not in VALID_PROBE_KINDS:
         raise _err(
             folder,
-            f"version_probes.{tool_raw}.probe",
+            f"{key_base}.probe",
             f"invalid probe kind {probe_kind!r}; expected one of {sorted(VALID_PROBE_KINDS)}",
         )
     if probe_kind == "command":
         if "argv" not in probe_raw:
             raise _err(
                 folder,
-                f"version_probes.{tool_raw}.argv",
+                f"{key_base}.argv",
                 "missing required key 'argv'",
             )
-        extra_keys = set(probe_raw.keys()) - {"probe", "argv"}
-        if extra_keys:
-            bad_k = sorted(extra_keys)[0]
-            raise _err(
-                folder,
-                f"version_probes.{tool_raw}.{bad_k}",
-                f"unexpected key {bad_k!r} for command probe",
-            )
-        argv = _validate_command_probe_argv(
+        _reject_extra_probe_keys(probe_raw, {"probe", "argv"}, probe_kind, folder, key_base)
+        return _validate_command_probe_argv(
             probe_raw["argv"],
             tool_raw,
             folder,
-            f"version_probes.{tool_raw}.argv",
+            f"{key_base}.argv",
         )
-        return argv
     if probe_kind == "file":
         return _parse_file_version_probe(probe_raw, tool_raw, folder)
-    extra_keys = set(probe_raw.keys()) - {"probe"}
-    if extra_keys:
-        bad_k = sorted(extra_keys)[0]
-        raise _err(
-            folder,
-            f"version_probes.{tool_raw}.{bad_k}",
-            f"unexpected key {bad_k!r} for {probe_kind} probe",
-        )
+    _reject_extra_probe_keys(probe_raw, {"probe"}, probe_kind, folder, key_base)
     return MappingProxyType({"probe": probe_kind})
 
 

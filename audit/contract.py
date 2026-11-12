@@ -117,13 +117,14 @@ def _preflight_template_dir_declarations(entry_path: Path, repo_root: Path, stat
 
 def _load_golden_manifests(
     eligible_entries: list[tuple[str, Path, Path]],
-    specs: dict[str, Any],
-    excluded: set[str],
     invalid: dict[str, str],
-) -> None:
+) -> tuple[dict[str, Any], set[str]]:
+    """Return specs and excluded IDs, filling invalid in place after Phase A finalizes credentials."""
     # Imported here: fingerprint imports this module at its top.
     from .fingerprint import CredentialStoreNotOpened, open_checked
 
+    specs: dict[str, Any] = {}
+    excluded: set[str] = set()
     for entry_name, entry_path, yaml_path in eligible_entries:
         if _credential_path(entry_path) or _credential_path(yaml_path):
             excluded.add(entry_name)
@@ -136,18 +137,15 @@ def _load_golden_manifests(
             excluded.add(entry_name)
         except (_templates.TemplateError, OSError, ValueError) as exc:
             invalid[entry_name] = type(exc).__name__
+    return specs, excluded
 
 
-def resolve_runtime_golden_registry() -> dict[str, Any]:
-    """Load and validate the golden template registry at run time after declaration preflight (cached per audit run)."""
-    state = _REDACTION_CURRENT.get()
-    base = Path(_templates.templates_root())
-    load_fn = getattr(_templates, "load_templates", None)
-
+def _preflight_golden_entries(
+    base: Path, state: Any,
+) -> tuple[set[str], dict[str, str], bool, str | None, list[tuple[str, Path, Path]]]:
+    """Enumerate templates and finalize credential declarations before manifest loading."""
     discovered: set[str] = set()
     invalid: dict[str, str] = {}
-    excluded: set[str] = set()
-    specs: dict[str, Any] = {}
     registry_available = True
     registry_reason: str | None = None
     eligible_entries: list[tuple[str, Path, Path]] = []
@@ -186,6 +184,21 @@ def resolve_runtime_golden_registry() -> dict[str, Any]:
         registry_available = False
         registry_reason = type(exc).__name__
 
+    return discovered, invalid, registry_available, registry_reason, eligible_entries
+
+
+def resolve_runtime_golden_registry() -> dict[str, Any]:
+    """Load and validate the golden template registry at run time after declaration preflight (cached per audit run)."""
+    state = _REDACTION_CURRENT.get()
+    base = Path(_templates.templates_root())
+    load_fn = getattr(_templates, "load_templates", None)
+
+    discovered, invalid, registry_available, registry_reason, eligible_entries = (
+        _preflight_golden_entries(base, state)
+    )
+    excluded: set[str] = set()
+    specs: dict[str, Any] = {}
+
     # Check cache after Phase A finalized credential declarations so repeated calls
     # within the same redaction_scope reuse the loaded manifests instead of re-reading them.
     cache_key = (
@@ -201,7 +214,7 @@ def resolve_runtime_golden_registry() -> dict[str, Any]:
 
     # Phase B: load template manifests using the finalized credential exclusion set.
     if registry_available:
-        _load_golden_manifests(eligible_entries, specs, excluded, invalid)
+        specs, excluded = _load_golden_manifests(eligible_entries, invalid)
 
     # Support test overrides of templates.load_templates when custom specs are injected.
     if callable(load_fn) and getattr(load_fn, "__name__", "") != "load_templates":

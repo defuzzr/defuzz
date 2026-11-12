@@ -168,7 +168,9 @@ def _xdg_config_root(home: Path) -> Path:
     return home / '.config'
 
 
-def _config_values(path, text, issues):
+def _iter_config_path_values(path, text, issues):
+    # Keep parsing lazy: the caller records each path's issues before parsing
+    # subsequent lines, preserving their order relative to parse failures.
     section = ''
     for line in _LINE_CONTINUATION.sub(r'\1', text).splitlines():
         line = line.strip()
@@ -270,7 +272,7 @@ def discover_git_context(project, *, home, system_config=Path('/etc/gitconfig'),
         text = read(path, required=depth > 0)
         if text is None:
             return
-        for section, raw in _config_values(path, text, result.issues):
+        for section, raw in _iter_config_path_values(path, text, result.issues):
             target = path_value(path, raw, (result.repository or project) if section == 'core' else path.parent)
             if target is None:
                 continue

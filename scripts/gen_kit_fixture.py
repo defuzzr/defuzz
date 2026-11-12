@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUT = REPO_ROOT / "tests" / "fixtures" / "kit_contract"
@@ -99,7 +99,7 @@ def generate(source: Path) -> Dict[str, str]:
     return _fixture_files(calls)
 
 
-def _fixture_files(calls) -> dict[str, str]:
+def _fixture_files(calls: List[Dict[str, Any]]) -> Dict[str, str]:
     """Validate recorded command replies and map them to fixture files."""
     files: Dict[str, str] = {}
     for c in calls:

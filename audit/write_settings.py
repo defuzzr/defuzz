@@ -104,6 +104,23 @@ def _read_settings_config(root, managed_active):
     return config, readable, config_reason
 
 
+def _coerce_bool_setting(value, source, *, approval):
+    truthy = APPROVAL_TRUTHY if approval else MEMORY_TRUTHY
+    falsy = APPROVAL_FALSY if approval else MEMORY_FALSY
+    integers = (0,) if approval else (0, 1)
+    if isinstance(value, bool):
+        pass
+    elif type(value) is int and value in integers:
+        value = bool(value)
+    elif isinstance(value, str) and value.strip().lower() in truthy:
+        value = True
+    elif isinstance(value, str) and value.strip().lower() in falsy:
+        value = False
+    else:
+        value, source = None, 'could_not_verify'
+    return value, source
+
+
 def _resolve_settings(config, readable, managed_active):
     settings = {}
     for key, default in DEFAULTS.items():
@@ -115,32 +132,12 @@ def _resolve_settings(config, readable, managed_active):
         if not readable or managed_active or (isinstance(value, str) and '${' in value):
             value, source = None, 'could_not_verify'
         elif isinstance(default, bool):
-            if field == 'write_approval':
-                # Hermes hermes_cli/config_migrations.py:397-416: legacy write_mode migrates to
-                # write_approval on next start; do not report as unattended while unmigrated.
-                if 'write_mode' in section and not present:
-                    value, source = None, 'could_not_verify'
-                elif isinstance(value, bool):
-                    pass
-                elif type(value) is int and value == 0:
-                    value = False
-                elif isinstance(value, str) and value.strip().lower() in APPROVAL_TRUTHY:
-                    value = True
-                elif isinstance(value, str) and value.strip().lower() in APPROVAL_FALSY:
-                    value = False
-                else:
-                    value, source = None, 'could_not_verify'
+            # Hermes hermes_cli/config_migrations.py:397-416: legacy write_mode migrates to
+            # write_approval on next start; do not report as unattended while unmigrated.
+            if field == 'write_approval' and 'write_mode' in section and not present:
+                value, source = None, 'could_not_verify'
             else:
-                if isinstance(value, bool):
-                    pass
-                elif type(value) is int and value in (0, 1):
-                    value = bool(value)
-                elif isinstance(value, str) and value.strip().lower() in MEMORY_TRUTHY:
-                    value = True
-                elif isinstance(value, str) and value.strip().lower() in MEMORY_FALSY:
-                    value = False
-                else:
-                    value, source = None, 'could_not_verify'
+                value, source = _coerce_bool_setting(value, source, approval=field == 'write_approval')
         else:
             try:
                 value = int(value)
@@ -167,28 +164,12 @@ def _resolve_tool_selection(config, readable, managed_active):
                 tool_unknown = True
     tools -= deny
     availability = {name: (None if tool_unknown else name in tools) for name in ('skill_manage', 'memory')}
-    return enabled, disabled, tool_source, tool_unknown, availability
+    tool_selection = {'source': tool_source, 'surface': 'cli', 'availability': availability,
+                      'enabled_toolsets': serialize_evidence(enabled), 'disabled_toolsets': serialize_evidence(disabled)}
+    return tool_selection, tool_unknown
 
 
-def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
-    root = Path(profile_path)
-    managed_active = _has_managed_overlay(managed_dir)
-    config, readable, config_reason = _read_settings_config(root, managed_active)
-    settings = _resolve_settings(config, readable, managed_active)
-    enabled, disabled, tool_source, tool_unknown, availability = _resolve_tool_selection(
-        config, readable, managed_active)
-    flags = [settings[k]['value'] for k in ('memory.memory_enabled', 'memory.user_profile_enabled')]
-    memory_on = True if True in flags else (None if None in flags else False)
-
-    def unattended(available, on, gate):
-        if available is False or on is False or gate is True:
-            return False
-        if None in (available, on, gate):
-            return None
-        return True
-
-    skill_on = unattended(availability['skill_manage'], True, settings['skills.write_approval']['value'])
-    memory_write = unattended(availability['memory'], memory_on, settings['memory.write_approval']['value'])
+def _resolve_external_provider(config, readable, managed_active):
     # Hermes agent/agent_init.py:1254-1278; plugins/memory/__init__.py:1-7:
     # one external provider is configured by name, not proof it is installed or active.
     provider = _section(config, 'memory').get('provider', '')
@@ -197,17 +178,10 @@ def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
     external = {'configured': None if provider_unknown else configured,
                 'provider': serialize_evidence(provider.strip()) if configured and not provider_unknown else None,
                 'measured': False, 'coverage': 'could_not_verify' if configured or provider_unknown else 'verified'}
-    findings = []
-    for rule, active, gate_key in (('write_settings.unattended_skill_writes', skill_on, 'skills.write_approval'),
-                                   ('write_settings.unattended_memory_writes', memory_write, 'memory.write_approval')):
-        if active:
-            findings.append(_finding(rule, root / 'config.yaml', {'enabled': True,
-                'source': settings[gate_key]['source'], 'approval_enabled': False}))
-    if configured and not provider_unknown:
-        evidence = {'configured': True, 'measured': False}
-        if provider.strip() in KNOWN_EXTERNAL_MEMORY_PROVIDERS:
-            evidence['provider'] = provider.strip()
-        findings.append(_finding('write_settings.external_memory_provider', root / 'config.yaml', evidence, 'could_not_verify'))
+    return external, provider, configured, provider_unknown
+
+
+def _append_drift_findings(findings, root, hygiene, skill_on, settings):
     drift = hygiene or {}
     candidates = [r for r in drift.get('skills', [])
                   if isinstance(r, dict) and not r.get('verified_unmodified', False)]
@@ -240,6 +214,40 @@ def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
             },
             consequence=APPROVAL_PRIOR_DRIFT_CONSEQUENCE,
         ))
+
+
+def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
+    root = Path(profile_path)
+    managed_active = _has_managed_overlay(managed_dir)
+    config, readable, config_reason = _read_settings_config(root, managed_active)
+    settings = _resolve_settings(config, readable, managed_active)
+    tool_selection, tool_unknown = _resolve_tool_selection(config, readable, managed_active)
+    availability = tool_selection['availability']
+    flags = [settings[k]['value'] for k in ('memory.memory_enabled', 'memory.user_profile_enabled')]
+    memory_on = True if True in flags else (None if None in flags else False)
+
+    def unattended(available, on, gate):
+        if available is False or on is False or gate is True:
+            return False
+        if None in (available, on, gate):
+            return None
+        return True
+
+    skill_on = unattended(availability['skill_manage'], True, settings['skills.write_approval']['value'])
+    memory_write = unattended(availability['memory'], memory_on, settings['memory.write_approval']['value'])
+    external, provider, configured, provider_unknown = _resolve_external_provider(config, readable, managed_active)
+    findings = []
+    for rule, active, gate_key in (('write_settings.unattended_skill_writes', skill_on, 'skills.write_approval'),
+                                   ('write_settings.unattended_memory_writes', memory_write, 'memory.write_approval')):
+        if active:
+            findings.append(_finding(rule, root / 'config.yaml', {'enabled': True,
+                'source': settings[gate_key]['source'], 'approval_enabled': False}))
+    if configured and not provider_unknown:
+        evidence = {'configured': True, 'measured': False}
+        if provider.strip() in KNOWN_EXTERNAL_MEMORY_PROVIDERS:
+            evidence['provider'] = provider.strip()
+        findings.append(_finding('write_settings.external_memory_provider', root / 'config.yaml', evidence, 'could_not_verify'))
+    _append_drift_findings(findings, root, hygiene, skill_on, settings)
     unknown = not readable or managed_active or tool_unknown or provider_unknown or any(s['source'] == 'could_not_verify' for s in settings.values())
     if unknown:
         findings.append(_finding('write_settings.could_not_verify', root / 'config.yaml', {'reason': config_reason}, 'could_not_verify'))
@@ -247,8 +255,7 @@ def audit_write_settings(*, profile_path, hygiene=None, managed_dir=None):
                'coverage': 'could_not_verify' if unknown or configured else 'verified',
                'unattended_skill_writes': skill_on, 'unattended_memory_writes': memory_write,
                'external_memory_provider': external,
-               'tool_selection': {'source': tool_source, 'surface': 'cli', 'availability': availability,
-                                  'enabled_toolsets': serialize_evidence(enabled), 'disabled_toolsets': serialize_evidence(disabled)},
+               'tool_selection': tool_selection,
                # Hermes tools/memory_tool.py:185-219: background patch/remove staged even with gate off.
                'background_memory_destructive_writes_gated': True,
                # No periodic flush setting found in agent_init.py, config_defaults.py, memory_tool*.py.

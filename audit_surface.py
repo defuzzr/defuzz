@@ -333,10 +333,9 @@ def _tools_lock_result(identity, summary):
     """Wrap the static TOOLS.lock summary as the ``tools_lock`` component result.
 
     ``summary`` is the dict returned by ``tool_guard.static_lock_summary``: its
-    ``coverage`` key becomes both the finding and component coverage, and the whole
-    summary becomes the finding evidence (validation walks every key). Returns a
-    §6-adapted component result carrying one ``tools_lock.static`` info finding. Performs
-    no file I/O: the plain data ``static_lock_summary`` returns is validated as plain data.
+    ``coverage`` becomes both the finding and component coverage, and the whole summary
+    becomes the finding evidence. Returns the ``adapt_component_result`` output carrying
+    one ``tools_lock.static`` info finding. Performs no file I/O of its own.
     """
     lock_finding = make_finding(rule_id='tools_lock.static', classification='info', coverage=summary['coverage'],
         affected_identities=[identity], consequence='Static TOOLS.lock provenance; installed versions were not probed.', evidence=summary)
@@ -346,16 +345,9 @@ def _tools_lock_result(identity, summary):
 def _scope_findings(inventory, outward):
     """Collect the audit-scope findings added on top of the per-unit results.
 
-    Starts from ``inventory.get('findings', [])``. When ``outward`` is not None, adds one
-    ``audit.scope.<region>`` finding per region (``info`` when coverage is
-    ``verified``, else ``review_suggested``) and one ``audit.blending`` finding per
-    evidenced relationship; otherwise adds one ``audit_scope.unverified``
-    ``review_suggested`` finding with ``could_not_verify`` coverage (via ``_unknown``),
-    because a quick audit leaves those regions uncollected.
-
-    Returns a new list; ``inventory['findings']`` is not mutated. Does no reads or writes
-    of its own, but validating sealed evidence can resolve/lstat the evidence paths and
-    update the run's redaction taint.
+    A quick audit (``outward`` is None) leaves the outward regions uncollected, so it
+    reports them as unknown instead. Returns a new list; ``inventory['findings']`` is
+    not mutated.
     """
     extra = list(inventory.get('findings', []))
     if outward is not None:
@@ -538,13 +530,9 @@ def _sweep(store, prepared):
     from . import templates
     from .audit.contract import resolve_runtime_golden_registry
     from .tool_guard import static_lock_summary
-    # Two constraints from tests/test_audit_open_sites_recheck.py keep this code in _sweep:
-    # (1) credential_path must be called directly from _sweep: the test's _caller_name() pins
-    #     sys._getframe(2).f_code.co_name == '_sweep' on the wrapped call, so a helper caller
-    #     would hide the site. (2) `specs` and `invalid_templates` must stay _sweep locals bound
-    #     before the first project-loop store.get_run: the test's stub get_run reads
-    #     sys._getframe(1).f_locals (the frame calling store.get_run) to stop the sweep once
-    #     templates are loaded.
+    # tests/test_audit_open_sites_recheck.py inspects _sweep's frame: credential_path must
+    # be called directly from _sweep, and `specs`/`invalid_templates` must stay _sweep
+    # locals bound before the first project-loop store.get_run. Keep this code here.
     from .audit.policy import credential_path
     from .audit.fingerprint import CredentialStoreNotOpened, open_checked
     specs, invalid_templates = {}, {}

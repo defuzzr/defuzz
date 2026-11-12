@@ -866,10 +866,15 @@ def _envelope(
     return out
 
 
+def _has_ancestor_in(parts: tuple[str, ...], ancestors: set[tuple[str, ...]]) -> bool:
+    """Pure prefix membership check; no I/O, and the path itself is excluded."""
+    return any(parts[:k] in ancestors for k in range(1, len(parts)))
+
+
 def _fixture_home_dirs(
     dir_child_names: dict[tuple[str, ...], set[str]],
-) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]], set[tuple[str, ...]]]:
-    """Identify nested fixture homes, keeping only outermost homes for membership checks."""
+) -> tuple[list[tuple[str, ...]], list[tuple[str, ...]]]:
+    """Pure metadata classification, no I/O; retain outermost homes for membership checks."""
     all_fixture_dirs: list[tuple[str, ...]] = []
     for d_parts, c_names in sorted(dir_child_names.items()):
         if _is_fixture_home_dir(d_parts, c_names):
@@ -878,17 +883,20 @@ def _fixture_home_dirs(
     top_fixture_homes: list[tuple[str, ...]] = []
     top_fixture_homes_set: set[tuple[str, ...]] = set()
     for d_parts in all_fixture_dirs:
-        if not any(d_parts[:k] in top_fixture_homes_set for k in range(1, len(d_parts))):
+        if not _has_ancestor_in(d_parts, top_fixture_homes_set):
             top_fixture_homes.append(d_parts)
             top_fixture_homes_set.add(d_parts)
-    return all_fixture_dirs, top_fixture_homes, top_fixture_homes_set
+    return all_fixture_dirs, top_fixture_homes
+
+
+_PendingBackup = tuple[tuple[str, ...], str, str, str, int, float]
 
 
 def _resolve_backup_copies(
-    pending_backups: list[tuple[tuple[str, ...], str, str, str, int, float]],
+    pending_backups: list[_PendingBackup],
     live_secret_sizes: dict[tuple[tuple[str, ...], str], int],
 ) -> tuple[list[dict[str, Any]], int]:
-    """Resolve backup copies against live file sizes, never reporting raw sizes."""
+    """Pure metadata comparison, no I/O; resolve copies without reporting raw sizes."""
     backup_copies_list: list[dict[str, Any]] = []
     same_size_count = 0
     for owner, secret_kind, live_name, scope, bak_size, mtime in pending_backups:
@@ -909,40 +917,20 @@ def _resolve_backup_copies(
     return backup_copies_list, same_size_count
 
 
-def audit_secret_file_copies(
-    profile_path: str | Path,
+def _walk_secret_metadata(
+    root_str: str,
     *,
-    clock: Callable[[], float] = time.monotonic,
-    max_entries: int = MAX_ENTRIES,
-    max_depth: int = MAX_DEPTH,
-    max_seconds: float = MAX_SECONDS,
-) -> dict[str, Any]:
-    """Audit secret file copies and secret-named files using directory listings and lstat only."""
-    limits_kw = dict(max_entries=max_entries, max_depth=max_depth, max_seconds=max_seconds)
-    try:
-        raw_root = os.fsdecode(os.fspath(profile_path))
-        if not raw_root or "\x00" in raw_root:
-            raise ValueError("empty or NUL-containing profile path")
-    except (TypeError, ValueError):
-        return _not_measured("invalid_path", **limits_kw)
-    root_str = raw_root
-    # String normalisation only (os.getcwd for a relative path; no file is touched).
-    root_abs = os.path.abspath(root_str)
-    start_time = clock()
-
-    try:
-        root_st = os.lstat(root_str)
-    except FileNotFoundError:
-        return _not_measured("missing", **limits_kw)
-    except (OSError, ValueError):
-        return _not_measured("unreadable", **limits_kw)
-
-    if stat.S_ISLNK(root_st.st_mode):
-        return _not_measured("symlink_root", **limits_kw)
-
-    if not stat.S_ISDIR(root_st.st_mode):
-        return _not_measured("not_directory", **limits_kw)
-
+    clock: Callable[[], float],
+    start_time: float,
+    max_entries: int,
+    max_depth: int,
+    max_seconds: float,
+) -> tuple[
+    list[tuple[tuple[str, ...], int, int, float]],
+    dict[tuple[str, ...], set[str]],
+    int, int, int, int, int, str | None,
+]:
+    """Collect listing/lstat metadata only; performs I/O but never opens files."""
     entries_walked = 0
     max_depth_reached = 0
     cuts = 0
@@ -1048,11 +1036,57 @@ def audit_secret_file_copies(
         for item in reversed(subdirs_to_push):
             stack.append(item)
 
-    # Identify nested fixture home directories (excluding the real home and profiles/<name>).
-    all_fixture_dirs, top_fixture_homes, top_fixture_homes_set = _fixture_home_dirs(dir_child_names)
+    return (
+        regular_files, dir_child_names, symlinks_skipped, secret_named_symlinks,
+        entries_walked, max_depth_reached, cuts, truncated_by,
+    )
 
-    def _inside_fixture_home(parts: tuple[str, ...]) -> bool:
-        return any(parts[:k] in top_fixture_homes_set for k in range(1, len(parts)))
+
+def audit_secret_file_copies(
+    profile_path: str | Path,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    max_entries: int = MAX_ENTRIES,
+    max_depth: int = MAX_DEPTH,
+    max_seconds: float = MAX_SECONDS,
+) -> dict[str, Any]:
+    """Audit secret file copies and secret-named files using directory listings and lstat only."""
+    limits_kw = dict(max_entries=max_entries, max_depth=max_depth, max_seconds=max_seconds)
+    try:
+        raw_root = os.fsdecode(os.fspath(profile_path))
+        if not raw_root or "\x00" in raw_root:
+            raise ValueError("empty or NUL-containing profile path")
+    except (TypeError, ValueError):
+        return _not_measured("invalid_path", **limits_kw)
+    root_str = raw_root
+    # String normalisation only (os.getcwd for a relative path; no file is touched).
+    root_abs = os.path.abspath(root_str)
+    start_time = clock()
+
+    try:
+        root_st = os.lstat(root_str)
+    except FileNotFoundError:
+        return _not_measured("missing", **limits_kw)
+    except (OSError, ValueError):
+        return _not_measured("unreadable", **limits_kw)
+
+    if stat.S_ISLNK(root_st.st_mode):
+        return _not_measured("symlink_root", **limits_kw)
+
+    if not stat.S_ISDIR(root_st.st_mode):
+        return _not_measured("not_directory", **limits_kw)
+
+    (
+        regular_files, dir_child_names, symlinks_skipped, secret_named_symlinks,
+        entries_walked, max_depth_reached, cuts, truncated_by,
+    ) = _walk_secret_metadata(
+        root_str, clock=clock, start_time=start_time,
+        max_entries=max_entries, max_depth=max_depth, max_seconds=max_seconds,
+    )
+
+    # Identify nested fixture home directories (excluding the real home and profiles/<name>).
+    all_fixture_dirs, top_fixture_homes = _fixture_home_dirs(dir_child_names)
+    top_fixture_homes_set = set(top_fixture_homes)
 
     live_secret_sizes: dict[tuple[tuple[str, ...], str], int] = {}
     expected_by_kind: Counter[str] = Counter({k: 0 for k in EXPECTED_SECRET_KINDS})
@@ -1067,7 +1101,7 @@ def audit_secret_file_copies(
     config_backup_dir_count = 0
     config_backup_mtimes_by_owner: dict[tuple[str, ...], list[float]] = defaultdict(list)
 
-    pending_backups: list[tuple[tuple[str, ...], str, str, str, int, float]] = []
+    pending_backups: list[_PendingBackup] = []
     fixture_secret_by_class: Counter[str] = Counter()
     work_secret_by_top: Counter[str] = Counter()
     work_classes_by_top: dict[str, Counter[str]] = defaultdict(Counter)
@@ -1081,7 +1115,7 @@ def audit_secret_file_copies(
     for rel_parts, size, imode, mtime in regular_files:
         all_file_modes.append(imode)
 
-        if _inside_fixture_home(rel_parts):
+        if _has_ancestor_in(rel_parts, top_fixture_homes_set):
             cls = classify_secret_filename(rel_parts[-1], rel_parts, name_cache)
             if cls is not None:
                 fixture_secret_by_class[cls] += 1

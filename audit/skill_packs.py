@@ -540,6 +540,12 @@ def _usage_age_buckets(
     use_record: Callable[[Mapping[str, Any]], Mapping[str, Any] | None],
     last_dt: datetime,
 ) -> dict[str, int]:
+    """Bucket records using id(record)-keyed states and the usage-record lookup callback.
+
+    Ages are relative to last_dt: under 30 days, inclusive 30–90 days, or over
+    90 days. Zero-use and unverifiable states get their own bands; a used
+    record without a latest timestamp is also unverifiable.
+    """
     buckets = {"never": 0, "gt_90_days": 0, "days_30_to_90": 0, "lt_30_days": 0, "unverifiable": 0}
     for r in loadable:
         state = states[id(r)]
@@ -562,6 +568,132 @@ def _usage_age_buckets(
         else:
             buckets["gt_90_days"] += 1
     return buckets
+
+
+def _usage_failure_reason(limits: Mapping[str, Any]) -> str:
+    if limits["truncated_by"]:
+        return "truncated"
+    return "usage_file_malformed"
+
+
+def _parse_usage_data(raw_usage, limits, note_cut):
+    usage_map: dict[str, dict[str, Any]] = {}
+    usage_coverage = "could_not_verify"
+    usage_reason = None
+    first_dt = last_dt = None
+    try:
+        parsed_u = json.loads(raw_usage.decode("utf-8-sig"))
+        if not isinstance(parsed_u, dict):
+            raise ValueError("usage root must be a JSON object")
+        usage_rows_ok = True
+        stamps: list[datetime] = []
+        for idx_u, (ukey, uval) in enumerate(parsed_u.items()):
+            if idx_u >= MAX_USAGE_ROWS:
+                note_cut("max_usage_rows")
+                usage_rows_ok = False
+                break
+            if not isinstance(uval, dict):
+                note_cut()
+                usage_rows_ok = False
+                continue
+            ucount, u_ok = _non_negative_int(uval.get("use_count"))
+            if not u_ok:
+                note_cut()
+                usage_rows_ok = False
+            rec_stamps = [dt for k in _USAGE_TS_KEYS if (dt := _parse_iso_ts(uval.get(k))) is not None]
+            stamps.extend(rec_stamps)
+            usage_map[str(ukey)] = {
+                "use_count": ucount,
+                "latest": _latest_activity_dt(uval),
+                "own_start": min(rec_stamps) if rec_stamps else None,
+            }
+        if stamps:
+            first_dt, last_dt = min(stamps), max(stamps)
+        if not usage_rows_ok:
+            usage_reason = _usage_failure_reason(limits)
+        elif last_dt is None:
+            usage_reason = "usage_file_no_timestamps"
+        else:
+            usage_coverage = "verified"
+            usage_reason = None
+    except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
+        note_cut()
+        usage_reason = "usage_file_malformed"
+    return usage_map, usage_coverage, usage_reason, first_dt, last_dt
+
+
+def _bulk_install_groups(skills_records, usage_coverage, use_count):
+    non_stock_all = [r for r in skills_records if not r["is_stock"]]
+    claimed_paths: set[tuple[str, str]] = set()
+    bulk_groups: list[dict[str, Any]] = []
+
+    def key_of(r: Mapping[str, Any]) -> tuple[str, str]:
+        return (r["root"], r["relative_path"])
+
+    def make_bulk_group(signal: str, weak: bool, members: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+        count = len(members)
+        if usage_coverage == "verified":
+            used: int | None = sum(1 for m in members if use_count(m) > 0)
+            share: float | None = round(used / count, 4) if count else 0.0
+        else:
+            used, share = None, None
+        return {"signal": signal, "weak_signal": weak, "skills_count": count, "used_skills_count": used,
+                "used_share": share}
+
+    by_lic_hash: dict[str, list[dict[str, Any]]] = {}
+    for r in non_stock_all:
+        for h in r["license_hashes"]:
+            by_lic_hash.setdefault(h, []).append(r)
+    for _, members in sorted(by_lic_hash.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        unclaimed = [m for m in members if key_of(m) not in claimed_paths]
+        if len(unclaimed) >= BULK_GROUP_MIN_SKILLS:
+            claimed_paths.update(key_of(m) for m in unclaimed)
+            bulk_groups.append(make_bulk_group("license_hash", False, unclaimed))
+
+    by_hub_src: dict[str, list[dict[str, Any]]] = {}
+    for r in non_stock_all:
+        if r["hub_source"] and key_of(r) not in claimed_paths:
+            by_hub_src.setdefault(str(r["hub_source"]), []).append(r)
+    for _, members in sorted(by_hub_src.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+        if len(members) >= BULK_GROUP_MIN_SKILLS:
+            claimed_paths.update(key_of(m) for m in members)
+            bulk_groups.append(make_bulk_group("hub_lock_source", False, members))
+
+    remaining_mtime = sorted((r for r in non_stock_all if key_of(r) not in claimed_paths),
+                             key=lambda r: (r["mtime"], r["root"], r["relative_path"]))
+    while len(remaining_mtime) >= BULK_GROUP_MIN_SKILLS:
+        best_window: list[dict[str, Any]] = []
+        hi = 0
+        for lo_i in range(len(remaining_mtime)):
+            hi = max(hi, lo_i)
+            while hi + 1 < len(remaining_mtime) and (
+                    float(remaining_mtime[hi + 1]["mtime"]) - float(remaining_mtime[lo_i]["mtime"]) <= MTIME_WINDOW_SECONDS):
+                hi += 1
+            if hi - lo_i + 1 > len(best_window):
+                best_window = remaining_mtime[lo_i: hi + 1]
+        if len(best_window) < BULK_GROUP_MIN_SKILLS:
+            break
+        win_keys = {key_of(m) for m in best_window}
+        claimed_paths.update(win_keys)
+        bulk_groups.append(make_bulk_group("mtime_window_2m", True, best_window))
+        remaining_mtime = [r for r in remaining_mtime if key_of(r) not in win_keys]
+
+    return bulk_groups
+
+
+def _verified_usage_stats(loadable, non_stock_loadable, use_count, zero_use_state, use_record, last_dt):
+    states = {id(r): ("used" if use_count(r) > 0 else zero_use_state(r)) for r in loadable}
+    unverifiable_count = sum(1 for s in states.values() if s == "unverifiable")
+    zero_use_count = sum(1 for s in states.values() if s == "zero")
+    skills_evaluated = len(loadable) - unverifiable_count
+    never_used_share = round(zero_use_count / skills_evaluated, 4) if skills_evaluated else 0.0
+    ns_eval = [r for r in non_stock_loadable if states[id(r)] != "unverifiable"]
+    ns_evaluated = len(ns_eval)
+    non_stock_zero_use_count = sum(1 for r in ns_eval if states[id(r)] == "zero")
+    non_stock_never_used_share = round(non_stock_zero_use_count / ns_evaluated, 4) if ns_evaluated else 0.0
+    days_buckets = _usage_age_buckets(loadable, states, use_record, last_dt)
+    return (unverifiable_count, zero_use_count, skills_evaluated, never_used_share,
+            ns_evaluated, non_stock_zero_use_count, non_stock_never_used_share, days_buckets)
 
 
 def audit_skill_packs(
@@ -1285,46 +1417,11 @@ def audit_skill_packs(
     if usage_present:
         raw_usage = read_bounded_file(usage_path, MAX_FILE_BYTES)
         if raw_usage is None:
-            usage_reason = "truncated" if limits["truncated_by"] else "usage_file_malformed"
+            usage_reason = _usage_failure_reason(limits)
         else:
-            try:
-                parsed_u = json.loads(raw_usage.decode("utf-8-sig"))
-                if not isinstance(parsed_u, dict):
-                    raise ValueError("usage root must be a JSON object")
-                usage_rows_ok = True
-                stamps: list[datetime] = []
-                for idx_u, (ukey, uval) in enumerate(parsed_u.items()):
-                    if idx_u >= MAX_USAGE_ROWS:
-                        note_cut("max_usage_rows")
-                        usage_rows_ok = False
-                        break
-                    if not isinstance(uval, dict):
-                        note_cut()
-                        usage_rows_ok = False
-                        continue
-                    ucount, u_ok = _non_negative_int(uval.get("use_count"))
-                    if not u_ok:
-                        note_cut()
-                        usage_rows_ok = False
-                    rec_stamps = [dt for k in _USAGE_TS_KEYS if (dt := _parse_iso_ts(uval.get(k))) is not None]
-                    stamps.extend(rec_stamps)
-                    usage_map[str(ukey)] = {
-                        "use_count": ucount,
-                        "latest": _latest_activity_dt(uval),
-                        "own_start": min(rec_stamps) if rec_stamps else None,
-                    }
-                if stamps:
-                    first_dt, last_dt = min(stamps), max(stamps)
-                if not usage_rows_ok:
-                    usage_reason = "truncated" if limits["truncated_by"] else "usage_file_malformed"
-                elif last_dt is None:
-                    usage_reason = "usage_file_no_timestamps"
-                else:
-                    usage_coverage = "verified"
-                    usage_reason = None
-            except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
-                note_cut()
-                usage_reason = "usage_file_malformed"
+            usage_map, usage_coverage, usage_reason, first_dt, last_dt = _parse_usage_data(
+                raw_usage, limits, note_cut,
+            )
 
     def use_record(rec: Mapping[str, Any]) -> Mapping[str, Any] | None:
         return usage_map.get(rec["name"]) or usage_map.get(rec["folder_name"])
@@ -1367,75 +1464,16 @@ def audit_skill_packs(
         top_used_counts = [{"path": by_alias.get(k), "use_count": c} for k, c in ranked_uses]
 
     if usage_coverage == "verified" and last_dt is not None:
-        states = {id(r): ("used" if use_count(r) > 0 else zero_use_state(r)) for r in loadable}
-        unverifiable_count = sum(1 for s in states.values() if s == "unverifiable")
-        zero_use_count = sum(1 for s in states.values() if s == "zero")
-        skills_evaluated = len(loadable) - unverifiable_count
-        never_used_share = round(zero_use_count / skills_evaluated, 4) if skills_evaluated else 0.0
-        ns_eval = [r for r in non_stock_loadable if states[id(r)] != "unverifiable"]
-        ns_evaluated = len(ns_eval)
-        non_stock_zero_use_count = sum(1 for r in ns_eval if states[id(r)] == "zero")
-        non_stock_never_used_share = round(non_stock_zero_use_count / ns_evaluated, 4) if ns_evaluated else 0.0
-        days_buckets = _usage_age_buckets(loadable, states, use_record, last_dt)
+        (unverifiable_count, zero_use_count, skills_evaluated, never_used_share,
+         ns_evaluated, non_stock_zero_use_count, non_stock_never_used_share, days_buckets) = _verified_usage_stats(
+            loadable, non_stock_loadable, use_count, zero_use_state, use_record, last_dt,
+        )
     else:
         ns_evaluated = len(non_stock_loadable)
 
     # Bulk installs across non-stock skills, in priority order:
     # (i) identical LICENSE/NOTICE/COPYING hash -> (ii) hub-lock source -> (iii) SKILL.md times within 2 minutes.
-    non_stock_all = [r for r in skills_records if not r["is_stock"]]
-    claimed_paths: set[tuple[str, str]] = set()
-    bulk_groups: list[dict[str, Any]] = []
-
-    def key_of(r: Mapping[str, Any]) -> tuple[str, str]:
-        return (r["root"], r["relative_path"])
-
-    def make_bulk_group(signal: str, weak: bool, members: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-        count = len(members)
-        if usage_coverage == "verified":
-            used: int | None = sum(1 for m in members if use_count(m) > 0)
-            share: float | None = round(used / count, 4) if count else 0.0
-        else:
-            used, share = None, None
-        return {"signal": signal, "weak_signal": weak, "skills_count": count, "used_skills_count": used,
-                "used_share": share}
-
-    by_lic_hash: dict[str, list[dict[str, Any]]] = {}
-    for r in non_stock_all:
-        for h in r["license_hashes"]:
-            by_lic_hash.setdefault(h, []).append(r)
-    for _, members in sorted(by_lic_hash.items(), key=lambda kv: (-len(kv[1]), kv[0])):
-        unclaimed = [m for m in members if key_of(m) not in claimed_paths]
-        if len(unclaimed) >= BULK_GROUP_MIN_SKILLS:
-            claimed_paths.update(key_of(m) for m in unclaimed)
-            bulk_groups.append(make_bulk_group("license_hash", False, unclaimed))
-
-    by_hub_src: dict[str, list[dict[str, Any]]] = {}
-    for r in non_stock_all:
-        if r["hub_source"] and key_of(r) not in claimed_paths:
-            by_hub_src.setdefault(str(r["hub_source"]), []).append(r)
-    for _, members in sorted(by_hub_src.items(), key=lambda kv: (-len(kv[1]), kv[0])):
-        if len(members) >= BULK_GROUP_MIN_SKILLS:
-            claimed_paths.update(key_of(m) for m in members)
-            bulk_groups.append(make_bulk_group("hub_lock_source", False, members))
-
-    remaining_mtime = sorted((r for r in non_stock_all if key_of(r) not in claimed_paths),
-                             key=lambda r: (r["mtime"], r["root"], r["relative_path"]))
-    while len(remaining_mtime) >= BULK_GROUP_MIN_SKILLS:
-        best_window: list[dict[str, Any]] = []
-        hi = 0
-        for lo_i in range(len(remaining_mtime)):
-            hi = max(hi, lo_i)
-            while hi + 1 < len(remaining_mtime) and (
-                    float(remaining_mtime[hi + 1]["mtime"]) - float(remaining_mtime[lo_i]["mtime"]) <= MTIME_WINDOW_SECONDS):
-                hi += 1
-            if hi - lo_i + 1 > len(best_window):
-                best_window = remaining_mtime[lo_i: hi + 1]
-        if len(best_window) < BULK_GROUP_MIN_SKILLS:
-            break
-        win_keys = {key_of(m) for m in best_window}
-        claimed_paths.update(win_keys)
-        bulk_groups.append(make_bulk_group("mtime_window_2m", True, best_window))
-        remaining_mtime = [r for r in remaining_mtime if key_of(r) not in win_keys]
+    bulk_groups = _bulk_install_groups(skills_records, usage_coverage, use_count)
 
     local_rels_set = {r["relative_path"] for r in skills_records if r["tier"] == TIER_LOCAL}
     local_names_set = ({r["name"] for r in skills_records if r["tier"] == TIER_LOCAL}

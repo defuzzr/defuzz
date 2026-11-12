@@ -351,7 +351,12 @@ def _summary(rows):
     return result
 
 
+def _session_read_state(state):
+    return {**state, 'immutable': state['read_mode'] == 'immutable', 'database_copied': False}
+
+
 def _contamination_report(rows, projects, findings, path, outside, limits, cut_reasons, state):
+    """Build the report, appending findings and updating state in place."""
     grouped, months = defaultdict(list), defaultdict(list)
     for row in rows:
         grouped[row['project_root']].append(row)
@@ -383,11 +388,124 @@ def _contamination_report(rows, projects, findings, path, outside, limits, cut_r
         state['reason'] = state['truncated_by']
     section = {'sessions_outside_registered_projects': outside, 'coverage': coverage, 'status': 'completed', 'overall': overall, 'projects': project_rows,
                'top_projects': sorted(project_rows, key=lambda r: (-(r['contamination_rate'] or 0), r['project_root']))[:10],
-               'system_prompt_by_month': monthly, 'limits': limits, 'cut_reasons': sorted(cut_reasons), **state,
-               'immutable': state['read_mode'] == 'immutable', 'database_copied': False,
+               'system_prompt_by_month': monthly, 'limits': limits, 'cut_reasons': sorted(cut_reasons), **_session_read_state(state),
                'thresholds': {'min_project_sessions': MIN_PROJECT_SESSIONS, 'foreign_rate': FOREIGN_RATE_THRESHOLD,
                               'growth_factor': GROWTH_FACTOR, 'growth_chars': GROWTH_CHARS}}
     return make_component_envelope(findings=findings, coverage=coverage, extra={'session_contamination': section})
+
+
+def _read_session_messages(read, mc, by_session, rows, limits, state, expired, record_cut):
+    # One global INTEGER PRIMARY KEY seek in bounded pages, never per-session timestamp sorts.
+    # Include the minimum signed rowid, then use strict id keyset paging.
+    last = -9223372036854775808
+    first = True
+    messages_complete = True
+    expr = 'COALESCE(api_content,content)' if 'api_content' in mc else 'content'
+    while by_session:
+        if expired():
+            messages_complete = False
+            break
+        if limits['bytes_read'] >= MAX_TOTAL_TEXT_BYTES:
+            record_cut('total_byte_limit_exceeded', cap_hit=True)
+            messages_complete = False
+            break
+        page_limit = min(MESSAGE_PAGE_SIZE, max(1, MAX_MESSAGES - limits['messages_examined'] + 1))
+        key_query = (
+            "SELECT id, "
+            "CASE WHEN typeof(session_id)='text' AND length(CAST(substr(session_id,1,?) AS BLOB)) <= ? THEN session_id END, "
+            "CASE WHEN typeof(session_id)='text' AND length(CAST(substr(session_id,1,?) AS BLOB)) > ? THEN 1 ELSE 0 END, "
+            "CASE WHEN typeof(timestamp) IN ('integer','real') THEN timestamp END "
+            "FROM messages WHERE id" + ('>=?' if first else '>?') + ' ORDER BY id LIMIT ?'
+        )
+        page = read(key_query, (MAX_METADATA_BYTES + 1, MAX_METADATA_BYTES,
+                                MAX_METADATA_BYTES + 1, MAX_METADATA_BYTES,
+                                last, page_limit))
+        first = False
+        if not page:
+            break
+        stop_messages = False
+        for mid, sid, sid_cut, mstamp in page:
+            if expired():
+                messages_complete = False
+                stop_messages = True
+                break
+            if limits['bytes_read'] >= MAX_TOTAL_TEXT_BYTES:
+                record_cut('total_byte_limit_exceeded', cap_hit=True)
+                messages_complete = False
+                stop_messages = True
+                break
+            if limits['messages_examined'] >= MAX_MESSAGES:
+                record_cut('database_row_limit_exceeded', cap_hit=True)
+                messages_complete = False
+                stop_messages = True
+                break
+            sid_bytes = len((sid or '').encode('utf-8'))
+            if sid_bytes > MAX_TOTAL_TEXT_BYTES - limits['bytes_read']:
+                record_cut('total_byte_limit_exceeded', cap_hit=True)
+                messages_complete = False
+                stop_messages = True
+                break
+            last = mid
+            limits['messages_examined'] += 1
+            limits['bytes_read'] += sid_bytes
+            if sid_cut:
+                record_cut('metadata_byte_budget', cap_hit=True)
+                continue
+            if sid is None or not isinstance(mstamp, (int, float)):
+                record_cut('invalid_values')
+            row = by_session.get(sid)
+            if row is None:
+                continue
+            if row['messages_seen'] >= MAX_MESSAGES_PER_SESSION:
+                if not row['session_cap_cut']:
+                    row['session_cap_cut'] = True
+                    row['classified'] = False
+                    record_cut('row_cap', cap_hit=True)
+                if all(r['session_cap_cut'] for r in by_session.values()):
+                    messages_complete = False
+                    stop_messages = True
+                    break
+                continue
+            row['messages_seen'] += 1
+            if limits['bytes_read'] >= MAX_TOTAL_TEXT_BYTES:
+                record_cut('total_byte_limit_exceeded', cap_hit=True)
+                row['classified'] = False
+                messages_complete = False
+                stop_messages = True
+                break
+            cap = min(MAX_TEXT_BYTES, MAX_TOTAL_TEXT_BYTES - limits['bytes_read'])
+            message_query = 'SELECT ' + _text_projection(expr) + ' FROM messages WHERE id=?'
+            found = read(message_query, (cap, cap, mid))
+            if not found:
+                state['changed_during_read'] = True
+                row['classified'] = False
+                continue
+            size, mraw = found[0]
+            limits['bytes_read'] += len(mraw or b'')
+            message_text, message_complete, msg_cut = _decode_bounded_text(mraw, size, cap)
+            if not message_complete:
+                record_cut(msg_cut, cap_hit=msg_cut != 'invalid_values')
+                row['classified'] = False
+                if msg_cut == 'invalid_values':
+                    continue
+            recalled, byte_cut, block_cut = _scan_recalled_blocks(_text_parts(message_text))
+            if byte_cut and message_complete:
+                record_cut('file_byte_limit_exceeded', cap_hit=True)
+                row['classified'] = False
+            if block_cut:
+                record_cut('limit_exceeded', cap_hit=True)
+                row['classified'] = False
+            row['recall_count'] += len(recalled)
+            row['recall_chars'] += sum(map(len, recalled)) + len(recalled) * (len(OPEN_FENCE) + len(CLOSE_FENCE))
+            for block in recalled:
+                row['terms'].update(technology_counts(block))
+        if stop_messages or len(page) < page_limit:
+            break
+    for row in rows:
+        row['classified'] &= messages_complete
+        if row['classified']:
+            row['foreign'] = {f: n for f, n in row['terms'].items() if f not in row['families']}
+            row['native'] = sum(n for f, n in row['terms'].items() if f in row['families'])
 
 
 def audit_session_contamination(*, profile_path, sessions: bool = False, selected_projects=()):
@@ -569,117 +687,7 @@ def audit_session_contamination(*, profile_path, sessions: bool = False, selecte
                        'messages_seen': 0, 'session_cap_cut': False}
                 rows.append(row)
                 by_session[sid] = row
-            # One global INTEGER PRIMARY KEY seek in bounded pages, never per-session timestamp sorts.
-            # Include the minimum signed rowid, then use strict id keyset paging.
-            last = -9223372036854775808
-            first = True
-            messages_complete = True
-            expr = 'COALESCE(api_content,content)' if 'api_content' in mc else 'content'
-            while by_session:
-                if expired():
-                    messages_complete = False
-                    break
-                if limits['bytes_read'] >= MAX_TOTAL_TEXT_BYTES:
-                    record_cut('total_byte_limit_exceeded', cap_hit=True)
-                    messages_complete = False
-                    break
-                page_limit = min(MESSAGE_PAGE_SIZE, max(1, MAX_MESSAGES - limits['messages_examined'] + 1))
-                key_query = (
-                    "SELECT id, "
-                    "CASE WHEN typeof(session_id)='text' AND length(CAST(substr(session_id,1,?) AS BLOB)) <= ? THEN session_id END, "
-                    "CASE WHEN typeof(session_id)='text' AND length(CAST(substr(session_id,1,?) AS BLOB)) > ? THEN 1 ELSE 0 END, "
-                    "CASE WHEN typeof(timestamp) IN ('integer','real') THEN timestamp END "
-                    "FROM messages WHERE id" + ('>=?' if first else '>?') + ' ORDER BY id LIMIT ?'
-                )
-                page = read(key_query, (MAX_METADATA_BYTES + 1, MAX_METADATA_BYTES,
-                                        MAX_METADATA_BYTES + 1, MAX_METADATA_BYTES,
-                                        last, page_limit))
-                first = False
-                if not page:
-                    break
-                stop_messages = False
-                for mid, sid, sid_cut, mstamp in page:
-                    if expired():
-                        messages_complete = False
-                        stop_messages = True
-                        break
-                    if limits['bytes_read'] >= MAX_TOTAL_TEXT_BYTES:
-                        record_cut('total_byte_limit_exceeded', cap_hit=True)
-                        messages_complete = False
-                        stop_messages = True
-                        break
-                    if limits['messages_examined'] >= MAX_MESSAGES:
-                        record_cut('database_row_limit_exceeded', cap_hit=True)
-                        messages_complete = False
-                        stop_messages = True
-                        break
-                    sid_bytes = len((sid or '').encode('utf-8'))
-                    if sid_bytes > MAX_TOTAL_TEXT_BYTES - limits['bytes_read']:
-                        record_cut('total_byte_limit_exceeded', cap_hit=True)
-                        messages_complete = False
-                        stop_messages = True
-                        break
-                    last = mid
-                    limits['messages_examined'] += 1
-                    limits['bytes_read'] += sid_bytes
-                    if sid_cut:
-                        record_cut('metadata_byte_budget', cap_hit=True)
-                        continue
-                    if sid is None or not isinstance(mstamp, (int, float)):
-                        record_cut('invalid_values')
-                    row = by_session.get(sid)
-                    if row is None:
-                        continue
-                    if row['messages_seen'] >= MAX_MESSAGES_PER_SESSION:
-                        if not row['session_cap_cut']:
-                            row['session_cap_cut'] = True
-                            row['classified'] = False
-                            record_cut('row_cap', cap_hit=True)
-                        if all(r['session_cap_cut'] for r in by_session.values()):
-                            messages_complete = False
-                            stop_messages = True
-                            break
-                        continue
-                    row['messages_seen'] += 1
-                    if limits['bytes_read'] >= MAX_TOTAL_TEXT_BYTES:
-                        record_cut('total_byte_limit_exceeded', cap_hit=True)
-                        row['classified'] = False
-                        messages_complete = False
-                        stop_messages = True
-                        break
-                    cap = min(MAX_TEXT_BYTES, MAX_TOTAL_TEXT_BYTES - limits['bytes_read'])
-                    message_query = 'SELECT ' + _text_projection(expr) + ' FROM messages WHERE id=?'
-                    found = read(message_query, (cap, cap, mid))
-                    if not found:
-                        state['changed_during_read'] = True
-                        row['classified'] = False
-                        continue
-                    size, mraw = found[0]
-                    limits['bytes_read'] += len(mraw or b'')
-                    message_text, message_complete, msg_cut = _decode_bounded_text(mraw, size, cap)
-                    if not message_complete:
-                        record_cut(msg_cut, cap_hit=msg_cut != 'invalid_values')
-                        row['classified'] = False
-                        if msg_cut == 'invalid_values':
-                            continue
-                    recalled, byte_cut, block_cut = _scan_recalled_blocks(_text_parts(message_text))
-                    if byte_cut and message_complete:
-                        record_cut('file_byte_limit_exceeded', cap_hit=True)
-                        row['classified'] = False
-                    if block_cut:
-                        record_cut('limit_exceeded', cap_hit=True)
-                        row['classified'] = False
-                    row['recall_count'] += len(recalled)
-                    row['recall_chars'] += sum(map(len, recalled)) + len(recalled) * (len(OPEN_FENCE) + len(CLOSE_FENCE))
-                    for block in recalled:
-                        row['terms'].update(technology_counts(block))
-                if stop_messages or len(page) < page_limit:
-                    break
-            for row in rows:
-                row['classified'] &= messages_complete
-                if row['classified']:
-                    row['foreign'] = {f: n for f, n in row['terms'].items() if f not in row['families']}
-                    row['native'] = sum(n for f, n in row['terms'].items() if f in row['families'])
+            _read_session_messages(read, mc, by_session, rows, limits, state, expired, record_cut)
             # All cursors are exhausted: autocommit rereads now see later commits,
             # unlike rereading inside one pinned transaction. Same bounded SQL and
             # parameters; compare only ephemeral digests, as registration reads do.
@@ -701,7 +709,7 @@ def audit_session_contamination(*, profile_path, sessions: bool = False, selecte
             findings.append(_finding(error_rule, path, {'cuts': limits['cuts'], 'reason': reason}, 'could_not_verify'))
             return make_component_envelope(findings=findings, coverage='could_not_verify', extra={
                 'session_contamination': {'coverage': 'could_not_verify', 'status': 'not_measured', 'reason': reason,
-                                          'limits': limits, **state, 'immutable': state['read_mode'] == 'immutable', 'database_copied': False}})
+                                          'limits': limits, **_session_read_state(state)}})
     if state['changed_during_read']:
         findings.append(make_finding(
             rule_id='session_contamination.database_changed_during_read', classification='info',

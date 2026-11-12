@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import stat
 import time
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from .contract import (
     CLASSIFICATION_INFO,
@@ -628,10 +628,20 @@ def _envelope(findings: list, coverage: str, section: dict, *, elapsed_ms: int) 
     }
 
 
+class _DirectoryEntryRecords(NamedTuple):
+    entries: list[tuple[os.DirEntry[str], os.stat_result, str]]
+    dir_names: set[str]
+    file_names: set[str]
+    all_names: set[str]
+
+
 def _directory_entry_records(
     raw_entries: list[os.DirEntry[str]], note_cut: Callable[[str], None],
-) -> tuple[list[tuple[os.DirEntry[str], os.stat_result, str]], set[str], set[str], set[str]]:
-    """Collect no-follow metadata and marker names for one sorted directory."""
+) -> _DirectoryEntryRecords:
+    """Collect no-follow metadata and marker names for one sorted directory.
+
+    Each failed stat calls ``note_cut`` to record incomplete traversal.
+    """
     dir_names: set[str] = set()
     file_names: set[str] = set()
     all_names: set[str] = set()
@@ -655,7 +665,7 @@ def _directory_entry_records(
             kind = "special"
         all_names.add(entry.name)
         entry_records.append((entry, st, kind))
-    return entry_records, dir_names, file_names, all_names
+    return _DirectoryEntryRecords(entry_records, dir_names, file_names, all_names)
 
 
 def audit_home_workdirs(
@@ -715,6 +725,7 @@ def audit_home_workdirs(
     truncated_by: str | None = None
 
     def _note_cut(reason: str) -> None:
+        """Count every cut and retain the first reason for incomplete coverage."""
         nonlocal truncated_by
         limits["cuts"] += 1
         if truncated_by is None:
@@ -748,39 +759,11 @@ def audit_home_workdirs(
             return False
         return True
 
-    stack: list[tuple[str, tuple[str, ...], int, frozenset[str]]] = [
-        (str(root), (), 0, frozenset())
-    ]
-
-    while stack:
-        if _expired():
-            break
-        cur_dir, rel_parts, depth, active_buckets = stack.pop()
-
-        try:
-            with os.scandir(cur_dir) as it:
-                raw_entries = []
-                for entry in it:
-                    # Skip macOS AppleDouble resource fork stubs (`._*`, audit hygiene rules).
-                    if entry.name.startswith("._"):
-                        continue
-                    limits["entries_walked"] += 1
-                    if limits["entries_walked"] > max_entries:
-                        _note_cut("max_entries")
-                        raw_entries = None
-                        break
-                    raw_entries.append(entry)
-        except OSError:
-            _note_cut("scandir_error")
-            continue
-
-        if raw_entries is None:
-            break
-
-        raw_entries.sort(key=lambda e: e.name)
-
-        entry_records, dir_names, file_names, all_names = _directory_entry_records(raw_entries, _note_cut)
-
+    def _directory_marker_buckets(
+        rel_parts: tuple[str, ...], depth: int, active_buckets: frozenset[str],
+        file_names: set[str], all_names: set[str],
+    ) -> frozenset[str]:
+        nonlocal tools_has_pm_marker, nested_with_marker, nested_config_only
         cur_buckets = set(active_buckets)
 
         if depth > 0 and rel_parts:
@@ -840,7 +823,14 @@ def audit_home_workdirs(
                 wt["git_dir_count"] += 1
                 cur_buckets.add("git")
 
-        frozen_buckets = frozenset(cur_buckets)
+        return frozenset(cur_buckets)
+
+    def _measure_directory_entries(
+        entry_records: list[tuple[os.DirEntry[str], os.stat_result, str]],
+        rel_parts: tuple[str, ...], depth: int, frozen_buckets: frozenset[str],
+        dir_names: set[str],
+    ) -> list[tuple[str, tuple[str, ...], int, frozenset[str]]]:
+        nonlocal symlinks_skipped
         subdirs_to_push: list[tuple[str, tuple[str, ...], int, frozenset[str]]] = []
 
         for entry, st, kind in entry_records:
@@ -966,6 +956,48 @@ def audit_home_workdirs(
                     "extension_class": ext_class,
                     "hermes_named_top_level": bool(top_rec["owned"]),
                 })
+
+        return subdirs_to_push
+
+    stack: list[tuple[str, tuple[str, ...], int, frozenset[str]]] = [
+        (str(root), (), 0, frozenset())
+    ]
+
+    while stack:
+        if _expired():
+            break
+        cur_dir, rel_parts, depth, active_buckets = stack.pop()
+
+        try:
+            with os.scandir(cur_dir) as it:
+                raw_entries = []
+                for entry in it:
+                    # Skip macOS AppleDouble resource fork stubs (`._*`, audit hygiene rules).
+                    if entry.name.startswith("._"):
+                        continue
+                    limits["entries_walked"] += 1
+                    if limits["entries_walked"] > max_entries:
+                        _note_cut("max_entries")
+                        raw_entries = None
+                        break
+                    raw_entries.append(entry)
+        except OSError:
+            _note_cut("scandir_error")
+            continue
+
+        if raw_entries is None:
+            break
+
+        raw_entries.sort(key=lambda e: e.name)
+
+        records = _directory_entry_records(raw_entries, _note_cut)
+
+        frozen_buckets = _directory_marker_buckets(
+            rel_parts, depth, active_buckets, records.file_names, records.all_names,
+        )
+        subdirs_to_push = _measure_directory_entries(
+            records.entries, rel_parts, depth, frozen_buckets, records.dir_names,
+        )
 
         for item in reversed(subdirs_to_push):
             stack.append(item)

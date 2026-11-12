@@ -122,6 +122,18 @@ RESEND_COST_NOTE = (
 )
 
 
+def _mapping_or_empty(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _has_explicit_value(values: Mapping[str, Any], key: str) -> bool:
+    return key in values and values.get(key) is not None
+
+
+def _warning_or_review(tokens: int, warning_tokens: int) -> str:
+    return CLASSIFICATION_WARNING if tokens >= warning_tokens else CLASSIFICATION_REVIEW
+
+
 def _est_tokens(chars: int, explicit_tokens: Any = None) -> int:
     if isinstance(explicit_tokens, int) and not isinstance(explicit_tokens, bool):
         return max(0, explicit_tokens)
@@ -385,16 +397,16 @@ def _normalize_project_entries(
 
         proj_inj_chars = int(
             raw_p["injected_chars"]
-            if "injected_chars" in raw_p and raw_p.get("injected_chars") is not None
+            if _has_explicit_value(raw_p, "injected_chars")
             else (
                 raw_p["total_injected_chars"]
-                if "total_injected_chars" in raw_p and raw_p.get("total_injected_chars") is not None
+                if _has_explicit_value(raw_p, "total_injected_chars")
                 else sum(item["injected_chars"] for item in injected_files)
             )
         )
         proj_est_tokens = int(
             raw_p["estimated_tokens"]
-            if "estimated_tokens" in raw_p and raw_p.get("estimated_tokens") is not None
+            if _has_explicit_value(raw_p, "estimated_tokens")
             else sum(item["estimated_tokens"] for item in injected_files)
         )
 
@@ -414,10 +426,11 @@ def _normalize_project_entries(
 
 
 def _build_source_rows(raw_comps: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Normalize ordered source metrics; the caller adds shares once totals are resolved."""
     source_rows: list[dict[str, Any]] = []
     for src_name in SOURCE_ORDER:
         raw_src = raw_comps.get(src_name)
-        src_map: Mapping[str, Any] = raw_src if isinstance(raw_src, Mapping) else {}
+        src_map: Mapping[str, Any] = _mapping_or_empty(raw_src)
         chars = max(0, int(src_map.get("characters") or 0))
         src_bytes = src_map.get("utf8_bytes")
         utf8_bytes = max(0, int(src_bytes) if src_bytes is not None else chars)
@@ -431,9 +444,366 @@ def _build_source_rows(raw_comps: Mapping[str, Any]) -> list[dict[str, Any]]:
             "utf8_bytes": utf8_bytes,
             "estimated_tokens": est_tokens,
             "coverage": cov,
-            "share_of_fixed": 0.0,
         })
     return source_rows
+
+
+def _persona_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    persona_path: str | None,
+    persona_raw_chars: int,
+    persona_injected_chars: int,
+    persona_tokens: int,
+    persona_truncated: bool,
+    persona_cov: str,
+) -> None:
+    # 1. context_load.persona_oversized
+    if persona_tokens >= PERSONA_REVIEW_TOKENS:
+        cls = _warning_or_review(persona_tokens, PERSONA_WARNING_TOKENS)
+        findings.append(
+            make_finding(
+                rule_id="context_load.persona_oversized",
+                classification=cls,
+                coverage=persona_cov,
+                affected_identities=[profile_name],
+                source_paths=[persona_path] if persona_path else [],
+                evidence={
+                    "raw_chars": persona_raw_chars,
+                    "injected_chars": persona_injected_chars,
+                    "estimated_tokens": persona_tokens,
+                    "truncated": persona_truncated,
+                    "threshold_tokens": PERSONA_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else PERSONA_REVIEW_TOKENS,
+                },
+                consequence=FINDING_CONSEQUENCES["context_load.persona_oversized"],
+            )
+        )
+
+
+def _auto_loaded_skill_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    loaded_skills: Sequence[Mapping[str, Any]],
+    per_skill_estimates: Sequence[tuple[int, str]],
+    rows_by_source: Mapping[str, Mapping[str, Any]],
+) -> None:
+    # 2. context_load.auto_loaded_skill_oversized
+    for sk, (sk_tokens, sk_estimator) in zip(loaded_skills, per_skill_estimates):
+        sk_chars = max(0, int(sk.get("injected_chars") or 0))
+        if sk_tokens >= AUTO_SKILL_REVIEW_TOKENS:
+            cls = _warning_or_review(sk_tokens, AUTO_SKILL_WARNING_TOKENS)
+            sk_path = str(sk.get("skill_md_path") or "").strip()
+            sk_cov = str(sk.get("coverage") or rows_by_source["auto_loaded_skill_bodies"]["coverage"])
+            if sk_cov != COVERAGE_VERIFIED:
+                sk_cov = COVERAGE_COULD_NOT_VERIFY
+            ev_sk: dict[str, Any] = {
+                "injected_chars": sk_chars,
+                "estimated_tokens": sk_tokens,
+                "estimator_version": sk_estimator,
+                "supporting_listing_chars": int(sk.get("supporting_listing_chars") or 0),
+                "threshold_tokens": AUTO_SKILL_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else AUTO_SKILL_REVIEW_TOKENS,
+            }
+            if sk_path:
+                ev_sk["skill_md_path"] = sk_path
+                ev_sk["path"] = sk_path
+            findings.append(
+                make_finding(
+                    rule_id="context_load.auto_loaded_skill_oversized",
+                    classification=cls,
+                    coverage=sk_cov,
+                    affected_identities=[profile_name],
+                    source_paths=[sk_path] if sk_path else [],
+                    evidence=ev_sk,
+                    consequence=FINDING_CONSEQUENCES["context_load.auto_loaded_skill_oversized"],
+                )
+            )
+
+
+def _skills_index_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    rows_by_source: Mapping[str, Mapping[str, Any]],
+    listed_in_index: int,
+    zero_counted_skill_count: int,
+) -> None:
+    # 3. context_load.skills_index_oversized
+    index_chars = rows_by_source["skills_index_text"]["characters"]
+    index_tokens = rows_by_source["skills_index_text"]["estimated_tokens"]
+    index_cov = rows_by_source["skills_index_text"]["coverage"]
+    if (
+        index_tokens >= SKILLS_INDEX_REVIEW_TOKENS
+        or listed_in_index >= SKILLS_INDEX_REVIEW_COUNT
+    ):
+        is_warn = (
+            index_tokens >= SKILLS_INDEX_WARNING_TOKENS
+            or listed_in_index >= SKILLS_INDEX_WARNING_COUNT
+        )
+        cls = CLASSIFICATION_WARNING if is_warn else CLASSIFICATION_REVIEW
+        findings.append(
+            make_finding(
+                rule_id="context_load.skills_index_oversized",
+                classification=cls,
+                coverage=index_cov,
+                affected_identities=[profile_name],
+                source_paths=[],
+                evidence={
+                    "characters": index_chars,
+                    "estimated_tokens": index_tokens,
+                    "listed_skill_count": listed_in_index,
+                    "zero_counted_skill_count": zero_counted_skill_count,
+                    "token_threshold": SKILLS_INDEX_WARNING_TOKENS if is_warn else SKILLS_INDEX_REVIEW_TOKENS,
+                    "count_threshold": SKILLS_INDEX_WARNING_COUNT if is_warn else SKILLS_INDEX_REVIEW_COUNT,
+                },
+                consequence=FINDING_CONSEQUENCES["context_load.skills_index_oversized"],
+            )
+        )
+
+
+def _memory_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    mem_blk: Mapping[str, Any],
+    user_blk: Mapping[str, Any],
+    mem_chars: int,
+    mem_tokens: int,
+    mem_entry_count: int,
+    mem_cov: str,
+) -> None:
+    # 4. context_load.memory_oversized
+    if mem_tokens >= MEMORY_REVIEW_TOKENS:
+        cls = _warning_or_review(mem_tokens, MEMORY_WARNING_TOKENS)
+        mem_paths = [
+            str(b["path"])
+            for b in (mem_blk, user_blk)
+            if isinstance(b, Mapping) and b.get("enabled") and b.get("exists") and b.get("path")
+        ]
+        findings.append(
+            make_finding(
+                rule_id="context_load.memory_oversized",
+                classification=cls,
+                coverage=mem_cov,
+                affected_identities=[profile_name],
+                source_paths=mem_paths,
+                evidence={
+                    "characters": mem_chars,
+                    "estimated_tokens": mem_tokens,
+                    "entry_count": mem_entry_count,
+                    "threshold_tokens": MEMORY_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else MEMORY_REVIEW_TOKENS,
+                },
+                consequence=FINDING_CONSEQUENCES["context_load.memory_oversized"],
+            )
+        )
+
+
+def _fixed_prompt_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    fixed_chars: int,
+    fixed_tokens: int,
+    profile_cov: str,
+) -> None:
+    # 5. context_load.fixed_prompt_oversized
+    if fixed_tokens >= FIXED_PROMPT_REVIEW_TOKENS:
+        cls = _warning_or_review(fixed_tokens, FIXED_PROMPT_WARNING_TOKENS)
+        findings.append(
+            make_finding(
+                rule_id="context_load.fixed_prompt_oversized",
+                classification=cls,
+                coverage=profile_cov,
+                affected_identities=[profile_name],
+                source_paths=[],
+                evidence={
+                    "characters": fixed_chars,
+                    "estimated_tokens": fixed_tokens,
+                    "threshold_tokens": FIXED_PROMPT_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else FIXED_PROMPT_REVIEW_TOKENS,
+                },
+                consequence=FINDING_CONSEQUENCES["context_load.fixed_prompt_oversized"],
+            )
+        )
+
+
+def _project_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    projects: Sequence[Mapping[str, Any]],
+    effective_max_chars: int,
+    max_chars_source: str,
+) -> None:
+    # 6, 7, 8. Per-project findings
+    for proj in projects:
+        p_root = proj["project_root"]
+        p_cov = proj["coverage"]
+        p_tokens = proj["estimated_tokens"]
+        p_chars = proj["injected_chars"]
+        p_identities = [p_root] if p_root else [profile_name]
+
+        if p_cov != COVERAGE_VERIFIED:
+            ev_unv: dict[str, Any] = {
+                "coverage": COVERAGE_COULD_NOT_VERIFY,
+            }
+            if p_root:
+                ev_unv["project_root"] = p_root
+            findings.append(
+                make_finding(
+                    rule_id="context_load.project_context_unverified",
+                    classification=CLASSIFICATION_REVIEW,
+                    coverage=COVERAGE_COULD_NOT_VERIFY,
+                    affected_identities=p_identities,
+                    source_paths=[p_root] if p_root else [],
+                    evidence=ev_unv,
+                    consequence=FINDING_CONSEQUENCES["context_load.project_context_unverified"],
+                )
+            )
+
+        if p_tokens >= PROJECT_CONTEXT_REVIEW_TOKENS:
+            cls = _warning_or_review(p_tokens, PROJECT_CONTEXT_WARNING_TOKENS)
+            ev_proj: dict[str, Any] = {
+                "injected_chars": p_chars,
+                "estimated_tokens": p_tokens,
+                "threshold_tokens": PROJECT_CONTEXT_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else PROJECT_CONTEXT_REVIEW_TOKENS,
+            }
+            if p_root:
+                ev_proj["project_root"] = p_root
+            if proj["winning_kind"]:
+                ev_proj["winning_kind"] = proj["winning_kind"]
+            findings.append(
+                make_finding(
+                    rule_id="context_load.project_context_oversized",
+                    classification=cls,
+                    coverage=p_cov,
+                    affected_identities=p_identities,
+                    source_paths=[f["path"] for f in proj["injected_files"] if f.get("path")],
+                    evidence=ev_proj,
+                    consequence=FINDING_CONSEQUENCES["context_load.project_context_oversized"],
+                )
+            )
+
+        for f in proj["injected_files"]:
+            fpath = f["path"]
+            if f["truncated"]:
+                trunc_is_assumed = max_chars_source == "assumed_default"
+                trunc_cov = COVERAGE_COULD_NOT_VERIFY if trunc_is_assumed else p_cov
+                trunc_consequence = (
+                    PROJECT_CONTEXT_TRUNCATED_ASSUMED_CONSEQUENCE
+                    if trunc_is_assumed
+                    else FINDING_CONSEQUENCES["context_load.project_context_truncated"]
+                )
+                ev_trunc: dict[str, Any] = {
+                    "kind": f["kind"],
+                    "raw_chars": f["raw_chars"],
+                    "injected_chars": f["injected_chars"],
+                    "estimated_tokens": f["estimated_tokens"],
+                    "context_file_max_chars": effective_max_chars,
+                    "source": max_chars_source,
+                }
+                if p_root:
+                    ev_trunc["project_root"] = p_root
+                if fpath:
+                    ev_trunc["path"] = fpath
+                findings.append(
+                    make_finding(
+                        rule_id="context_load.project_context_truncated",
+                        classification=CLASSIFICATION_REVIEW,
+                        coverage=trunc_cov,
+                        affected_identities=p_identities,
+                        source_paths=[fpath] if fpath else [],
+                        evidence=ev_trunc,
+                        consequence=trunc_consequence,
+                    )
+                )
+
+            if f["from_parent"]:
+                ev_parent: dict[str, Any] = {
+                    "kind": f["kind"],
+                    "raw_chars": f["raw_chars"],
+                    "injected_chars": f["injected_chars"],
+                    "estimated_tokens": f["estimated_tokens"],
+                    "from_parent": True,
+                }
+                if p_root:
+                    ev_parent["project_root"] = p_root
+                if fpath:
+                    ev_parent["path"] = fpath
+                findings.append(
+                    make_finding(
+                        rule_id="context_load.parent_context_injected",
+                        classification=CLASSIFICATION_REVIEW,
+                        coverage=p_cov,
+                        affected_identities=p_identities,
+                        source_paths=[fpath] if fpath else [],
+                        evidence=ev_parent,
+                        consequence=FINDING_CONSEQUENCES["context_load.parent_context_injected"],
+                    )
+                )
+
+
+def _external_memory_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    profile_path: str | None,
+    ext_configured: bool,
+    ext_provider_name: str | None,
+) -> None:
+    # 9. context_load.external_memory_provider_unmeasured
+    if ext_configured:
+        cfg_paths = [f"{profile_path.rstrip('/')}/config.yaml"] if profile_path else []
+        ev_ext: dict[str, Any] = {
+            "configured": True,
+            "measured": False,
+        }
+        if ext_provider_name in KNOWN_EXTERNAL_MEMORY_PROVIDERS:
+            ev_ext["provider"] = ext_provider_name
+        findings.append(
+            make_finding(
+                rule_id="context_load.external_memory_provider_unmeasured",
+                classification=CLASSIFICATION_REVIEW,
+                coverage=COVERAGE_COULD_NOT_VERIFY,
+                affected_identities=[profile_name],
+                source_paths=cfg_paths,
+                evidence=ev_ext,
+                consequence=FINDING_CONSEQUENCES["context_load.external_memory_provider_unmeasured"],
+            )
+        )
+
+
+def _window_share_findings(
+    findings: list[dict[str, Any]],
+    *,
+    profile_name: str,
+    per_turn_chars: int,
+    per_turn_tokens: int,
+    window_share: Mapping[str, float],
+    measured_inputs_cov: str,
+) -> None:
+    # 10. context_load.per_turn_window_share
+    if per_turn_tokens >= WINDOW_SHARE_REVIEW_TOKENS:
+        cls = _warning_or_review(per_turn_tokens, WINDOW_SHARE_WARNING_TOKENS)
+        findings.append(
+            make_finding(
+                rule_id="context_load.per_turn_window_share",
+                classification=cls,
+                coverage=measured_inputs_cov,
+                affected_identities=[profile_name],
+                source_paths=[],
+                evidence={
+                    "characters": per_turn_chars,
+                    "estimated_tokens": per_turn_tokens,
+                    "share_32k": window_share["32000"],
+                    "share_128k": window_share["128000"],
+                    "share_200k": window_share["200000"],
+                    "threshold_tokens": WINDOW_SHARE_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else WINDOW_SHARE_REVIEW_TOKENS,
+                    "threshold_share": WINDOW_SHARE_THRESHOLD,
+                },
+                consequence=FINDING_CONSEQUENCES["context_load.per_turn_window_share"],
+            )
+        )
 
 
 def evaluate_context_load(
@@ -466,7 +836,7 @@ def evaluate_context_load(
     ).strip() or "default"
 
     raw_totals = base.get("totals")
-    totals: Mapping[str, Any] = raw_totals if isinstance(raw_totals, Mapping) else {}
+    totals: Mapping[str, Any] = _mapping_or_empty(raw_totals)
     estimator_version = str(
         totals.get("estimator_version")
         or base.get("estimator_version")
@@ -478,17 +848,17 @@ def evaluate_context_load(
 
     fixed_chars = int(
         totals["characters"]
-        if "characters" in totals and totals.get("characters") is not None
+        if _has_explicit_value(totals, "characters")
         else sum(r["characters"] for r in source_rows)
     )
     fixed_bytes = int(
         totals["utf8_bytes"]
-        if "utf8_bytes" in totals and totals.get("utf8_bytes") is not None
+        if _has_explicit_value(totals, "utf8_bytes")
         else sum(r["utf8_bytes"] for r in source_rows)
     )
     fixed_tokens = int(
         totals["estimated_tokens"]
-        if "estimated_tokens" in totals and totals.get("estimated_tokens") is not None
+        if _has_explicit_value(totals, "estimated_tokens")
         else sum(r["estimated_tokens"] for r in source_rows)
     )
 
@@ -501,11 +871,11 @@ def evaluate_context_load(
 
     # Persona details
     raw_soul = raw_comps.get("identity_soul")
-    soul_map: Mapping[str, Any] = raw_soul if isinstance(raw_soul, Mapping) else {}
+    soul_map: Mapping[str, Any] = _mapping_or_empty(raw_soul)
     persona_injected_chars = rows_by_source["identity_soul"]["characters"]
     persona_raw_chars = int(
         soul_map["raw_chars"]
-        if "raw_chars" in soul_map and soul_map.get("raw_chars") is not None
+        if _has_explicit_value(soul_map, "raw_chars")
         else persona_injected_chars
     )
     persona_tokens = rows_by_source["identity_soul"]["estimated_tokens"]
@@ -516,7 +886,7 @@ def evaluate_context_load(
 
     # Skills details
     raw_auto = raw_comps.get("auto_loaded_skill_bodies")
-    auto_map: Mapping[str, Any] = raw_auto if isinstance(raw_auto, Mapping) else {}
+    auto_map: Mapping[str, Any] = _mapping_or_empty(raw_auto)
     raw_loaded_skills = auto_map.get("loaded_skills")
     loaded_skills: Sequence[Mapping[str, Any]] = (
         [s for s in raw_loaded_skills if isinstance(s, Mapping)]
@@ -532,28 +902,28 @@ def evaluate_context_load(
     largest_auto_tokens = max((tok for tok, _ in per_skill_estimates), default=0)
 
     raw_index = raw_comps.get("skills_index_text")
-    index_map: Mapping[str, Any] = raw_index if isinstance(raw_index, Mapping) else {}
+    index_map: Mapping[str, Any] = _mapping_or_empty(raw_index)
     listed_in_index = int(
         index_map["listed_skill_count"]
-        if "listed_skill_count" in index_map and index_map.get("listed_skill_count") is not None
+        if _has_explicit_value(index_map, "listed_skill_count")
         else len(index_map.get("listed_skills") or ())
     )
     zero_counted_skill_count = int(
         index_map["zero_counted_skill_count"]
-        if "zero_counted_skill_count" in index_map and index_map.get("zero_counted_skill_count") is not None
+        if _has_explicit_value(index_map, "zero_counted_skill_count")
         else len(index_map.get("zero_counted_skills") or ())
     )
 
     # Memory details
     raw_mem = raw_comps.get("enabled_memory_files")
-    mem_map: Mapping[str, Any] = raw_mem if isinstance(raw_mem, Mapping) else {}
+    mem_map: Mapping[str, Any] = _mapping_or_empty(raw_mem)
     raw_mem_blk = mem_map.get("memory")
-    mem_blk: Mapping[str, Any] = raw_mem_blk if isinstance(raw_mem_blk, Mapping) else {}
+    mem_blk: Mapping[str, Any] = _mapping_or_empty(raw_mem_blk)
     raw_user_blk = mem_map.get("user")
-    user_blk: Mapping[str, Any] = raw_user_blk if isinstance(raw_user_blk, Mapping) else {}
+    user_blk: Mapping[str, Any] = _mapping_or_empty(raw_user_blk)
     mem_entry_count = int(
         mem_map["entry_count"]
-        if "entry_count" in mem_map and mem_map.get("entry_count") is not None
+        if _has_explicit_value(mem_map, "entry_count")
         else (
             int(mem_blk.get("unique_entry_count_injected") or 0)
             + int(user_blk.get("unique_entry_count_injected") or 0)
@@ -686,284 +1056,76 @@ def evaluate_context_load(
 
     findings: list[dict[str, Any]] = []
 
-    # 1. context_load.persona_oversized
-    if persona_tokens >= PERSONA_REVIEW_TOKENS:
-        cls = CLASSIFICATION_WARNING if persona_tokens >= PERSONA_WARNING_TOKENS else CLASSIFICATION_REVIEW
-        findings.append(
-            make_finding(
-                rule_id="context_load.persona_oversized",
-                classification=cls,
-                coverage=persona_cov,
-                affected_identities=[profile_name],
-                source_paths=[persona_path] if persona_path else [],
-                evidence={
-                    "raw_chars": persona_raw_chars,
-                    "injected_chars": persona_injected_chars,
-                    "estimated_tokens": persona_tokens,
-                    "truncated": persona_truncated,
-                    "threshold_tokens": PERSONA_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else PERSONA_REVIEW_TOKENS,
-                },
-                consequence=FINDING_CONSEQUENCES["context_load.persona_oversized"],
-            )
-        )
+    _persona_findings(
+        findings,
+        profile_name=profile_name,
+        persona_path=persona_path,
+        persona_raw_chars=persona_raw_chars,
+        persona_injected_chars=persona_injected_chars,
+        persona_tokens=persona_tokens,
+        persona_truncated=persona_truncated,
+        persona_cov=persona_cov,
+    )
 
-    # 2. context_load.auto_loaded_skill_oversized
-    for sk, (sk_tokens, sk_estimator) in zip(loaded_skills, per_skill_estimates):
-        sk_chars = max(0, int(sk.get("injected_chars") or 0))
-        if sk_tokens >= AUTO_SKILL_REVIEW_TOKENS:
-            cls = CLASSIFICATION_WARNING if sk_tokens >= AUTO_SKILL_WARNING_TOKENS else CLASSIFICATION_REVIEW
-            sk_path = str(sk.get("skill_md_path") or "").strip()
-            sk_cov = str(sk.get("coverage") or rows_by_source["auto_loaded_skill_bodies"]["coverage"])
-            if sk_cov != COVERAGE_VERIFIED:
-                sk_cov = COVERAGE_COULD_NOT_VERIFY
-            ev_sk: dict[str, Any] = {
-                "injected_chars": sk_chars,
-                "estimated_tokens": sk_tokens,
-                "estimator_version": sk_estimator,
-                "supporting_listing_chars": int(sk.get("supporting_listing_chars") or 0),
-                "threshold_tokens": AUTO_SKILL_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else AUTO_SKILL_REVIEW_TOKENS,
-            }
-            if sk_path:
-                ev_sk["skill_md_path"] = sk_path
-                ev_sk["path"] = sk_path
-            findings.append(
-                make_finding(
-                    rule_id="context_load.auto_loaded_skill_oversized",
-                    classification=cls,
-                    coverage=sk_cov,
-                    affected_identities=[profile_name],
-                    source_paths=[sk_path] if sk_path else [],
-                    evidence=ev_sk,
-                    consequence=FINDING_CONSEQUENCES["context_load.auto_loaded_skill_oversized"],
-                )
-            )
+    _auto_loaded_skill_findings(
+        findings,
+        profile_name=profile_name,
+        loaded_skills=loaded_skills,
+        per_skill_estimates=per_skill_estimates,
+        rows_by_source=rows_by_source,
+    )
 
-    # 3. context_load.skills_index_oversized
-    index_chars = rows_by_source["skills_index_text"]["characters"]
-    index_tokens = rows_by_source["skills_index_text"]["estimated_tokens"]
-    index_cov = rows_by_source["skills_index_text"]["coverage"]
-    if (
-        index_tokens >= SKILLS_INDEX_REVIEW_TOKENS
-        or listed_in_index >= SKILLS_INDEX_REVIEW_COUNT
-    ):
-        is_warn = (
-            index_tokens >= SKILLS_INDEX_WARNING_TOKENS
-            or listed_in_index >= SKILLS_INDEX_WARNING_COUNT
-        )
-        cls = CLASSIFICATION_WARNING if is_warn else CLASSIFICATION_REVIEW
-        findings.append(
-            make_finding(
-                rule_id="context_load.skills_index_oversized",
-                classification=cls,
-                coverage=index_cov,
-                affected_identities=[profile_name],
-                source_paths=[],
-                evidence={
-                    "characters": index_chars,
-                    "estimated_tokens": index_tokens,
-                    "listed_skill_count": listed_in_index,
-                    "zero_counted_skill_count": zero_counted_skill_count,
-                    "token_threshold": SKILLS_INDEX_WARNING_TOKENS if is_warn else SKILLS_INDEX_REVIEW_TOKENS,
-                    "count_threshold": SKILLS_INDEX_WARNING_COUNT if is_warn else SKILLS_INDEX_REVIEW_COUNT,
-                },
-                consequence=FINDING_CONSEQUENCES["context_load.skills_index_oversized"],
-            )
-        )
+    _skills_index_findings(
+        findings,
+        profile_name=profile_name,
+        rows_by_source=rows_by_source,
+        listed_in_index=listed_in_index,
+        zero_counted_skill_count=zero_counted_skill_count,
+    )
 
-    # 4. context_load.memory_oversized
-    if mem_tokens >= MEMORY_REVIEW_TOKENS:
-        cls = CLASSIFICATION_WARNING if mem_tokens >= MEMORY_WARNING_TOKENS else CLASSIFICATION_REVIEW
-        mem_paths = [
-            str(b["path"])
-            for b in (mem_blk, user_blk)
-            if isinstance(b, Mapping) and b.get("enabled") and b.get("exists") and b.get("path")
-        ]
-        findings.append(
-            make_finding(
-                rule_id="context_load.memory_oversized",
-                classification=cls,
-                coverage=mem_cov,
-                affected_identities=[profile_name],
-                source_paths=mem_paths,
-                evidence={
-                    "characters": mem_chars,
-                    "estimated_tokens": mem_tokens,
-                    "entry_count": mem_entry_count,
-                    "threshold_tokens": MEMORY_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else MEMORY_REVIEW_TOKENS,
-                },
-                consequence=FINDING_CONSEQUENCES["context_load.memory_oversized"],
-            )
-        )
+    _memory_findings(
+        findings,
+        profile_name=profile_name,
+        mem_blk=mem_blk,
+        user_blk=user_blk,
+        mem_chars=mem_chars,
+        mem_tokens=mem_tokens,
+        mem_entry_count=mem_entry_count,
+        mem_cov=mem_cov,
+    )
 
-    # 5. context_load.fixed_prompt_oversized
-    if fixed_tokens >= FIXED_PROMPT_REVIEW_TOKENS:
-        cls = CLASSIFICATION_WARNING if fixed_tokens >= FIXED_PROMPT_WARNING_TOKENS else CLASSIFICATION_REVIEW
-        findings.append(
-            make_finding(
-                rule_id="context_load.fixed_prompt_oversized",
-                classification=cls,
-                coverage=profile_cov,
-                affected_identities=[profile_name],
-                source_paths=[],
-                evidence={
-                    "characters": fixed_chars,
-                    "estimated_tokens": fixed_tokens,
-                    "threshold_tokens": FIXED_PROMPT_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else FIXED_PROMPT_REVIEW_TOKENS,
-                },
-                consequence=FINDING_CONSEQUENCES["context_load.fixed_prompt_oversized"],
-            )
-        )
+    _fixed_prompt_findings(
+        findings,
+        profile_name=profile_name,
+        fixed_chars=fixed_chars,
+        fixed_tokens=fixed_tokens,
+        profile_cov=profile_cov,
+    )
 
-    # 6, 7, 8. Per-project findings
-    for proj in projects:
-        p_root = proj["project_root"]
-        p_cov = proj["coverage"]
-        p_tokens = proj["estimated_tokens"]
-        p_chars = proj["injected_chars"]
-        p_identities = [p_root] if p_root else [profile_name]
+    _project_findings(
+        findings,
+        profile_name=profile_name,
+        projects=projects,
+        effective_max_chars=effective_max_chars,
+        max_chars_source=max_chars_source,
+    )
 
-        if p_cov != COVERAGE_VERIFIED:
-            ev_unv: dict[str, Any] = {
-                "coverage": COVERAGE_COULD_NOT_VERIFY,
-            }
-            if p_root:
-                ev_unv["project_root"] = p_root
-            findings.append(
-                make_finding(
-                    rule_id="context_load.project_context_unverified",
-                    classification=CLASSIFICATION_REVIEW,
-                    coverage=COVERAGE_COULD_NOT_VERIFY,
-                    affected_identities=p_identities,
-                    source_paths=[p_root] if p_root else [],
-                    evidence=ev_unv,
-                    consequence=FINDING_CONSEQUENCES["context_load.project_context_unverified"],
-                )
-            )
+    _external_memory_findings(
+        findings,
+        profile_name=profile_name,
+        profile_path=profile_path,
+        ext_configured=ext_configured,
+        ext_provider_name=ext_provider_name,
+    )
 
-        if p_tokens >= PROJECT_CONTEXT_REVIEW_TOKENS:
-            cls = CLASSIFICATION_WARNING if p_tokens >= PROJECT_CONTEXT_WARNING_TOKENS else CLASSIFICATION_REVIEW
-            ev_proj: dict[str, Any] = {
-                "injected_chars": p_chars,
-                "estimated_tokens": p_tokens,
-                "threshold_tokens": PROJECT_CONTEXT_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else PROJECT_CONTEXT_REVIEW_TOKENS,
-            }
-            if p_root:
-                ev_proj["project_root"] = p_root
-            if proj["winning_kind"]:
-                ev_proj["winning_kind"] = proj["winning_kind"]
-            findings.append(
-                make_finding(
-                    rule_id="context_load.project_context_oversized",
-                    classification=cls,
-                    coverage=p_cov,
-                    affected_identities=p_identities,
-                    source_paths=[f["path"] for f in proj["injected_files"] if f.get("path")],
-                    evidence=ev_proj,
-                    consequence=FINDING_CONSEQUENCES["context_load.project_context_oversized"],
-                )
-            )
-
-        for f in proj["injected_files"]:
-            fpath = f["path"]
-            if f["truncated"]:
-                trunc_is_assumed = max_chars_source == "assumed_default"
-                trunc_cov = COVERAGE_COULD_NOT_VERIFY if trunc_is_assumed else p_cov
-                trunc_consequence = (
-                    PROJECT_CONTEXT_TRUNCATED_ASSUMED_CONSEQUENCE
-                    if trunc_is_assumed
-                    else FINDING_CONSEQUENCES["context_load.project_context_truncated"]
-                )
-                ev_trunc: dict[str, Any] = {
-                    "kind": f["kind"],
-                    "raw_chars": f["raw_chars"],
-                    "injected_chars": f["injected_chars"],
-                    "estimated_tokens": f["estimated_tokens"],
-                    "context_file_max_chars": effective_max_chars,
-                    "source": max_chars_source,
-                }
-                if p_root:
-                    ev_trunc["project_root"] = p_root
-                if fpath:
-                    ev_trunc["path"] = fpath
-                findings.append(
-                    make_finding(
-                        rule_id="context_load.project_context_truncated",
-                        classification=CLASSIFICATION_REVIEW,
-                        coverage=trunc_cov,
-                        affected_identities=p_identities,
-                        source_paths=[fpath] if fpath else [],
-                        evidence=ev_trunc,
-                        consequence=trunc_consequence,
-                    )
-                )
-
-            if f["from_parent"]:
-                ev_parent: dict[str, Any] = {
-                    "kind": f["kind"],
-                    "raw_chars": f["raw_chars"],
-                    "injected_chars": f["injected_chars"],
-                    "estimated_tokens": f["estimated_tokens"],
-                    "from_parent": True,
-                }
-                if p_root:
-                    ev_parent["project_root"] = p_root
-                if fpath:
-                    ev_parent["path"] = fpath
-                findings.append(
-                    make_finding(
-                        rule_id="context_load.parent_context_injected",
-                        classification=CLASSIFICATION_REVIEW,
-                        coverage=p_cov,
-                        affected_identities=p_identities,
-                        source_paths=[fpath] if fpath else [],
-                        evidence=ev_parent,
-                        consequence=FINDING_CONSEQUENCES["context_load.parent_context_injected"],
-                    )
-                )
-
-    # 9. context_load.external_memory_provider_unmeasured
-    if ext_configured:
-        cfg_paths = [f"{profile_path.rstrip('/')}/config.yaml"] if profile_path else []
-        ev_ext: dict[str, Any] = {
-            "configured": True,
-            "measured": False,
-        }
-        if ext_provider_name in KNOWN_EXTERNAL_MEMORY_PROVIDERS:
-            ev_ext["provider"] = ext_provider_name
-        findings.append(
-            make_finding(
-                rule_id="context_load.external_memory_provider_unmeasured",
-                classification=CLASSIFICATION_REVIEW,
-                coverage=COVERAGE_COULD_NOT_VERIFY,
-                affected_identities=[profile_name],
-                source_paths=cfg_paths,
-                evidence=ev_ext,
-                consequence=FINDING_CONSEQUENCES["context_load.external_memory_provider_unmeasured"],
-            )
-        )
-
-    # 10. context_load.per_turn_window_share
-    if per_turn_tokens >= WINDOW_SHARE_REVIEW_TOKENS:
-        cls = CLASSIFICATION_WARNING if per_turn_tokens >= WINDOW_SHARE_WARNING_TOKENS else CLASSIFICATION_REVIEW
-        findings.append(
-            make_finding(
-                rule_id="context_load.per_turn_window_share",
-                classification=cls,
-                coverage=measured_inputs_cov,
-                affected_identities=[profile_name],
-                source_paths=[],
-                evidence={
-                    "characters": per_turn_chars,
-                    "estimated_tokens": per_turn_tokens,
-                    "share_32k": window_share["32000"],
-                    "share_128k": window_share["128000"],
-                    "share_200k": window_share["200000"],
-                    "threshold_tokens": WINDOW_SHARE_WARNING_TOKENS if cls == CLASSIFICATION_WARNING else WINDOW_SHARE_REVIEW_TOKENS,
-                    "threshold_share": WINDOW_SHARE_THRESHOLD,
-                },
-                consequence=FINDING_CONSEQUENCES["context_load.per_turn_window_share"],
-            )
-        )
+    _window_share_findings(
+        findings,
+        profile_name=profile_name,
+        per_turn_chars=per_turn_chars,
+        per_turn_tokens=per_turn_tokens,
+        window_share=window_share,
+        measured_inputs_cov=measured_inputs_cov,
+    )
 
     if any(f["coverage"] == COVERAGE_COULD_NOT_VERIFY for f in findings):
         section["coverage"] = COVERAGE_COULD_NOT_VERIFY
